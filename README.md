@@ -1,6 +1,6 @@
 # CQJTU Campus Assistant
 
-重庆交通大学（CQJTU）校园生活助手（Android），基于 **Flutter + Riverpod** 开发。
+重庆交通大学（CQJTU）校园生活助手，基于 **Flutter + Riverpod** 开发（当前以 Android 为主）。
 
 ## Features
 
@@ -54,8 +54,6 @@ flutter run --dart-define=ENV=prod --dart-define=BASE_URL=http://127.0.0.1:8080
 ```
 flutter build apk --release --dart-define=ENV=prod --dart-define=BASE_URL=http://127.0.0.1:8080
 ```
-
-> 建议开源仓库默认使用 `ENV=mock`，提供 Mock 数据源以便无账号可体验。
 
 ## Compliance & Security
 
