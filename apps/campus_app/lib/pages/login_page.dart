@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:data/src/api_service.dart';
 import 'package:campus_platform/services/credential_service.dart';
+import 'package:campus_app/config/app_config.dart';
 import '../utils/providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -54,6 +55,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       setState(() => _error = e.message);
     } catch (_) {
       setState(() => _error = '连接失败，请确认后端已启动且 IP 地址正确');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// mock 模式下免登录，使用固定 dummy 凭据直接进入 App
+  Future<void> _enterMockMode() async {
+    setState(() => _loading = true);
+    try {
+      const mockUser = 'mock_user';
+      const mockPass = 'mock_pass';
+      await ref.read(credentialServiceProvider).save(mockUser, mockPass);
+      ref.read(credentialsProvider.notifier).set(mockUser, mockPass);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -133,6 +147,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         : const Text('登录', style: TextStyle(fontSize: 16)),
                   ),
                 ),
+
+                // ── Mock 体验模式入口（仅在 ENV=mock 时显示）────────
+                if (AppConfig.env == 'mock') ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.science_outlined),
+                      label: const Text('体验模式（Mock 数据）'),
+                      onPressed: _loading ? null : _enterMockMode,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '体验模式使用模拟数据，无需真实账号',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
               ],
             ),
           ),
