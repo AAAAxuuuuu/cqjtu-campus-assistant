@@ -69,6 +69,11 @@ flutter build apk --release --dart-define=ENV=prod --dart-define=BASE_URL=http:/
 -  单元测试：学期推算 / 提醒时间 / 轮询策略
 -  CI：analyze + test + format
 
+## AI Usage
+
+本项目在开发过程中使用了 AI 辅助工具（Claude by Anthropic）协助完成代码设计、架构规划与文档编写。
+所有代码均经过人工审阅、测试与验证。
+
 ## License
 
 Apache-2.0
