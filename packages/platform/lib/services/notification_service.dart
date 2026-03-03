@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -38,26 +39,26 @@ class NotificationService {
   };
 
   // ── 通知渠道 ID 常量（修改此值可强制系统重建渠道，带走新的声音/震动配置）──
-  // 每次需要"重置"渠道配置时，把末尾版本号 +1 即可，无需卸载 App
   static const _classChannelId = 'class_reminder_v2';
   static const _classChannelName = '上课提醒';
   static const _elecChannelId = 'elec_alert_v2';
   static const _cardChannelId = 'card_alert_v2';
 
   static Future<void> init() async {
+    debugPrint('[NOTIF] init() 开始');
     tz.initializeTimeZones();
+
     final tzInfo = await FlutterTimezone.getLocalTimezone();
     final String timeZoneName = tzInfo.identifier;
     tz.setLocalLocation(tz.getLocation(timeZoneName));
+    debugPrint('[NOTIF] 时区初始化完成: $timeZoneName');
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
+    debugPrint('[NOTIF] 插件初始化完成');
 
-    // ── 预先创建所有通知渠道，明确指定声音与震动 ──
-    // Android 8+ 要求声音/震动必须在渠道层面开启，Notification 级别的设置仅作补充。
-    // 渠道一旦创建后系统会永久缓存，修改 ID（如 v2→v3）是唯一让新配置生效的办法。
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
 
@@ -66,7 +67,7 @@ class NotificationService {
         _classChannelId,
         _classChannelName,
         description: '课前 15 分钟提醒，带声音与震动',
-        importance: Importance.high, // high = 横幅 + 声音 + 震动
+        importance: Importance.high,
         playSound: true,
         enableVibration: true,
         enableLights: true,
@@ -92,91 +93,159 @@ class NotificationService {
         enableVibration: true,
       ),
     );
+    debugPrint(
+        '[NOTIF] 通知渠道创建完成: $_classChannelId / $_elecChannelId / $_cardChannelId');
 
-    // 申请 Android 13+ 通知权限
-    await androidPlugin?.requestNotificationsPermission();
-    // 申请精确闹钟权限 (Android 12+)
-    await androidPlugin?.requestExactAlarmsPermission();
+    // ✅ Bug 1 说明：此处运行时申请通知权限，但若 AndroidManifest.xml 未声明
+    //    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    //    系统会在 Android 13+ 上直接拒绝，通知完全失效。
+    //    请确保 Manifest 已声明该权限（详见下方注释）。
+    final notifGranted =
+        await androidPlugin?.requestNotificationsPermission() ?? false;
+    debugPrint('[NOTIF] 通知权限申请结果: $notifGranted'
+        '${notifGranted ? '' : ' ⚠️ 权限被拒绝！请检查 AndroidManifest.xml 是否声明了 POST_NOTIFICATIONS'}');
+
+    final alarmGranted =
+        await androidPlugin?.requestExactAlarmsPermission() ?? false;
+    debugPrint('[NOTIF] 精确闹钟权限申请结果: $alarmGranted'
+        '${alarmGranted ? '' : ' ⚠️ 精确闹钟权限未获取，定时通知可能延迟或失效'}');
+
+    debugPrint('[NOTIF] init() 完成 ✅');
   }
 
-  // ▼ 新增：动态调度课程提醒
+  // ▼ 动态调度课程提醒
   static Future<void> scheduleClassReminders(
       List<Course> courses, DateTime semesterStart) async {
     final now = DateTime.now();
-    // 算出开学第一周的周一
+
+    // ✅ Bug 2 修复：用纯日期（00:00:00）做天数比较，消除 now 时分秒的影响。
+    //    旧写法：classDate.difference(now).inDays
+    //    例：周一 14:00，下周三 classDate 为周三 00:00，相差 8 天零 10 小时，
+    //    inDays 截断为 8 > 7，该课被错误丢弃。
+    //    新写法：classDate.difference(today).inDays，today 也是 00:00:00，
+    //    结果始终是整天数，不再受当前时间影响。
+    final today = DateTime(now.year, now.month, now.day);
+
     final semesterMonday =
         semesterStart.subtract(Duration(days: semesterStart.weekday - 1));
-    // ✅ 获取通知开关状态
     final isReminderEnabled = await getCourseReminderEnabled();
-    // 当前是第几周
     final currentWeek = (now.difference(semesterMonday).inDays ~/ 7) + 1;
 
-    // 策略：每次刷新只调度【今天】和【明天】的课，避免数量爆炸
+    debugPrint('[NOTIF] ══════════════════════════════════════');
+    debugPrint('[NOTIF] scheduleClassReminders 开始');
+    debugPrint('[NOTIF] 当前时间: $now');
+    debugPrint('[NOTIF] 今日日期(00:00): $today');
+    debugPrint('[NOTIF] 开学周一: $semesterMonday');
+    debugPrint('[NOTIF] 时区: ${tz.local.name}');
+    debugPrint('[NOTIF] 当前第 $currentWeek 周，课程提醒开关: $isReminderEnabled');
+    debugPrint('[NOTIF] 将处理第 $currentWeek 周和第 ${currentWeek + 1} 周');
+
+    // ✅ cancelAll() 移到循环外：只执行一次，避免第 2 周循环时
+    //    把第 1 周刚调度好的通知全部删掉。
+    debugPrint('[NOTIF] cancelAll() 清空所有旧通知调度...');
+    final swCancel = Stopwatch()..start();
+    await _plugin.cancelAll();
+    swCancel.stop();
+    debugPrint('[NOTIF] 旧调度清空完成，耗时 ${swCancel.elapsedMilliseconds}ms');
+
+    if (!isReminderEnabled) {
+      debugPrint('[NOTIF] 课程提醒开关已关闭，跳过全部调度');
+      return;
+    }
+
     for (int w = currentWeek; w <= currentWeek + 1; w++) {
-      if (w < 1 || w > 20) continue;
-
-      // 【核心防抖】先取消这周可能存在的旧调度（防止课表发生变更导致“幽灵通知”）
-      for (int day = 1; day <= 7; day++) {
-        for (int slot = 1; slot <= 13; slot++) {
-          await _plugin.cancel(w * 1000 + day * 100 + slot);
-        }
+      if (w < 1 || w > 20) {
+        debugPrint('[NOTIF] 第 $w 周超出范围(1~20)，跳过');
+        continue;
       }
-
-      if (!isReminderEnabled) continue;
 
       final mondayOfWeek = semesterMonday.add(Duration(days: (w - 1) * 7));
+      int scheduledCount = 0;
+      int skippedPast = 0;
+      int skippedInactive = 0;
+      int skippedTooFar = 0;
 
       for (final course in courses) {
-        if (!course.isActiveInWeek(w)) continue;
+        if (!course.isActiveInWeek(w)) {
+          skippedInactive++;
+          continue;
+        }
+
         final classDate =
             mondayOfWeek.add(Duration(days: course.dayOfWeek - 1));
-        // 你一周都不开这个app说明你也不需要这个app了
-        if (classDate.difference(now).inDays > 7) continue;
+        final daysFromToday = classDate.difference(today).inDays;
+
+        if (daysFromToday > 7) {
+          skippedTooFar++;
+          debugPrint('[NOTIF] 跳过(超7天): ${course.name} '
+              '${classDate.month}/${classDate.day}，距今 $daysFromToday 天');
+          continue;
+        }
 
         final timeStr = _slotStartTimes[course.timeSlot];
-        if (timeStr == null) continue;
+        if (timeStr == null) {
+          debugPrint('[NOTIF] 警告：${course.name} 节次${course.timeSlot}无时间配置');
+          continue;
+        }
 
-        final timeParts = timeStr.split(':');
-        final hour = int.parse(timeParts[0]);
-        final minute = int.parse(timeParts[1]);
-
-        final classTime = DateTime(
-            classDate.year, classDate.month, classDate.day, hour, minute);
-
-        // 提前 15 分钟
+        final parts = timeStr.split(':');
+        final classTime = DateTime(classDate.year, classDate.month,
+            classDate.day, int.parse(parts[0]), int.parse(parts[1]));
         final remindTime = classTime.subtract(const Duration(minutes: 15));
 
-        if (remindTime.isAfter(now)) {
-          final notificationId =
-              w * 1000 + course.dayOfWeek * 100 + course.timeSlot;
-
-          await _plugin.zonedSchedule(
-            notificationId,
-            '上课提醒：${course.name}',
-            '将在 15 分钟后（$timeStr）在 ${course.classroom} 上课',
-            tz.TZDateTime.from(remindTime, tz.local),
-            NotificationDetails(
-              android: AndroidNotificationDetails(
-                _classChannelId,
-                _classChannelName,
-                channelDescription: '课前 15 分钟提醒，带声音与震动',
-                importance: Importance.high,
-                priority: Priority.high,
-                playSound: true,
-                enableVibration: true,
-                enableLights: true,
-                // 震动节奏：短-停-长-停-长（单位毫秒）
-                vibrationPattern:
-                    Int64List.fromList([0, 200, 200, 400, 200, 400]),
-              ),
-            ),
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
-          );
+        if (!remindTime.isAfter(now)) {
+          skippedPast++;
+          debugPrint('[NOTIF] 跳过(已过期): ${course.name} '
+              '提醒时间 ${remindTime.month}/${remindTime.day} '
+              '${remindTime.hour}:${remindTime.minute.toString().padLeft(2, '0')}');
+          continue;
         }
+
+        final notificationId =
+            w * 1000 + course.dayOfWeek * 100 + course.timeSlot;
+        final tzRemindTime = tz.TZDateTime.from(remindTime, tz.local);
+
+        debugPrint('[NOTIF] ✅ 调度 #$notificationId: ${course.name} '
+            '@ ${classDate.month}/${classDate.day} $timeStr '
+            '→ 提醒 ${remindTime.month}/${remindTime.day} '
+            '${remindTime.hour}:${remindTime.minute.toString().padLeft(2, '0')} '
+            '(tz=${tzRemindTime.timeZoneName})');
+
+        await _plugin.zonedSchedule(
+          notificationId,
+          '上课提醒：${course.name}',
+          '将在 15 分钟后（$timeStr）在 ${course.classroom} 上课',
+          tzRemindTime,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              _classChannelId,
+              _classChannelName,
+              channelDescription: '课前 15 分钟提醒，带声音与震动',
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
+              vibrationPattern:
+                  Int64List.fromList([0, 200, 200, 400, 200, 400]),
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        scheduledCount++;
       }
+
+      debugPrint('[NOTIF] 第 $w 周汇总 → '
+          '已调度: $scheduledCount | '
+          '已过期: $skippedPast | '
+          '本周无课: $skippedInactive | '
+          '超7天: $skippedTooFar');
     }
+
+    debugPrint('[NOTIF] scheduleClassReminders 完成 ✅');
+    debugPrint('[NOTIF] ══════════════════════════════════════');
   }
 
   /// 前台运行时检查电费余额并推送（供 electricityProvider 调用）
@@ -193,7 +262,7 @@ class NotificationService {
         1,
         '⚡ 电费不足提醒',
         '寝室剩余电费 ¥$balanceStr，已低于 ¥${threshold.toStringAsFixed(0)}，请及时充值！',
-        NotificationDetails(
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             _elecChannelId,
             '电费预警',
@@ -242,5 +311,13 @@ class NotificationService {
   static Future<void> setCourseReminderEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_courseReminderKey, value);
+  }
+
+  /// 取消所有已注册的课程提醒（关闭开关时调用）
+  /// 使用 cancelAll() 一次清空，比逐个 cancel 更高效
+  static Future<void> cancelAllClassReminders() async {
+    debugPrint('[NOTIF] cancelAllClassReminders: 清空所有课程通知调度...');
+    await _plugin.cancelAll();
+    debugPrint('[NOTIF] cancelAllClassReminders: 完成');
   }
 }

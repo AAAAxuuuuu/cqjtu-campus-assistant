@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/models/course.dart';
+import 'package:campus_platform/services/notification_service.dart';
 import '../utils/providers.dart';
 import '../widgets/course_cell.dart';
 import '../widgets/error_view.dart';
@@ -92,7 +94,9 @@ class SchedulePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedSemester = ref.watch(selectedScheduleSemesterProvider);
+    // selectedScheduleSemesterProvider 已改为 AsyncNotifier，需要解包
+    final selectedSemesterAsync = ref.watch(selectedScheduleSemesterProvider);
+    final selectedSemester = selectedSemesterAsync.valueOrNull;
     final semesterAsync = ref.watch(activeSemesterStartProvider);
 
     // 开学日期变更时自动跳到对应当前周
@@ -225,20 +229,39 @@ class _ScheduleBody extends ConsumerWidget {
                   duration: Duration(seconds: 1),
                 ),
               );
+              // 在第一个 await 前缓存所有需要用到的引用，
+              // 避免 await 后 widget 销毁导致 StateError
+              final creds = ref.read(credentialsProvider);
+              final apiService = ref.read(apiServiceProvider);
+              final semesterStart = ref
+                  .read(activeSemesterStartProvider)
+                  .valueOrNull;
               try {
-                final creds = ref.read(credentialsProvider);
                 if (creds != null) {
-                  await ref
-                      .read(apiServiceProvider)
-                      .getSchedule(
-                        creds.username,
-                        creds.password,
-                        semester: selectedSemester,
-                        forceRefresh: true,
-                      );
+                  await apiService.getSchedule(
+                    creds.username,
+                    creds.password,
+                    semester: selectedSemester,
+                    forceRefresh: true,
+                  );
                 }
                 ref.invalidate(scheduleProvider(selectedSemester));
-                await ref.read(scheduleProvider(selectedSemester).future);
+                final result = await ref.read(
+                  scheduleProvider(selectedSemester).future,
+                );
+
+                // 课表拉取成功后，清空旧调度并重新注册通知
+                if (semesterStart != null) {
+                  debugPrint('[刷新] 课表已更新，重新调度课程通知...');
+                  await NotificationService.scheduleClassReminders(
+                    result.courses,
+                    semesterStart,
+                  );
+                  debugPrint('[刷新] 课程通知调度完成');
+                } else {
+                  debugPrint('[刷新] 未设置开学日期，跳过通知调度');
+                }
+
                 if (context.mounted) {
                   ScaffoldMessenger.of(
                     context,
@@ -296,26 +319,39 @@ Future<void> _pickSemesterStart(BuildContext context, WidgetRef ref) async {
     helpText: '选择开学第一天',
   );
 
-  if (picked != null) {
-    // 自动推断学期
-    final semesterStr = _calculateSemester(picked);
+  if (picked == null) return;
 
-    // 1. 存储选定日期的开学时间
-    await ref
-        .read(semesterStartForKeyProvider(semesterStr).notifier)
-        .set(picked);
+  // ✅ StateError 修复：在第一个 await 之前把所有 notifier 缓存为本地变量。
+  //    showDatePicker await 返回后 widget 可能已被销毁，此时再调用
+  //    ref.read() 会抛出 "Cannot use ref after widget was disposed"。
+  //    notifier 对象本身是独立存活的，缓存后可安全在 async gap 后使用。
+  final semesterStr = _calculateSemester(picked);
+  final forKeyNotifier = ref.read(
+    semesterStartForKeyProvider(semesterStr).notifier,
+  );
+  final semesterStartNotifier = ref.read(semesterStartProvider.notifier);
+  final selectedSemesterNotifier = ref.read(
+    selectedScheduleSemesterProvider.notifier,
+  );
+  final selectedWeekNotifier = ref.read(selectedWeekProvider.notifier);
 
-    // 2. 切换当前学期为刚刚推算的学期，自动触发数据获取
-    await ref.read(selectedScheduleSemesterProvider.notifier).set(semesterStr);
+  // 1. 存储选定日期的开学时间（按学期 key）
+  await forKeyNotifier.set(picked);
 
-    // 3. 计算周次并跳转
-    ref.read(selectedWeekProvider.notifier).setWeek(_calcCurrentWeek(picked));
+  // 2. 同时写入默认 semesterStartProvider，作为 activeSemesterStartProvider 的 fallback。
+  //    避免 selectedScheduleSemesterProvider 重建时短暂为 null 导致显示"未设置开学日期"。
+  await semesterStartNotifier.set(picked);
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已自动切换为 ${_semesterLabel(semesterStr)}')),
-      );
-    }
+  // 3. 切换当前学期，触发课表数据获取
+  await selectedSemesterNotifier.set(semesterStr);
+
+  // 4. 计算周次并跳转
+  selectedWeekNotifier.setWeek(_calcCurrentWeek(picked));
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已自动切换为 \${_semesterLabel(semesterStr)}')),
+    );
   }
 }
 

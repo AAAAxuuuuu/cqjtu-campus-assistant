@@ -9,6 +9,12 @@ import 'package:workmanager/workmanager.dart';
 const kBgTaskName = 'balanceMonitor';
 const kBgTaskTag = 'com.axu.schedule.balanceMonitor';
 
+// ✅ 与 NotificationService 保持完全一致的 Channel ID，
+// 必须用 v2 版本；旧的 'elec_alert'/'card_alert' 未配置
+// Importance.high，发出的通知没有悬浮横幅且无声音。
+const _elecChannelId = 'elec_alert_v2';
+const _cardChannelId = 'card_alert_v2';
+
 /// 后台任务入口，必须是顶层函数且加 @pragma。
 @pragma('vm:entry-point')
 void backgroundCallbackDispatcher() {
@@ -49,14 +55,41 @@ void backgroundCallbackDispatcher() {
         debugPrint('[BG] 夜间降频模式，已超过 3 小时，本次正常执行');
       }
 
-      // ── 2. 初始化通知插件
+      // ── 2. 初始化通知插件并创建渠道
+      // ✅ 修复：后台进程是独立的 Isolate，不能依赖主进程创建过的渠道。
+      // 必须在此处显式创建渠道，否则 Android 8+ 上通知会被静默丢弃。
       final plugin = FlutterLocalNotificationsPlugin();
       await plugin.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
       );
-      debugPrint('[BG] 通知插件初始化完成');
+
+      final androidPlugin = plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      // ✅ 每次后台任务启动都重新确保渠道存在（createNotificationChannel 是幂等的）
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _elecChannelId,
+          '电费预警',
+          description: '电费余额低于预警阈值时通知',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _cardChannelId,
+          '校园卡预警',
+          description: '校园卡余额低于预警阈值时通知',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+      debugPrint('[BG] 通知插件初始化 & 渠道创建完成');
 
       // ── 3. 读取预警阈值
       final prefs = await SharedPreferences.getInstance();
@@ -65,19 +98,20 @@ void backgroundCallbackDispatcher() {
       debugPrint('[BG] 阈值读取：电费=$elecThreshold，校园卡=$cardThreshold');
 
       // ── 4. 读取宿舍参数（用户在 App 内选择并保存的）
-      // 若用户未设置宿舍，dormParams 为 null，后端使用默认逻辑
       final dormParams = _readDormParams(prefs);
       debugPrint('[BG] 宿舍参数：${dormParams ?? "未设置，使用默认"}');
 
       // ── 5. 初始化 HTTP 客户端
       final dio = Dio(BaseOptions(
-        baseUrl: const String.fromEnvironment('BASE_URL',
-            defaultValue: 'http://127.0.0.1:8080'),
+        baseUrl: const String.fromEnvironment(
+          'BASE_URL',
+          defaultValue: 'http://127.0.0.1:8080',
+        ),
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 30),
       ));
 
-      // ── 6. 查询电费余额（携带宿舍参数）
+      // ── 6. 查询电费余额
       debugPrint('[BG] 开始查询电费余额...');
       await _checkElec(
           dio, plugin, prefs, username, password, elecThreshold, dormParams);
@@ -98,19 +132,40 @@ void backgroundCallbackDispatcher() {
   });
 }
 
-/// 从 SharedPreferences 读取宿舍查询参数
-/// 若任一字段缺失则返回 null（表示用户未设置宿舍）
+/// 按实际存储的 key 读取，然后手动拼出 buildid宿舍查询参数
 Map<String, String>? _readDormParams(SharedPreferences prefs) {
-  final buildid = prefs.getString('dorm_buildid');
+  final gardenName = prefs.getString('dorm_garden');
+  final numberStr = prefs.getString('dorm_number');
   final roomid = prefs.getString('dorm_roomid');
-  final sysid = prefs.getString('dorm_sysid');
-  final areaid = prefs.getString('dorm_areaid');
-  if (buildid == null || roomid == null || sysid == null || areaid == null) {
-    return null;
+
+  if (gardenName == null || numberStr == null || roomid == null) return null;
+
+  final number = int.tryParse(numberStr);
+  if (number == null) return null;
+
+  // 与 dorm_room.dart 的 buildDormId() 保持完全一致
+  // 德园 suffix=01，礼园 suffix=05
+  final String suffix;
+  final String gardenLabel;
+  switch (gardenName) {
+    case 'deYuan':
+      suffix = '01';
+      gardenLabel = '德园';
+      break;
+    case 'liYuan':
+      suffix = '05';
+      gardenLabel = '礼园';
+      break;
+    default:
+      return null; // 未知园区，拒绝构造错误参数
   }
+
+  final numStr = number.toString().padLeft(2, '0');
+  final buildid = '${numStr}00_${suffix}_C_${gardenLabel}${number}舍';
+
   return {
-    'sysid': sysid,
-    'areaid': areaid,
+    'sysid': '1',
+    'areaid': '1',
     'buildid': buildid,
     'roomid': roomid,
   };
@@ -166,13 +221,16 @@ Future<void> _checkElec(
       101,
       '⚡ 电费不足提醒',
       '寝室剩余电费 ¥$balStr，已低于 ¥${threshold.toStringAsFixed(0)}，请及时充值！',
+      // ✅ 修复：使用 v2 Channel ID，与 NotificationService 保持一致
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'elec_alert',
+          _elecChannelId, // 'elec_alert_v2'
           '电费预警',
           channelDescription: '电费余额低于预警阈值时通知',
           importance: Importance.high,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
         ),
       ),
     );
@@ -228,13 +286,16 @@ Future<void> _checkCard(
       102,
       '💳 校园卡余额不足',
       '校园卡余额 ¥$balStr，已低于 ¥${threshold.toStringAsFixed(0)}，请及时充值！',
+      // ✅ 修复：使用 v2 Channel ID
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'card_alert',
+          _cardChannelId, // 'card_alert_v2'
           '校园卡预警',
           channelDescription: '校园卡余额低于预警阈值时通知',
           importance: Importance.high,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
         ),
       ),
     );

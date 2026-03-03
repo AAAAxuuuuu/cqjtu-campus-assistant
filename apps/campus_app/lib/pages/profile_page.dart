@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -873,15 +874,16 @@ class _NoticeSection extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // 后台设置卡片
 // ══════════════════════════════════════════════════════════════
-class _BackgroundSettingsCard extends StatefulWidget {
+class _BackgroundSettingsCard extends ConsumerStatefulWidget {
   const _BackgroundSettingsCard();
 
   @override
-  State<_BackgroundSettingsCard> createState() =>
+  ConsumerState<_BackgroundSettingsCard> createState() =>
       _BackgroundSettingsCardState();
 }
 
-class _BackgroundSettingsCardState extends State<_BackgroundSettingsCard>
+class _BackgroundSettingsCardState
+    extends ConsumerState<_BackgroundSettingsCard>
     with WidgetsBindingObserver {
   bool? _isIgnoring;
   bool? _autostartAppOps;
@@ -981,6 +983,59 @@ class _BackgroundSettingsCardState extends State<_BackgroundSettingsCard>
                     onChanged: (val) async {
                       await NotificationService.setCourseReminderEnabled(val);
                       setState(() => _courseReminderEnabled = val);
+
+                      if (!val) {
+                        // 关闭：立即清空所有已注册的课程提醒
+                        await NotificationService.cancelAllClassReminders();
+                        debugPrint('[Profile] 课前通知已关闭，所有调度已清空');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('课前提醒已关闭')),
+                          );
+                        }
+                      } else {
+                        // 开启：立即重新调度，不用等下次切换前台
+                        final semesterStart = ref
+                            .read(activeSemesterStartProvider)
+                            .valueOrNull;
+                        final selectedSemester = ref
+                            .read(selectedScheduleSemesterProvider)
+                            .valueOrNull;
+
+                        if (semesterStart == null) {
+                          debugPrint('[Profile] 开启失败：尚未设置开学日期');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('请先在课程表页面设置开学日期')),
+                            );
+                          }
+                          return;
+                        }
+
+                        try {
+                          // ✅ 修复：autoDispose provider 用 .future await，不能同步 .valueOrNull
+                          final scheduleResult = await ref.read(
+                            scheduleProvider(selectedSemester).future,
+                          );
+                          await NotificationService.scheduleClassReminders(
+                            scheduleResult.courses,
+                            semesterStart,
+                          );
+                          debugPrint('[Profile] 课前通知已开启，调度完成');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('课前提醒已开启')),
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('[Profile] 开启失败（拉取课表出错）：$e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('课表获取失败，请稍后重试')),
+                            );
+                          }
+                        }
+                      }
                     },
                   ),
           ),
@@ -1017,7 +1072,7 @@ class _BackgroundSettingsCardState extends State<_BackgroundSettingsCard>
           _SettingTile(
             icon: Icons.autorenew_outlined,
             iconColor: _autostartDone ? Colors.blue : Colors.blueGrey,
-            title: '开启自启动（MIUI 必做）',
+            title: '开启自启动',
             subtitle: _autostartSubtitle,
             trailing: _autostartDone
                 ? Icon(
@@ -1049,7 +1104,7 @@ class _BackgroundSettingsCardState extends State<_BackgroundSettingsCard>
           _SettingTile(
             icon: Icons.lock_outline,
             iconColor: Colors.purple,
-            title: '锁定后台（MIUI 必做）',
+            title: '锁定后台',
             subtitle: '在最近任务界面长按本应用 → 锁定，防止被清理',
             trailing: const Icon(
               Icons.info_outline,

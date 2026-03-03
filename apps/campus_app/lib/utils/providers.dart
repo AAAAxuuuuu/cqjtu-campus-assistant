@@ -206,38 +206,39 @@ final semesterStartForKeyProvider =
     >(SemesterStartForKeyNotifier.new);
 
 // ── 课程表页当前选中的学期（null = 当前学期，持久化到 SharedPreferences）──
-// 使用 NotifierProvider 替换原来的 StateProvider，使其能在 App 重启后恢复。
-// build() 先返回 null（保持启动时无闪烁），再通过 microtask 异步恢复持久化值。
-class SelectedSemesterNotifier extends Notifier<String?> {
+// 使用 AsyncNotifierProvider：build() 直接 await 读取持久化值，
+// 彻底消除旧版 Future.microtask 写法在 Provider 重建时引发的 race condition
+// （旧写法：build() 同步返回 null → activeSemesterStartProvider 瞬间看到 null
+//  → semesterStartProvider 从未被写入 → 展示"尚未设置开学日期"页面）。
+class SelectedSemesterNotifier extends AsyncNotifier<String?> {
   @override
-  String? build() {
-    // 立即返回 null，再在后台异步恢复持久化的学期字符串
-    Future.microtask(() async {
-      final saved = await ref
-          .read(semesterServiceProvider)
-          .loadSelectedSemester();
-      if (saved != null && state == null) {
-        state = saved;
-      }
-    });
-    return null;
+  Future<String?> build() async {
+    return ref.read(semesterServiceProvider).loadSelectedSemester();
   }
 
   /// 更新选中学期并持久化
   Future<void> set(String? value) async {
-    state = value;
+    state = AsyncData(value);
     await ref.read(semesterServiceProvider).saveSelectedSemester(value);
   }
 }
 
 final selectedScheduleSemesterProvider =
-    NotifierProvider<SelectedSemesterNotifier, String?>(
+    AsyncNotifierProvider<SelectedSemesterNotifier, String?>(
       SelectedSemesterNotifier.new,
     );
 
 // ── 生效的学期开始日期 ────────────────────────────────────────
 final activeSemesterStartProvider = Provider<AsyncValue<DateTime?>>((ref) {
-  final selected = ref.watch(selectedScheduleSemesterProvider);
+  // selectedScheduleSemesterProvider 现在是 AsyncNotifier，正在加载时返回 loading，
+  // 避免 UI 在初始化瞬间因 selected=null 而误判为"未设置开学日期"。
+  final selectedAsync = ref.watch(selectedScheduleSemesterProvider);
+  if (selectedAsync.isLoading) return const AsyncValue.loading();
+  if (selectedAsync.hasError) {
+    return AsyncValue.error(selectedAsync.error!, selectedAsync.stackTrace!);
+  }
+
+  final selected = selectedAsync.valueOrNull;
   if (selected == null) return ref.watch(semesterStartProvider);
   return ref.watch(semesterStartForKeyProvider(selected));
 });
