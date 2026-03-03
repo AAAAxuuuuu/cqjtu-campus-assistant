@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:core/models/course.dart';
 import 'package:core/models/grade.dart';
 import 'package:core/models/exam.dart';
+import 'dart:developer' as dev;
 
 class ApiService {
   ApiService({
@@ -73,8 +74,6 @@ class ApiService {
   }
 
   // ── 电费余额 ─────────────────────────────────────────────
-  // [新增] dormParams：可选的宿舍参数（sysid/areaid/buildid/roomid）
-  // 后端若支持则按宿舍查询；留空时沿用后端 Session 绑定的默认宿舍。
   Future<String> getElecBalance(
     String username,
     String password, {
@@ -127,12 +126,55 @@ class ApiService {
     return res.data['data'] as String;
   }
 
+  // ── SSO Ticket 登录（WebView 拦截后调用）────────────────────
+  /// 将 WebView 拦截到的 SSO ticket 发给后端，后端自行完成握手。
+  Future<void> loginWithTicket(String username, String ticket) async {
+    dev.log('发送 SSO ticket，用户：$username', name: 'ApiService');
+    final res = await _dio.post(
+      '/api/auth/loginWithTicket',
+      queryParameters: {'username': username, 'ticket': ticket},
+    );
+    _checkCode(res.data);
+  }
+
+  // ── JSESSIONID 直接注入（策略二兜底）───────────────────────
+  Future<void> injectJsessionid(String username, String jsessionid) async {
+    dev.log('注入 JSESSIONID，用户：$username', name: 'ApiService');
+    final res = await _dio.post(
+      '/api/auth/injectJsessionid',
+      queryParameters: {'username': username, 'jsessionid': jsessionid},
+    );
+    _checkCode(res.data);
+  }
+
+  Future<void> injectCookies(
+      String username, String domain, String cookies) async {
+    final res = await _dio.post('/api/auth/injectCookies', queryParameters: {
+      'username': username,
+      'domain': domain,
+      'cookies': cookies,
+    });
+    _checkCode(res.data);
+  }
+
+  // ── 内部工具 ─────────────────────────────────────────────
+
   void _checkCode(dynamic data) {
     final code = data['code'] as int;
+    if (code == 449) {
+      // 需要滑动验证码，由 login_page 捕获后弹出 WebView
+      throw CaptchaRequiredException();
+    }
     if (code != 200) {
       throw ApiException(code, data['msg'] as String? ?? '未知错误');
     }
   }
+}
+
+/// 后端返回 449：需要用户手动完成滑动验证码。
+class CaptchaRequiredException implements Exception {
+  @override
+  String toString() => '需要验证码';
 }
 
 class ApiException implements Exception {
