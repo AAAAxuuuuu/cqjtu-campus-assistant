@@ -20,7 +20,7 @@ void main() async {
 
   await Workmanager().initialize(
     backgroundCallbackDispatcher,
-    isInDebugMode: false,
+    //isInDebugMode: false,
   );
 
   await Workmanager().registerPeriodicTask(
@@ -113,6 +113,7 @@ class _MainShellState extends ConsumerState<_MainShell>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showBatteryGuideIfNeeded();
+      _trySchedule();
     });
   }
 
@@ -125,18 +126,46 @@ class _MainShellState extends ConsumerState<_MainShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[生命周期] 状态改变: $state');
     if (state == AppLifecycleState.resumed) {
       _trySchedule();
     }
   }
 
   void _trySchedule() {
-    // scheduleProvider 现在返回 ScheduleResult，从中取 .courses
-    final result = ref.read(scheduleProvider(null)).valueOrNull;
-    final semesterStart = ref.read(semesterStartProvider).valueOrNull;
-    if (result != null && semesterStart != null) {
-      NotificationService.scheduleClassReminders(result.courses, semesterStart);
+    // ✅ 核心修复 1：读取当前真正选中的学期，而不是写死 null
+    final selectedSemester = ref
+        .read(selectedScheduleSemesterProvider)
+        .valueOrNull;
+
+    // ✅ 核心修复 2：使用统一的 Provider 实例
+    final scheduleState = ref.read(scheduleProvider(selectedSemester));
+    final semesterState = ref.read(activeSemesterStartProvider);
+
+    final result = scheduleState.valueOrNull;
+    final semesterStart = semesterState.valueOrNull;
+
+    debugPrint('----------------------------------------');
+    debugPrint('[调度器] 准备检查课表提醒注册条件...');
+
+    if (scheduleState.hasError) {
+      debugPrint('[调度器] ❌ 课表加载失败，原因: ${scheduleState.error}');
     }
+
+    debugPrint(
+      '[调度器] 课表状态(${selectedSemester ?? "默认"}): ${scheduleState.runtimeType} -> ${result != null ? "有数据" : "无数据"}',
+    );
+    debugPrint(
+      '[调度器] 开学时间: ${semesterState.runtimeType} -> ${semesterStart != null ? "有数据" : "无数据"}',
+    );
+
+    if (result != null && semesterStart != null) {
+      debugPrint('[调度器] ✅ 两大数据已就绪，准备下发给系统注册！');
+      NotificationService.scheduleClassReminders(result.courses, semesterStart);
+    } else {
+      debugPrint('[调度器] ❌ 拦截：数据不完整，放弃本次注册。');
+    }
+    debugPrint('----------------------------------------');
   }
 
   Future<void> _showBatteryGuideIfNeeded() async {
@@ -186,10 +215,16 @@ class _MainShellState extends ConsumerState<_MainShell>
     ref.watch(electricityProvider);
     ref.watch(campusCardBalanceProvider);
 
-    ref.listen(scheduleProvider(null), (prev, next) {
+    // ✅ 核心修复 3：在 build 中也监听真正选中的学期
+    final selectedSemester = ref
+        .watch(selectedScheduleSemesterProvider)
+        .valueOrNull;
+
+    ref.listen(scheduleProvider(selectedSemester), (prev, next) {
       if (next.hasValue) _trySchedule();
     });
-    ref.listen(semesterStartProvider, (prev, next) {
+
+    ref.listen(activeSemesterStartProvider, (prev, next) {
       if (next.hasValue) _trySchedule();
     });
 

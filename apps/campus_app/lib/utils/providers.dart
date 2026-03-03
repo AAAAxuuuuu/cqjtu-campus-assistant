@@ -259,18 +259,20 @@ final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, int>(
 typedef ScheduleResult = ({List<Course> courses, String remark});
 
 // ── 课程表（按学期 family，null = 当前学期）──────────────────────
-final scheduleProvider = FutureProvider.autoDispose
-    .family<ScheduleResult, String?>((ref, semester) async {
-      final creds = ref.watch(credentialsProvider);
-      if (creds == null) throw Exception('未登录');
+final scheduleProvider = FutureProvider.family<ScheduleResult, String?>((
+  ref,
+  semester,
+) async {
+  final creds = ref.watch(credentialsProvider);
+  if (creds == null) throw Exception('未登录');
 
-      final backend = ref.watch(campusBackendProvider);
-      return backend.getSchedule(
-        creds.username,
-        creds.password,
-        semester: semester,
-      );
-    });
+  final backend = ref.watch(campusBackendProvider);
+  return backend.getSchedule(
+    creds.username,
+    creds.password,
+    semester: semester,
+  );
+});
 
 // ── 电费（时间感知轮询）──────────────────────────────────────────
 final electricityProvider = FutureProvider<String>((ref) async {
