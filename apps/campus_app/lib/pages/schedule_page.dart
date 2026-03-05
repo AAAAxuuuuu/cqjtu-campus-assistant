@@ -242,7 +242,7 @@ class _ScheduleBody extends ConsumerWidget {
               }
 
               // 注入凭据后，再次使 Provider 失效重试
-              ref.invalidate(scheduleProvider(selectedSemester));
+              ref.read(sessionUpdateProvider.notifier).triggerRefresh();
             } catch (injectErr) {
               if (context.mounted) {
                 ScaffoldMessenger.of(

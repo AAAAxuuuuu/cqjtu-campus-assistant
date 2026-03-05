@@ -263,6 +263,7 @@ final scheduleProvider = FutureProvider.family<ScheduleResult, String?>((
   ref,
   semester,
 ) async {
+  ref.watch(sessionUpdateProvider); // 监听全局会话更新，触发时刷新课程表数据
   final creds = ref.watch(credentialsProvider);
   if (creds == null) throw Exception('未登录');
 
@@ -276,6 +277,7 @@ final scheduleProvider = FutureProvider.family<ScheduleResult, String?>((
 
 // ── 电费（时间感知轮询）──────────────────────────────────────────
 final electricityProvider = FutureProvider<String>((ref) async {
+  ref.watch(sessionUpdateProvider); // 监听全局会话更新，触发时刷新电费数据
   final interval = pollingInterval();
   final timer = Timer(interval, () => ref.invalidateSelf());
   ref.onDispose(timer.cancel);
@@ -308,6 +310,7 @@ final electricityProvider = FutureProvider<String>((ref) async {
 
 // ── 校园卡余额（时间感知轮询）────────────────────────────────────
 final campusCardBalanceProvider = FutureProvider<String>((ref) async {
+  ref.watch(sessionUpdateProvider); // 监听全局会话更新，触发时刷新余额数据
   final interval = pollingInterval();
   debugPrint('[FG] 校园卡 Timer 启动，${interval.inMinutes}min 后自动刷新');
   final timer = Timer(interval, () => ref.invalidateSelf());
@@ -328,6 +331,7 @@ final campusCardBalanceProvider = FutureProvider<String>((ref) async {
 
 // ── 消费二维码 ────────────────────────────────────────────────
 final payCodeProvider = FutureProvider.autoDispose<String>((ref) async {
+  ref.watch(sessionUpdateProvider);
   final creds = ref.watch(credentialsProvider);
   if (creds == null) throw Exception('未登录');
 
@@ -360,3 +364,16 @@ final examsProvider = FutureProvider.autoDispose.family<List<Exam>, String?>((
   final backend = ref.watch(campusBackendProvider);
   return backend.getExams(creds.username, creds.password, semester: semester);
 });
+
+// ── 全局会话更新触发器 ──────────────────────────────
+class SessionUpdateNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  // 每次 WebView 登录成功或注入新 Cookie 后调用
+  void triggerRefresh() => state++;
+}
+
+final sessionUpdateProvider = NotifierProvider<SessionUpdateNotifier, int>(
+  SessionUpdateNotifier.new,
+);
