@@ -1,6 +1,6 @@
 name: campus_platform
 description: Platform integrations (notifications, background tasks, storage).
-version: 0.0.1
+version: 0.0.1+4
 publish_to: "none"
 
 environment:

@@ -38,7 +38,7 @@ packages:
       path: "../../packages/platform"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "0.0.1+4"
   characters:
     dependency: transitive
     description:

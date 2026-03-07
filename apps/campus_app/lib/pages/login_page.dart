@@ -140,6 +140,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  void _showCredentialNoticeDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('账号与隐私说明'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('1. 账号和密码仅用于向学校教务系统发起登录请求。'),
+            SizedBox(height: 8),
+            Text('2. 不会上传到开发者服务器，也不会用于与教务无关的数据处理。'),
+            SizedBox(height: 8),
+            Text('3. 为了免登录，凭据会使用系统加密能力保存在本机。'),
+            SizedBox(height: 8),
+            Text('4. 你可以在「我的 > 退出登录」随时清除本机保存的凭据。'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('我知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,6 +188,67 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text('使用教务网账号登录', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.verified_user_outlined,
+                            size: 16,
+                            color: Color(0xFF1D4ED8),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '账号密码仅用于教务登录，不会上传到开发者服务器。',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1E3A8A),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: Size.zero,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: _showCredentialNoticeDialog,
+                          child: const Text(
+                            '查看详情',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 40),
                 TextField(
                   controller: _usernameCtrl,

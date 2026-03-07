@@ -23,4 +23,5 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 
+rootProject.name = "campus_app_android"
 include(":app")

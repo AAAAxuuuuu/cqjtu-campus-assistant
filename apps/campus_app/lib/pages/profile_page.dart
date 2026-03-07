@@ -892,6 +892,20 @@ class _BackgroundSettingsCardState
   bool? _autostartAppOps;
   bool _autostartOpened = false;
   bool? _courseReminderEnabled;
+  int? _courseReminderMinutes;
+
+  static const List<int> _reminderMinuteOptions = [
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+  ];
 
   @override
   void initState() {
@@ -917,11 +931,14 @@ class _BackgroundSettingsCardState
         await BatteryOptimizationService.isIgnoringBatteryOptimizations();
     final autostart = await BatteryOptimizationService.checkMiuiAutostart();
     final courseReminder = await NotificationService.getCourseReminderEnabled();
+    final courseReminderMinutes =
+        await NotificationService.getCourseReminderMinutes();
     if (mounted) {
       setState(() {
         _isIgnoring = ignoring;
         _autostartAppOps = autostart;
         _courseReminderEnabled = courseReminder;
+        _courseReminderMinutes = courseReminderMinutes;
       });
     }
   }
@@ -949,8 +966,73 @@ class _BackgroundSettingsCardState
     return '允许 App 开机自启，确保后台轮询不中断';
   }
 
+  Future<bool> _rescheduleCourseReminders({String? successMessage}) async {
+    final semesterStart = ref.read(activeSemesterStartProvider).valueOrNull;
+    final selectedSemester = ref.read(selectedScheduleSemesterProvider).valueOrNull;
+
+    if (semesterStart == null) {
+      debugPrint('[Profile] 开启失败：尚未设置开学日期');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先在课程表页面设置开学日期')),
+        );
+      }
+      return false;
+    }
+
+    try {
+      final scheduleResult = await ref.read(
+        scheduleProvider(selectedSemester).future,
+      );
+      await NotificationService.scheduleClassReminders(
+        scheduleResult.courses,
+        semesterStart,
+      );
+
+      if (successMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(successMessage)),
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint('[Profile] 调度失败（拉取课表出错）：$e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('课表获取失败，请稍后重试')),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _onReminderMinutesSelected(int minutes) async {
+    if (_courseReminderMinutes == minutes) return;
+
+    await NotificationService.setCourseReminderMinutes(minutes);
+    if (mounted) {
+      setState(() => _courseReminderMinutes = minutes);
+    }
+
+    if (_courseReminderEnabled == true) {
+      final ok = await _rescheduleCourseReminders();
+      if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('课前提醒已改为提前 $minutes 分钟')),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已保存为提前 $minutes 分钟，开启课前提醒后生效')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentReminderMinutes =
+        _courseReminderMinutes ?? NotificationService.defaultCourseReminderMinutes;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -971,9 +1053,45 @@ class _BackgroundSettingsCardState
                 ? Colors.deepOrange
                 : Colors.grey,
             title: '课程表课前通知',
-            subtitle: _courseReminderEnabled == true
-                ? '✅ 已开启，课前 15 分钟提醒'
-                : '预警已关闭',
+            subtitleWidget:
+                _courseReminderEnabled == null || _courseReminderMinutes == null
+                ? const Text(
+                    '加载中...',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  )
+                : Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        _courseReminderEnabled == true
+                            ? '✅ 已开启，课前 $currentReminderMinutes 分钟提醒'
+                            : '预警已关闭（默认提前 $currentReminderMinutes 分钟）',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      PopupMenuButton<int>(
+                        initialValue: currentReminderMinutes,
+                        tooltip: '设置提醒提前时间',
+                        onSelected: _onReminderMinutesSelected,
+                        itemBuilder: (context) => _reminderMinuteOptions
+                            .map(
+                              (m) => PopupMenuItem<int>(
+                                value: m,
+                                child: Text('提前 $m 分钟'),
+                              ),
+                            )
+                            .toList(),
+                        child: const Text(
+                          '修改',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            fontSize: 12,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
             trailing: _courseReminderEnabled == null
                 ? const SizedBox(
                     width: 20,
@@ -988,7 +1106,6 @@ class _BackgroundSettingsCardState
                       setState(() => _courseReminderEnabled = val);
 
                       if (!val) {
-                        // 关闭：立即清空所有已注册的课程提醒
                         await NotificationService.cancelAllClassReminders();
                         debugPrint('[Profile] 课前通知已关闭，所有调度已清空');
                         if (mounted) {
@@ -997,47 +1114,12 @@ class _BackgroundSettingsCardState
                           );
                         }
                       } else {
-                        // 开启：立即重新调度，不用等下次切换前台
-                        final semesterStart = ref
-                            .read(activeSemesterStartProvider)
-                            .valueOrNull;
-                        final selectedSemester = ref
-                            .read(selectedScheduleSemesterProvider)
-                            .valueOrNull;
-
-                        if (semesterStart == null) {
-                          debugPrint('[Profile] 开启失败：尚未设置开学日期');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('请先在课程表页面设置开学日期')),
-                            );
-                          }
-                          return;
-                        }
-
-                        try {
-                          // ✅ 修复：autoDispose provider 用 .future await，不能同步 .valueOrNull
-                          final scheduleResult = await ref.read(
-                            scheduleProvider(selectedSemester).future,
-                          );
-                          await NotificationService.scheduleClassReminders(
-                            scheduleResult.courses,
-                            semesterStart,
-                          );
-                          debugPrint('[Profile] 课前通知已开启，调度完成');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('课前提醒已开启')),
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint('[Profile] 开启失败（拉取课表出错）：$e');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('课表获取失败，请稍后重试')),
-                            );
-                          }
-                        }
+                        final minutes =
+                            _courseReminderMinutes ??
+                            NotificationService.defaultCourseReminderMinutes;
+                        await _rescheduleCourseReminders(
+                          successMessage: '课前提醒已开启（提前 $minutes 分钟）',
+                        );
                       }
                     },
                   ),
@@ -1168,7 +1250,8 @@ class _SettingTile extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String title;
-  final String subtitle;
+  final String? subtitle;
+  final Widget? subtitleWidget;
   final Widget trailing;
   final VoidCallback? onTap;
 
@@ -1176,10 +1259,11 @@ class _SettingTile extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
+    this.subtitleWidget,
     required this.trailing,
     this.onTap,
-  });
+  }) : assert(subtitle != null || subtitleWidget != null);
 
   @override
   Widget build(BuildContext context) {
@@ -1197,10 +1281,12 @@ class _SettingTile extends StatelessWidget {
         title,
         style: const TextStyle(fontSize: 15, color: Colors.black87),
       ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 12, color: Colors.grey),
-      ),
+      subtitle:
+          subtitleWidget ??
+          Text(
+            subtitle!,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
       trailing: trailing,
       onTap: onTap,
     );

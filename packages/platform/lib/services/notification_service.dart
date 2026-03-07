@@ -14,10 +14,14 @@ class NotificationService {
   static const _elecThresholdKey = 'elec_threshold';
   static const _cardThresholdKey = 'card_threshold';
   static const _courseReminderKey = 'course_reminder';
+  static const _courseReminderMinutesKey = 'course_reminder_minutes';
 
   static const double defaultElecThreshold = 10.0;
   static const double defaultCardThreshold = 20.0;
   static const bool defaultCourseReminder = true;
+  static const int defaultCourseReminderMinutes = 15;
+  static const int minCourseReminderMinutes = 15;
+  static const int maxCourseReminderMinutes = 60;
 
   // 向下兼容旧代码引用
   static const double defaultThreshold = defaultElecThreshold;
@@ -66,7 +70,7 @@ class NotificationService {
       const AndroidNotificationChannel(
         _classChannelId,
         _classChannelName,
-        description: '课前 15 分钟提醒，带声音与震动',
+        description: '课前提醒，带声音与震动',
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
@@ -129,6 +133,7 @@ class NotificationService {
     final semesterMonday =
         semesterStart.subtract(Duration(days: semesterStart.weekday - 1));
     final isReminderEnabled = await getCourseReminderEnabled();
+    final reminderMinutes = await getCourseReminderMinutes();
     final currentWeek = (now.difference(semesterMonday).inDays ~/ 7) + 1;
 
     debugPrint('[NOTIF] ══════════════════════════════════════');
@@ -137,7 +142,9 @@ class NotificationService {
     debugPrint('[NOTIF] 今日日期(00:00): $today');
     debugPrint('[NOTIF] 开学周一: $semesterMonday');
     debugPrint('[NOTIF] 时区: ${tz.local.name}');
-    debugPrint('[NOTIF] 当前第 $currentWeek 周，课程提醒开关: $isReminderEnabled');
+    debugPrint(
+      '[NOTIF] 当前第 $currentWeek 周，课程提醒开关: $isReminderEnabled，提前 $reminderMinutes 分钟',
+    );
     debugPrint('[NOTIF] 将处理第 $currentWeek 周和第 ${currentWeek + 1} 周');
 
     // ✅ cancelAll() 移到循环外：只执行一次，避免第 2 周循环时
@@ -191,7 +198,9 @@ class NotificationService {
         final parts = timeStr.split(':');
         final classTime = DateTime(classDate.year, classDate.month,
             classDate.day, int.parse(parts[0]), int.parse(parts[1]));
-        final remindTime = classTime.subtract(const Duration(minutes: 15));
+        final remindTime = classTime.subtract(
+          Duration(minutes: reminderMinutes),
+        );
 
         if (!remindTime.isAfter(now)) {
           skippedPast++;
@@ -214,13 +223,13 @@ class NotificationService {
         await _plugin.zonedSchedule(
           notificationId,
           '上课提醒：${course.name}',
-          '将在 15 分钟后（$timeStr）在 ${course.classroom} 上课',
+          '将在 $reminderMinutes 分钟后（$timeStr）在 ${course.classroom} 上课',
           tzRemindTime,
           NotificationDetails(
             android: AndroidNotificationDetails(
               _classChannelId,
               _classChannelName,
-              channelDescription: '课前 15 分钟提醒，带声音与震动',
+              channelDescription: '课前提醒，带声音与震动',
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
@@ -311,6 +320,25 @@ class NotificationService {
   static Future<void> setCourseReminderEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_courseReminderKey, value);
+  }
+
+  static Future<int> getCourseReminderMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value =
+        prefs.getInt(_courseReminderMinutesKey) ?? defaultCourseReminderMinutes;
+    return value.clamp(
+      minCourseReminderMinutes,
+      maxCourseReminderMinutes,
+    ).toInt();
+  }
+
+  static Future<void> setCourseReminderMinutes(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    final safeValue = value.clamp(
+      minCourseReminderMinutes,
+      maxCourseReminderMinutes,
+    ).toInt();
+    await prefs.setInt(_courseReminderMinutesKey, safeValue);
   }
 
   /// 取消所有已注册的课程提醒（关闭开关时调用）
