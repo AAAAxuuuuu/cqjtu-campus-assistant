@@ -326,18 +326,22 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     final value =
         prefs.getInt(_courseReminderMinutesKey) ?? defaultCourseReminderMinutes;
-    return value.clamp(
-      minCourseReminderMinutes,
-      maxCourseReminderMinutes,
-    ).toInt();
+    return value
+        .clamp(
+          minCourseReminderMinutes,
+          maxCourseReminderMinutes,
+        )
+        .toInt();
   }
 
   static Future<void> setCourseReminderMinutes(int value) async {
     final prefs = await SharedPreferences.getInstance();
-    final safeValue = value.clamp(
-      minCourseReminderMinutes,
-      maxCourseReminderMinutes,
-    ).toInt();
+    final safeValue = value
+        .clamp(
+          minCourseReminderMinutes,
+          maxCourseReminderMinutes,
+        )
+        .toInt();
     await prefs.setInt(_courseReminderMinutesKey, safeValue);
   }
 

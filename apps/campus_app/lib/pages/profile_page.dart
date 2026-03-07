@@ -968,14 +968,16 @@ class _BackgroundSettingsCardState
 
   Future<bool> _rescheduleCourseReminders({String? successMessage}) async {
     final semesterStart = ref.read(activeSemesterStartProvider).valueOrNull;
-    final selectedSemester = ref.read(selectedScheduleSemesterProvider).valueOrNull;
+    final selectedSemester = ref
+        .read(selectedScheduleSemesterProvider)
+        .valueOrNull;
 
     if (semesterStart == null) {
       debugPrint('[Profile] 开启失败：尚未设置开学日期');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请先在课程表页面设置开学日期')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请先在课程表页面设置开学日期')));
       }
       return false;
     }
@@ -990,17 +992,17 @@ class _BackgroundSettingsCardState
       );
 
       if (successMessage != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(successMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
       }
       return true;
     } catch (e) {
       debugPrint('[Profile] 调度失败（拉取课表出错）：$e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('课表获取失败，请稍后重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('课表获取失败，请稍后重试')));
       }
       return false;
     }
@@ -1017,21 +1019,22 @@ class _BackgroundSettingsCardState
     if (_courseReminderEnabled == true) {
       final ok = await _rescheduleCourseReminders();
       if (ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('课前提醒已改为提前 $minutes 分钟')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('课前提醒已改为提前 $minutes 分钟')));
       }
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已保存为提前 $minutes 分钟，开启课前提醒后生效')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已保存为提前 $minutes 分钟，开启课前提醒后生效')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentReminderMinutes =
-        _courseReminderMinutes ?? NotificationService.defaultCourseReminderMinutes;
+        _courseReminderMinutes ??
+        NotificationService.defaultCourseReminderMinutes;
 
     return Container(
       decoration: BoxDecoration(
@@ -1067,7 +1070,10 @@ class _BackgroundSettingsCardState
                         _courseReminderEnabled == true
                             ? '✅ 已开启，课前 $currentReminderMinutes 分钟提醒'
                             : '预警已关闭（默认提前 $currentReminderMinutes 分钟）',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                       PopupMenuButton<int>(
                         initialValue: currentReminderMinutes,
