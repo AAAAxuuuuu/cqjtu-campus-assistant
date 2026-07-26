@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../utils/campus_error_message.dart';
+import '../services/webview_session_scope.dart';
+
 enum WebViewLoginMode { jwgSession, zoveTokenOnly }
 
 class WebViewLoginPage extends StatefulWidget {
@@ -33,6 +36,7 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
   late final WebViewController _controller;
   bool _isHandled = false;
   bool _isLoading = true;
+  String? _loadError;
   String? _latestTicket;
   String? _capturedPassword;
   Completer<void>? _pageLoadedCompleter;
@@ -110,6 +114,7 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
               await _extractAndReturnArtifacts();
             }
           },
+          onWebResourceError: _handleWebResourceError,
         ),
       );
 
@@ -143,7 +148,13 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
       await WebViewCookieManager().clearCookies();
       await _controller.clearCache();
       await _controller.clearLocalStorage();
-    } catch (_) {}
+    } catch (error) {
+      debugPrint(
+        '[WebViewLoginPage] clear previous session failed: ${formatCampusError(error)}',
+      );
+      _showLoadError('无法清除上一个账号的登录状态，请重试');
+      return;
+    }
 
     if (mounted) {
       final url = widget.mode == WebViewLoginMode.jwgSession
@@ -151,6 +162,39 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           : _studentIndexUrl;
       await _controller.loadRequest(Uri.parse(url));
     }
+  }
+
+  void _handleWebResourceError(WebResourceError error) {
+    final url = error.url ?? '';
+    final isAuthenticationPage =
+        url.isEmpty ||
+        url.contains('ids.cqjtu.edu.cn') ||
+        url.contains('jwgln.cqjtu.edu.cn');
+    if (_isHandled ||
+        error.isForMainFrame != true ||
+        !isAuthenticationPage ||
+        !isCampusNetworkError(error.description)) {
+      return;
+    }
+    _showLoadError(formatCampusError(error.description));
+  }
+
+  void _showLoadError(String message) {
+    if (!mounted) return;
+    setState(() {
+      _loadError = message;
+      _isLoading = false;
+    });
+  }
+
+  void _retryLoginPage() {
+    setState(() {
+      _isHandled = false;
+      _isLoading = true;
+      _loadError = null;
+      _latestTicket = null;
+    });
+    unawaited(_clearCookiesAndLoad());
   }
 
   Future<void> _extractAndReturnArtifacts() async {
@@ -182,6 +226,9 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           ? (_latestTicket ?? '')
           : '';
 
+      if (mounted) {
+        await WebViewSessionScope.markAuthenticated(widget.username);
+      }
       if (mounted) {
         debugPrint(
           '[WebViewLoginPage] return result mode=${widget.mode} ticketLen=${ticket.length} casCookieLen=${casCookies.length} jwgCookieLen=${jwgCookies.length} ecardCookieLen=${ecardCookies.length} zoveTokenLen=${zoveToken.length} passwordLen=${(_capturedPassword ?? widget.password).length}',
@@ -319,6 +366,31 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
+          if (_loadError != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_off_outlined, size: 40),
+                        const SizedBox(height: 12),
+                        Text(_loadError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _retryLoginPage,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('重试'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),

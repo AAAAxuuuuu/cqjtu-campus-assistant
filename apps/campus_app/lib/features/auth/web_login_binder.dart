@@ -31,27 +31,44 @@ class WebLoginBinder {
     required Map<String, dynamic> result,
   }) async {
     final artifacts = _WebLoginArtifacts.fromResult(result);
+    final gateway = ref.read(campusGatewayProvider);
+    if (gateway is! DirectSchoolCampusGateway) {
+      throw const UnsupportedModeFailure('本地 CAS ticket 绑定');
+    }
+
+    // The WebView has established the authoritative session. Discard the
+    // failed direct-login jar before persisting or importing its artifacts.
+    await gateway.resetLoginSession(username);
     await ref
         .read(sessionServiceProvider)
         .saveWebLoginArtifacts(
           username,
-          ticket: artifacts.ticket,
           casCookies: artifacts.casCookies,
           jwgCookies: artifacts.jwgCookies,
           ecardCookies: artifacts.ecardCookies,
           zoveToken: artifacts.zoveToken,
         );
 
-    if (artifacts.ticket.isEmpty) {
-      throw const AuthInvalidFailure('未获取到可用于本地直连的 CAS ticket，请重新完成网页登录');
+    if (artifacts.ticket.isNotEmpty) {
+      try {
+        await gateway.loginWithTicket(username, artifacts.ticket);
+        return;
+      } catch (e) {
+        // Ticket may have already been consumed by SSO redirect in WebView
+      }
     }
 
-    final gateway = ref.read(campusGatewayProvider);
-    if (gateway is! DirectSchoolCampusGateway) {
-      throw const UnsupportedModeFailure('本地 CAS ticket 绑定');
+    if (artifacts.jwgCookies.isNotEmpty || artifacts.casCookies.isNotEmpty) {
+      await gateway.loginWithCookies(
+        username,
+        casCookies: artifacts.casCookies,
+        jwgCookies: artifacts.jwgCookies,
+        ecardCookies: artifacts.ecardCookies,
+      );
+      return;
     }
 
-    await gateway.loginWithTicket(username, artifacts.ticket);
+    throw const AuthInvalidFailure('未获取到有效的网页登录凭证（ticket 或 Cookie），请重新尝试网页登录');
   }
 
   Future<String> _bindSelfHosted({
@@ -67,7 +84,6 @@ class WebLoginBinder {
     Future<void> bindWithSession(String currentSessionId) async {
       await sessionManager.saveWebLoginArtifacts(
         username,
-        ticket: artifacts.ticket,
         casCookies: artifacts.casCookies,
         jwgCookies: artifacts.jwgCookies,
         ecardCookies: artifacts.ecardCookies,

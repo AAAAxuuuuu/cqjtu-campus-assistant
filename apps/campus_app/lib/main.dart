@@ -345,6 +345,7 @@ class _MainShellState extends ConsumerState<_MainShell>
           currentIndex: _index,
           onTabSelected: (index) {
             setState(() => _index = index);
+            ref.read(mainTabIndexProvider.notifier).state = index;
           },
           pages: _pages,
           destinations: _destinations,

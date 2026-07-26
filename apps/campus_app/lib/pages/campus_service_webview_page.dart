@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../utils/providers.dart';
+import '../services/webview_session_scope.dart';
 
 class CampusServiceWebViewPage extends ConsumerStatefulWidget {
   const CampusServiceWebViewPage({
@@ -52,8 +54,21 @@ class _CampusServiceWebViewPageState
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse(widget.initialUrl));
+      );
+
+    unawaited(_prepareSessionAndLoad());
+  }
+
+  Future<void> _prepareSessionAndLoad() async {
+    final username = ref.read(credentialsProvider)?.username ?? '';
+    try {
+      await WebViewSessionScope.resetForAccount(_controller, username);
+    } catch (error) {
+      debugPrint('[CampusServiceWebView] session reset failed: $error');
+    }
+
+    if (!mounted) return;
+    await _controller.loadRequest(Uri.parse(widget.initialUrl));
   }
 
   Future<void> _refreshNavigationState() async {
