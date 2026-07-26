@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/models/course.dart';
 import 'package:core/utils/schedule_time_utils.dart';
 import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
+import '../features/schedule/utils/course_text_parser.dart';
+import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/course_cell.dart';
@@ -342,9 +345,7 @@ class _ScheduleBody extends ConsumerWidget {
         // 普通的网络错误直接提示
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('刷新失败: ${errorStr.replaceAll('Exception: ', '')}'),
-            ),
+            SnackBar(content: Text('刷新失败：${formatCampusError(e)}')),
           );
         }
       }
@@ -523,6 +524,7 @@ Future<void> _showAddCustomCourseSheet(
   final nameController = TextEditingController();
   final classroomController = TextEditingController();
   final teacherController = TextEditingController();
+  final autoTextController = TextEditingController();
   final formKey = GlobalKey<FormState>();
   final safeTotalWeeks = totalWeeks
       .clamp(minSemesterTotalWeeks, maxSemesterTotalWeeks)
@@ -548,6 +550,75 @@ Future<void> _showAddCustomCourseSheet(
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
+            void applyParsedData(ParsedCourseData parsed) {
+              var count = 0;
+              if (parsed.name != null && parsed.name!.isNotEmpty) {
+                nameController.text = parsed.name!;
+                count++;
+              }
+              if (parsed.classroom != null && parsed.classroom!.isNotEmpty) {
+                classroomController.text = parsed.classroom!;
+                count++;
+              }
+              if (parsed.teacher != null && parsed.teacher!.isNotEmpty) {
+                teacherController.text = parsed.teacher!;
+                count++;
+              }
+              if (parsed.weekday != null &&
+                  parsed.weekday! >= 1 &&
+                  parsed.weekday! <= 7) {
+                weekday = parsed.weekday!;
+                count++;
+              }
+              if (parsed.startSlot != null &&
+                  parsed.startSlot! >= 1 &&
+                  parsed.startSlot! <= 13) {
+                startSlot = parsed.startSlot!;
+                count++;
+              }
+              if (parsed.endSlot != null &&
+                  parsed.endSlot! >= 1 &&
+                  parsed.endSlot! <= 13) {
+                endSlot = parsed.endSlot! < startSlot
+                    ? startSlot
+                    : parsed.endSlot!;
+                count++;
+              }
+              if (parsed.startWeek != null &&
+                  parsed.startWeek! >= 1 &&
+                  parsed.startWeek! <= safeTotalWeeks) {
+                startWeek = parsed.startWeek!;
+                count++;
+              }
+              if (parsed.endWeek != null &&
+                  parsed.endWeek! >= 1 &&
+                  parsed.endWeek! <= safeTotalWeeks) {
+                endWeek = parsed.endWeek! < startWeek
+                    ? startWeek
+                    : parsed.endWeek!;
+                count++;
+              }
+
+              setSheetState(() {});
+
+              if (!sheetContext.mounted) return;
+              if (count > 0) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(
+                    content: Text('已自动识别填充 $count 项信息'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('未识别到有效课程信息'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            }
+
             return Padding(
               padding: EdgeInsets.fromLTRB(
                 20,
@@ -587,7 +658,128 @@ Future<void> _showAddCustomCourseSheet(
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.auto_awesome,
+                                      size: 18,
+                                      color: Colors.blue,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      '粘贴并识别课程',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final data = await Clipboard.getData(
+                                      Clipboard.kTextPlain,
+                                    );
+                                    final text = data?.text;
+                                    if (text != null &&
+                                        text.trim().isNotEmpty) {
+                                      autoTextController.text = text;
+                                      final parsed = CourseTextParser.parse(
+                                        text,
+                                      );
+                                      applyParsedData(parsed);
+                                    } else {
+                                      if (!sheetContext.mounted) return;
+                                      ScaffoldMessenger.of(
+                                        sheetContext,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('剪贴板为空'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.content_paste,
+                                    size: 16,
+                                  ),
+                                  label: const Text('粘贴剪贴板'),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: autoTextController,
+                                    maxLines: 2,
+                                    minLines: 1,
+                                    decoration: const InputDecoration(
+                                      hintText:
+                                          '如：高等数学 周一 1-2节 1-16周 A101 张三老师',
+                                      hintStyle: TextStyle(fontSize: 12),
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                FilledButton.tonal(
+                                  onPressed: () {
+                                    final text = autoTextController.text;
+                                    if (text.trim().isNotEmpty) {
+                                      final parsed = CourseTextParser.parse(
+                                        text,
+                                      );
+                                      applyParsedData(parsed);
+                                    }
+                                  },
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  child: const Text('识别'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       TextFormField(
                         controller: nameController,
                         decoration: const InputDecoration(
@@ -788,6 +980,7 @@ Future<void> _showAddCustomCourseSheet(
     nameController.dispose();
     classroomController.dispose();
     teacherController.dispose();
+    autoTextController.dispose();
   }
 }
 

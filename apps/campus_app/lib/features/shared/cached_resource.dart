@@ -13,6 +13,11 @@ typedef ResourceDecoder<T> = T Function(Object? json);
 
 const Object _unset = Object();
 
+String? _activeUsername(Ref ref) {
+  final username = ref.read(credentialsProvider)?.username.trim();
+  return username == null || username.isEmpty ? null : username;
+}
+
 class CachedResource<T> {
   const CachedResource({
     required this.data,
@@ -128,6 +133,7 @@ abstract class CachedResourceNotifier<T, Arg>
   late Arg _arg;
   Timer? _timer;
   Future<CachedResource<T>>? _inflightRefresh;
+  String? _inflightUsername;
   bool _disposed = false;
 
   T get emptyData;
@@ -161,15 +167,16 @@ abstract class CachedResourceNotifier<T, Arg>
       previous,
       next,
     ) {
-      if (next != null && previous?.username != next.username) {
-        unawaited(restoreCachedThenRefresh());
-      } else if (next != null && previous == null) {
-        unawaited(refresh());
+      if (next == null) {
+        state = CachedResource<T>(data: emptyData);
+      } else if (previous?.username != next.username) {
+        state = CachedResource<T>(data: emptyData);
+        unawaited(restoreCachedThenRefresh(forceRefresh: true));
       }
     });
 
     ref.listen<int>(sessionUpdateProvider, (_, next) {
-      unawaited(refresh());
+      unawaited(refresh(forceRefresh: true));
     });
 
     listenDependencies(arg);
@@ -179,40 +186,56 @@ abstract class CachedResourceNotifier<T, Arg>
     return CachedResource<T>(data: emptyData);
   }
 
-  Future<CachedResource<T>> restoreCachedThenRefresh() async {
-    final creds = ref.read(credentialsProvider);
-    final cached =
-        await _readCache(username: creds?.username) ??
-        await _readCache(username: null);
+  Future<CachedResource<T>> restoreCachedThenRefresh({
+    bool forceRefresh = false,
+  }) async {
+    final username = _activeUsername(ref);
+    if (username == null) {
+      if (!_disposed) state = CachedResource<T>(data: emptyData);
+      return state;
+    }
 
-    if (!_disposed && cached != null) {
+    final cached = await _readCache(username: username);
+    if (!_isCurrentAccount(username)) return state;
+
+    if (cached != null) {
       state = state.copyWith(
         data: cached.data,
         hasData: true,
         updatedAt: cached.updatedAt,
       );
+    } else {
+      state = CachedResource<T>(data: emptyData);
     }
 
-    return refresh();
+    return refresh(forceRefresh: forceRefresh);
   }
 
   Future<CachedResource<T>> refresh({
     bool forceRefresh = false,
     bool throwOnError = false,
   }) {
+    final username = _activeUsername(ref);
+    if (username == null) return Future.value(state);
     final existing = _inflightRefresh;
-    if (existing != null && !forceRefresh) return existing;
+    if (existing != null && !forceRefresh && _inflightUsername == username) {
+      return existing;
+    }
 
     final task = _refreshInternal(
       forceRefresh: forceRefresh,
       throwOnError: throwOnError,
     );
-    _inflightRefresh = task.whenComplete(() {
-      if (identical(_inflightRefresh, task)) {
+    _inflightUsername = username;
+    late final Future<CachedResource<T>> trackedTask;
+    trackedTask = task.whenComplete(() {
+      if (identical(_inflightRefresh, trackedTask)) {
         _inflightRefresh = null;
+        _inflightUsername = null;
       }
     });
-    return task;
+    _inflightRefresh = trackedTask;
+    return trackedTask;
   }
 
   Future<CachedResource<T>> _refreshInternal({
@@ -221,22 +244,19 @@ abstract class CachedResourceNotifier<T, Arg>
   }) async {
     final creds = ref.read(credentialsProvider);
     if (creds == null) return state;
+    final username = creds.username.trim();
+    if (username.isEmpty) return state;
 
     state = state.copyWith(isRefreshing: true, error: null, stackTrace: null);
 
     try {
       final fresh = await fetch(creds, forceRefresh: forceRefresh);
+      if (!_isCurrentAccount(username)) return state;
+
       final changed = !state.hasData || !_sameData(state.data, fresh);
       final updatedAt = DateTime.now();
-
-      await _writeCaches(fresh, username: creds.username);
-      if (_disposed) {
-        return CachedResource<T>(
-          data: fresh,
-          hasData: true,
-          updatedAt: updatedAt,
-        );
-      }
+      await _writeCache(fresh, username: username);
+      if (!_isCurrentAccount(username)) return state;
 
       state = state.copyWith(
         data: fresh,
@@ -256,7 +276,7 @@ abstract class CachedResourceNotifier<T, Arg>
 
       return state;
     } catch (error, stackTrace) {
-      if (!_disposed) {
+      if (_isCurrentAccount(username)) {
         state = state.copyWith(
           isRefreshing: false,
           error: error,
@@ -281,7 +301,11 @@ abstract class CachedResourceNotifier<T, Arg>
     ).read();
   }
 
-  Future<void> _writeCaches(T data, {required String username}) async {
+  bool _isCurrentAccount(String username) =>
+      !_disposed && _activeUsername(ref) == username;
+
+  Future<void> _writeCache(T data, {required String username}) async {
+    if (!_isCurrentAccount(username)) return;
     final scopedStore = ResourceCacheStore<T>(
       key: resourceCacheKey(
         cacheNamespace,
@@ -291,17 +315,7 @@ abstract class CachedResourceNotifier<T, Arg>
       encode: encode,
       decode: decode,
     );
-    final latestStore = ResourceCacheStore<T>(
-      key: resourceCacheKey(
-        cacheNamespace,
-        username: null,
-        scope: cacheScopeForArg(_arg),
-      ),
-      encode: encode,
-      decode: decode,
-    );
     await scopedStore.write(data);
-    await latestStore.write(data);
   }
 
   bool _sameData(T current, T next) {
@@ -329,6 +343,7 @@ abstract class SimpleCachedResourceNotifier<T>
     extends Notifier<CachedResource<T>> {
   Timer? _timer;
   Future<CachedResource<T>>? _inflightRefresh;
+  String? _inflightUsername;
   bool _disposed = false;
 
   T get emptyData;
@@ -360,15 +375,16 @@ abstract class SimpleCachedResourceNotifier<T>
       previous,
       next,
     ) {
-      if (next != null && previous?.username != next.username) {
-        unawaited(restoreCachedThenRefresh());
-      } else if (next != null && previous == null) {
-        unawaited(refresh());
+      if (next == null) {
+        state = CachedResource<T>(data: emptyData);
+      } else if (previous?.username != next.username) {
+        state = CachedResource<T>(data: emptyData);
+        unawaited(restoreCachedThenRefresh(forceRefresh: true));
       }
     });
 
     ref.listen<int>(sessionUpdateProvider, (_, next) {
-      unawaited(refresh());
+      unawaited(refresh(forceRefresh: true));
     });
 
     listenDependencies();
@@ -378,40 +394,56 @@ abstract class SimpleCachedResourceNotifier<T>
     return CachedResource<T>(data: emptyData);
   }
 
-  Future<CachedResource<T>> restoreCachedThenRefresh() async {
-    final creds = ref.read(credentialsProvider);
-    final cached =
-        await _readCache(username: creds?.username) ??
-        await _readCache(username: null);
+  Future<CachedResource<T>> restoreCachedThenRefresh({
+    bool forceRefresh = false,
+  }) async {
+    final username = _activeUsername(ref);
+    if (username == null) {
+      if (!_disposed) state = CachedResource<T>(data: emptyData);
+      return state;
+    }
 
-    if (!_disposed && cached != null) {
+    final cached = await _readCache(username: username);
+    if (!_isCurrentAccount(username)) return state;
+
+    if (cached != null) {
       state = state.copyWith(
         data: cached.data,
         hasData: true,
         updatedAt: cached.updatedAt,
       );
+    } else {
+      state = CachedResource<T>(data: emptyData);
     }
 
-    return refresh();
+    return refresh(forceRefresh: forceRefresh);
   }
 
   Future<CachedResource<T>> refresh({
     bool forceRefresh = false,
     bool throwOnError = false,
   }) {
+    final username = _activeUsername(ref);
+    if (username == null) return Future.value(state);
     final existing = _inflightRefresh;
-    if (existing != null && !forceRefresh) return existing;
+    if (existing != null && !forceRefresh && _inflightUsername == username) {
+      return existing;
+    }
 
     final task = _refreshInternal(
       forceRefresh: forceRefresh,
       throwOnError: throwOnError,
     );
-    _inflightRefresh = task.whenComplete(() {
-      if (identical(_inflightRefresh, task)) {
+    _inflightUsername = username;
+    late final Future<CachedResource<T>> trackedTask;
+    trackedTask = task.whenComplete(() {
+      if (identical(_inflightRefresh, trackedTask)) {
         _inflightRefresh = null;
+        _inflightUsername = null;
       }
     });
-    return task;
+    _inflightRefresh = trackedTask;
+    return trackedTask;
   }
 
   Future<CachedResource<T>> _refreshInternal({
@@ -420,22 +452,19 @@ abstract class SimpleCachedResourceNotifier<T>
   }) async {
     final creds = ref.read(credentialsProvider);
     if (creds == null) return state;
+    final username = creds.username.trim();
+    if (username.isEmpty) return state;
 
     state = state.copyWith(isRefreshing: true, error: null, stackTrace: null);
 
     try {
       final fresh = await fetch(creds, forceRefresh: forceRefresh);
+      if (!_isCurrentAccount(username)) return state;
+
       final changed = !state.hasData || !_sameData(state.data, fresh);
       final updatedAt = DateTime.now();
-
-      await _writeCaches(fresh, username: creds.username);
-      if (_disposed) {
-        return CachedResource<T>(
-          data: fresh,
-          hasData: true,
-          updatedAt: updatedAt,
-        );
-      }
+      await _writeCache(fresh, username: username);
+      if (!_isCurrentAccount(username)) return state;
 
       state = state.copyWith(
         data: fresh,
@@ -455,7 +484,7 @@ abstract class SimpleCachedResourceNotifier<T>
 
       return state;
     } catch (error, stackTrace) {
-      if (!_disposed) {
+      if (_isCurrentAccount(username)) {
         state = state.copyWith(
           isRefreshing: false,
           error: error,
@@ -480,7 +509,11 @@ abstract class SimpleCachedResourceNotifier<T>
     ).read();
   }
 
-  Future<void> _writeCaches(T data, {required String username}) async {
+  bool _isCurrentAccount(String username) =>
+      !_disposed && _activeUsername(ref) == username;
+
+  Future<void> _writeCache(T data, {required String username}) async {
+    if (!_isCurrentAccount(username)) return;
     final scopedStore = ResourceCacheStore<T>(
       key: resourceCacheKey(
         cacheNamespace,
@@ -490,13 +523,7 @@ abstract class SimpleCachedResourceNotifier<T>
       encode: encode,
       decode: decode,
     );
-    final latestStore = ResourceCacheStore<T>(
-      key: resourceCacheKey(cacheNamespace, username: null, scope: cacheScope),
-      encode: encode,
-      decode: decode,
-    );
     await scopedStore.write(data);
-    await latestStore.write(data);
   }
 
   bool _sameData(T current, T next) {
