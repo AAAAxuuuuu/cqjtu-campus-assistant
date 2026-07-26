@@ -491,9 +491,9 @@ class _RequiredCreditLegendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = totalRequired <= 0
+    final percent = !hasData || bucket.requiredCredits <= 0
         ? 0
-        : (bucket.requiredCredits / totalRequired * 100).round();
+        : (bucket.earnedCredits / bucket.requiredCredits * 100).round().clamp(0, 100);
     final color = _creditCategoryColor(bucket.category);
 
     return Row(
@@ -861,7 +861,8 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                     .read(gradesProvider(_semester).notifier)
                     .refresh(forceRefresh: true),
               ),
-            if (result.summary.isNotEmpty) _SummaryCard(result.summary),
+            if (result.summary.isNotEmpty || result.grades.isNotEmpty)
+              _SummaryCard(summary: result.summary, grades: result.grades),
             const SizedBox(height: 12),
             ...result.grades.map(
               (g) => GradeItem(
@@ -892,10 +893,29 @@ class _GradesPageState extends ConsumerState<GradesPage> {
 
 class _SummaryCard extends StatelessWidget {
   final Map<String, String> summary;
-  const _SummaryCard(this.summary);
+  final List<Grade> grades;
+  const _SummaryCard({required this.summary, this.grades = const []});
+
+  static String _resolveValue(String? raw, String? fallback) {
+    final trimmed = raw?.trim();
+    if (trimmed != null && trimmed.isNotEmpty && trimmed != '-') {
+      return trimmed;
+    }
+    return fallback ?? '-';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final stats = grades.isNotEmpty ? AcademicStats.fromGrades(grades) : null;
+    final gpaVal = _resolveValue(
+      summary['gpa'],
+      stats?.calculatedGpa?.toStringAsFixed(2),
+    );
+    final avgVal = _resolveValue(
+      summary['avgScore'],
+      stats?.weightedAverage?.toStringAsFixed(1),
+    );
+
     return Card(
       color: Colors.blue.shade50,
       child: Padding(
@@ -911,10 +931,10 @@ class _SummaryCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _Item('GPA', summary['gpa'] ?? '-'),
-                _Item('均分', summary['avgScore'] ?? '-'),
-                _Item('班级排名', summary['classRank'] ?? '-'),
-                _Item('专业排名', summary['majorRank'] ?? '-'),
+                _Item('GPA', gpaVal),
+                _Item('均分', avgVal),
+                _Item('班级排名', _resolveValue(summary['classRank'], null)),
+                _Item('专业排名', _resolveValue(summary['majorRank'], null)),
               ],
             ),
           ],
