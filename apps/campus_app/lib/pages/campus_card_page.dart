@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,10 +25,20 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.scrollToQr) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToQr());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.scrollToQr) {
+        _scrollToQr();
+      }
+      _autoRefreshCardData();
+    });
   }
+
+  void _autoRefreshCardData() => unawaited(
+    refreshCampusCardOnEntry(
+      ref.read(campusCardBalanceProvider.notifier),
+      ref.read(payCodeProvider.notifier),
+    ),
+  );
 
   @override
   void dispose() {
@@ -36,11 +48,20 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(mainTabIndexProvider, (previous, next) {
+      if (next == 1 && previous != 1) {
+        _autoRefreshCardData();
+      }
+    });
+
     final qrScrollSignal = ref.watch(campusCardQrScrollSignalProvider);
     final balanceState = ref.watch(campusCardBalanceProvider);
     if (qrScrollSignal > _handledQrScrollSignal) {
       _handledQrScrollSignal = qrScrollSignal;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToQr());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToQr();
+        _autoRefreshCardData();
+      });
     }
 
     return Scaffold(
@@ -58,8 +79,6 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
           const _BalanceCard(),
           const SizedBox(height: 16),
           const _QrCard(),
-          const SizedBox(height: 16),
-          const _RechargeCard(),
         ],
       ),
     );
@@ -117,17 +136,6 @@ class _BalanceCard extends ConsumerWidget {
                       ),
                     );
                     try {
-                      final creds = ref.read(credentialsProvider);
-                      if (creds != null) {
-                        // 先强制刷新后端缓存
-                        await ref
-                            .read(campusGatewayProvider)
-                            .getCampusCardBalance(
-                              creds.username,
-                              creds.password,
-                              forceRefresh: true,
-                            );
-                      }
                       await ref
                           .read(campusCardBalanceProvider.notifier)
                           .refresh(forceRefresh: true, throwOnError: true);
@@ -153,51 +161,75 @@ class _BalanceCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            balanceAsync.when(
-              skipError: true,
-              skipLoadingOnRefresh: true,
-              skipLoadingOnReload: true,
-              loading: () => const SizedBox(
-                height: 42,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: balanceAsync.isLoading
+                      ? const SizedBox(
+                          height: 42,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        )
+                      : balanceAsync.hasError && !balanceAsync.hasData
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '获取失败',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              balanceAsync.error.toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          balanceAsync.hasData ? balanceAsync.data : '--',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CampusCardRechargePage(),
                     ),
                   ),
-                ),
-              ),
-              error: (e, _) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '获取失败',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  icon: const Icon(Icons.add_card_outlined, size: 20),
+                  label: const Text('充值'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(96, 48),
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.blue.shade700,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    e.toString(),
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                ],
-              ),
-              data: (balance) => Text(
-                balance,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
                 ),
-              ),
+              ],
             ),
             if (isUpdating)
               const Padding(
@@ -326,6 +358,23 @@ class _QrCard extends ConsumerWidget {
   }
 }
 
+class CampusCardRechargePage extends StatelessWidget {
+  const CampusCardRechargePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('校园卡充值')),
+      body: const SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: _RechargeCard(),
+        ),
+      ),
+    );
+  }
+}
+
 // ── 支付宝充值 ───────────────────────────────────────────────
 class _RechargeCard extends ConsumerStatefulWidget {
   const _RechargeCard();
@@ -370,20 +419,8 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
                 // 1. 先关闭弹窗
                 Navigator.pop(context);
 
-                // 2. 静默触发刷新，去掉多余的“正在同步”提示
+                // 静默刷新余额。
                 try {
-                  final creds = ref.read(credentialsProvider);
-                  if (creds != null) {
-                    await ref
-                        .read(campusGatewayProvider)
-                        .getCampusCardBalance(
-                          creds.username,
-                          creds.password,
-                          forceRefresh: true,
-                        );
-                  }
-
-                  // 3. 击穿缓存后，令 Provider 失效，UI 自动获取最新余额
                   await ref
                       .read(campusCardBalanceProvider.notifier)
                       .refresh(forceRefresh: true, throwOnError: true);

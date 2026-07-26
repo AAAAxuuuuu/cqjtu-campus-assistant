@@ -136,11 +136,13 @@ class StudyProgressData {
     required this.groups,
     required this.currentSemester,
     required this.currentSemesterCourses,
+    this.requiredCreditsByCategory = const {},
   });
 
   final List<StudyProgressGroup> groups;
   final String currentSemester;
   final List<ExecutionPlanCourse> currentSemesterCourses;
+  final Map<String, double> requiredCreditsByCategory;
 
   factory StudyProgressData.fromJson(Map<String, dynamic> json) =>
       StudyProgressData(
@@ -161,6 +163,13 @@ class StudyProgressData {
                   ),
                 )
                 .toList(),
+        requiredCreditsByCategory:
+            (json['requiredCreditsByCategory'] as Map? ?? const {}).map(
+          (key, value) => MapEntry(
+            key.toString(),
+            double.tryParse(value.toString()) ?? 0,
+          ),
+        ),
       );
 
   Map<String, dynamic> toJson() => {
@@ -168,5 +177,6 @@ class StudyProgressData {
         'currentSemester': currentSemester,
         'currentSemesterCourses':
             currentSemesterCourses.map((course) => course.toJson()).toList(),
+        'requiredCreditsByCategory': requiredCreditsByCategory,
       };
 }

@@ -1,67 +1,104 @@
+import 'dart:async';
+
 import 'package:core/models/grade.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/study_progress/study_progress_providers.dart';
 import '../utils/providers.dart';
 import '../widgets/background_refresh_banner.dart';
 
-class AcademicStatusPage extends ConsumerWidget {
+class AcademicStatusPage extends ConsumerStatefulWidget {
   const AcademicStatusPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AcademicStatusPage> createState() => _AcademicStatusPageState();
+}
+
+class _AcademicStatusPageState extends ConsumerState<AcademicStatusPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshAll();
+    });
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      ref.read(gradesProvider('').notifier).refresh(forceRefresh: true),
+      ref.read(studyProgressProvider.notifier).refresh(forceRefresh: true),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final gradesState = ref.watch(gradesProvider(''));
+    final studyState = ref.watch(studyProgressProvider);
+    final summary = ref.watch(studyCreditProgressSummaryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('学业情况')),
-      body: gradesState.when(
-        skipError: true,
-        skipLoadingOnRefresh: true,
-        skipLoadingOnReload: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _AcademicError(
-          message: error.toString(),
-          onRetry: () =>
-              ref.read(gradesProvider('').notifier).refresh(forceRefresh: true),
-        ),
-        data: (result) => _AcademicStatusContent(
-          summary: result.summary,
-          grades: result.grades,
-          showRefreshBanner: gradesState.shouldOfferManualRefresh,
-          onRefresh: () =>
-              ref.read(gradesProvider('').notifier).refresh(forceRefresh: true),
-        ),
+      appBar: AppBar(
+        title: const Text('学业情况'),
+        actions: [
+          IconButton(
+            tooltip: '刷新学业数据',
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshAll,
+          ),
+        ],
       ),
+      body:
+          gradesState.hasError &&
+              !gradesState.hasData &&
+              studyState.hasError &&
+              !studyState.hasData
+          ? _AcademicError(
+              message: gradesState.error.toString(),
+              onRetry: () => unawaited(_refreshAll()),
+            )
+          : _AcademicStatusContent(
+              gradesSummary: gradesState.data.summary,
+              creditSummary: summary,
+              grades: gradesState.data.grades,
+              showRefreshBanner:
+                  gradesState.shouldOfferManualRefresh ||
+                  studyState.shouldOfferManualRefresh,
+              onRefresh: _refreshAll,
+            ),
     );
   }
 }
 
 class _AcademicStatusContent extends StatelessWidget {
   const _AcademicStatusContent({
-    required this.summary,
+    required this.gradesSummary,
+    required this.creditSummary,
     required this.grades,
     required this.showRefreshBanner,
     required this.onRefresh,
   });
 
-  final Map<String, String> summary;
+  final Map<String, String> gradesSummary;
+  final StudyCreditProgressSummary creditSummary;
   final List<Grade> grades;
   final bool showRefreshBanner;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final stats = _AcademicStats.fromGrades(grades);
+    final stats = AcademicStats.fromGrades(grades);
 
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (showRefreshBanner) BackgroundRefreshBanner(onRefresh: onRefresh),
-          _OverviewCard(summary: summary, stats: stats),
+          if (showRefreshBanner)
+            BackgroundRefreshBanner(onRefresh: () => unawaited(onRefresh())),
+          _OverviewCard(summary: gradesSummary, stats: stats),
           const SizedBox(height: 12),
-          _CreditCard(stats: stats),
+          _CreditCard(summary: creditSummary, stats: stats),
           if (grades.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 64),
@@ -79,10 +116,27 @@ class _OverviewCard extends StatelessWidget {
   const _OverviewCard({required this.summary, required this.stats});
 
   final Map<String, String> summary;
-  final _AcademicStats stats;
+  final AcademicStats stats;
+
+  static String _resolveValue(String? raw, String? fallback) {
+    final trimmed = raw?.trim();
+    if (trimmed != null && trimmed.isNotEmpty && trimmed != '-') {
+      return trimmed;
+    }
+    return fallback ?? '-';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final gpaVal = _resolveValue(
+      summary['gpa'],
+      stats.calculatedGpa?.toStringAsFixed(2),
+    );
+    final avgVal = _resolveValue(
+      summary['avgScore'],
+      stats.weightedAverage?.toStringAsFixed(1),
+    );
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Container(
@@ -113,10 +167,16 @@ class _OverviewCard extends StatelessWidget {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               children: [
-                _MetricTile(label: 'GPA', value: summary['gpa'] ?? '-'),
-                _MetricTile(label: '均分', value: summary['avgScore'] ?? '-'),
-                _MetricTile(label: '班级排名', value: summary['classRank'] ?? '-'),
-                _MetricTile(label: '专业排名', value: summary['majorRank'] ?? '-'),
+                _MetricTile(label: 'GPA', value: gpaVal),
+                _MetricTile(label: '均分', value: avgVal),
+                _MetricTile(
+                  label: '班级排名',
+                  value: _resolveValue(summary['classRank'], null),
+                ),
+                _MetricTile(
+                  label: '专业排名',
+                  value: _resolveValue(summary['majorRank'], null),
+                ),
               ],
             ),
             if (stats.weightedAverage != null) ...[
@@ -134,12 +194,17 @@ class _OverviewCard extends StatelessWidget {
 }
 
 class _CreditCard extends StatelessWidget {
-  const _CreditCard({required this.stats});
+  const _CreditCard({required this.summary, required this.stats});
 
-  final _AcademicStats stats;
+  final StudyCreditProgressSummary summary;
+  final AcademicStats stats;
 
   @override
   Widget build(BuildContext context) {
+    double earnedCreditsFor(StudyCreditCategory category) => summary.buckets
+        .where((bucket) => bucket.category == category)
+        .fold<double>(0, (total, bucket) => total + bucket.earnedCredits);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -153,33 +218,45 @@ class _CreditCard extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 14),
-            Row(
+            GridView.count(
+              crossAxisCount: 2,
+              childAspectRatio: 2.8,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
               children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: '已读课程',
-                    value: '${stats.totalCourses}',
+                _MetricTile(
+                  label: '总学分',
+                  value: _formatNumber(summary.requiredCredits),
+                ),
+                _MetricTile(
+                  label: '已修必修',
+                  value: _formatNumber(
+                    earnedCreditsFor(StudyCreditCategory.compulsory),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricTile(
-                    label: '通过学分',
-                    value: _formatNumber(stats.passedCredits),
+                _MetricTile(
+                  label: '已修选修',
+                  value: _formatNumber(
+                    earnedCreditsFor(StudyCreditCategory.elective),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricTile(
-                    label: '待关注',
-                    value: '${stats.failedCourses}',
-                    valueColor: stats.failedCourses > 0
-                        ? Colors.red.shade700
-                        : Colors.green.shade700,
+                _MetricTile(
+                  label: '已修校选',
+                  value: _formatNumber(
+                    earnedCreditsFor(StudyCreditCategory.schoolElective),
                   ),
                 ),
               ],
             ),
+            if (stats.failedCourses > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                '成绩单中有 ${stats.failedCourses} 门课程待关注',
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+              ),
+            ],
           ],
         ),
       ),
@@ -188,15 +265,10 @@ class _CreditCard extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _MetricTile({required this.label, required this.value});
 
   final String label;
   final String value;
-  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +292,7 @@ class _MetricTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: valueColor ?? Theme.of(context).colorScheme.primary,
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 19,
               fontWeight: FontWeight.w800,
             ),
@@ -261,50 +333,93 @@ class _AcademicError extends StatelessWidget {
   }
 }
 
-class _AcademicStats {
-  const _AcademicStats({
+class AcademicStats {
+  const AcademicStats({
     required this.totalCourses,
     required this.failedCourses,
     required this.passedCredits,
     this.weightedAverage,
+    this.calculatedGpa,
   });
 
   final int totalCourses;
   final int failedCourses;
   final double passedCredits;
   final double? weightedAverage;
+  final double? calculatedGpa;
 
-  factory _AcademicStats.fromGrades(List<Grade> grades) {
+  static double? parseScore(String text) {
+    final cleaned = text.trim();
+    final val = double.tryParse(cleaned);
+    if (val != null) return val;
+    if (cleaned.contains('优')) return 90.0;
+    if (cleaned.contains('良')) return 80.0;
+    if (cleaned.contains('中')) return 75.0;
+    if (cleaned.contains('不及格') ||
+        cleaned.contains('不合格') ||
+        cleaned == '未通过' ||
+        cleaned.toUpperCase() == 'FAIL' ||
+        cleaned.toUpperCase() == 'F') {
+      return 50.0;
+    }
+    if (cleaned.contains('及格') ||
+        cleaned.contains('合格') ||
+        cleaned == '通过' ||
+        cleaned.toUpperCase() == 'PASS' ||
+        cleaned.toUpperCase() == 'P') {
+      return 60.0;
+    }
+    return null;
+  }
+
+  factory AcademicStats.fromGrades(List<Grade> grades) {
     var passedCredits = 0.0;
     var failedCourses = 0;
     var weightedScore = 0.0;
-    var weightedCredits = 0.0;
+    var weightedScoreCredits = 0.0;
+    var weightedGp = 0.0;
+    var weightedGpCredits = 0.0;
 
     for (final grade in grades) {
-      final score = double.tryParse(grade.score.trim());
-      final credit = double.tryParse(grade.credits.trim()) ?? 0;
-      if (score == null) {
-        continue;
+      final score = parseScore(grade.score);
+      final credit = double.tryParse(grade.credits.trim()) ?? 0.0;
+      final rawGp = double.tryParse(grade.gradePoint.trim());
+      final gp =
+          rawGp ??
+          (score != null ? ((score >= 60) ? (score - 50) / 10.0 : 0.0) : null);
+
+      if (score != null) {
+        if (score >= 60) {
+          passedCredits += credit;
+        } else {
+          failedCourses += 1;
+        }
+      } else if (gp != null && gp > 0) {
+        passedCredits += credit;
       }
 
-      if (score >= 60) {
-        passedCredits += credit;
-      } else {
-        failedCourses += 1;
-      }
       if (credit > 0) {
-        weightedScore += score * credit;
-        weightedCredits += credit;
+        if (score != null) {
+          weightedScore += score * credit;
+          weightedScoreCredits += credit;
+        }
+        if (gp != null) {
+          weightedGp += gp * credit;
+          weightedGpCredits += credit;
+        }
       }
     }
 
-    return _AcademicStats(
+    return AcademicStats(
       totalCourses: grades.length,
       failedCourses: failedCourses,
       passedCredits: passedCredits,
-      weightedAverage: weightedCredits == 0
+      weightedAverage: weightedScoreCredits == 0
           ? null
-          : weightedScore / weightedCredits,
+          : weightedScore / weightedScoreCredits,
+      calculatedGpa: weightedGpCredits == 0
+          ? null
+          : weightedGp / weightedGpCredits,
     );
   }
 }

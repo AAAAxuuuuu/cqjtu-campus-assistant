@@ -13,6 +13,18 @@ String _redactIdentifier(String value) {
   return 'user_${trimmed.substring(0, 2)}****${trimmed.substring(trimmed.length - 2)}';
 }
 
+final mainTabIndexProvider = StateProvider<int>((ref) => 0);
+
+Future<void> refreshCampusCardOnEntry(
+  CampusCardBalanceNotifier balanceNotifier,
+  PayCodeNotifier payCodeNotifier,
+) async {
+  await Future.wait([
+    balanceNotifier.refresh(forceRefresh: true),
+    payCodeNotifier.refresh(forceRefresh: true),
+  ]);
+}
+
 final campusCardBalanceProvider =
     NotifierProvider<CampusCardBalanceNotifier, CachedResource<String>>(
       CampusCardBalanceNotifier.new,

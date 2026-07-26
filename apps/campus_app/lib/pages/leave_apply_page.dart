@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../utils/providers.dart';
+import '../services/webview_session_scope.dart';
 
 class LeaveApplyPage extends ConsumerStatefulWidget {
   const LeaveApplyPage({super.key});
@@ -85,6 +86,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       final runtimeMode = ref.read(campusRuntimeModeProvider);
       final sessionService = ref.read(sessionServiceProvider);
       final username = creds.username;
+      await WebViewSessionScope.resetForAccount(_controller, username);
 
       var zoveToken = await _resolveZoveToken(
         username: username,
