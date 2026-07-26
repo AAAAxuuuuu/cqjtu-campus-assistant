@@ -21,3 +21,8 @@ Thumbs.db
 
 # 本地环境变量
 .env.local
+
+# 本地诊断与 AI 工作记录，可能包含截图、网络日志或会话上下文
+.agents/
+debug_logs/
+packages/data/tool/test_user.dart
