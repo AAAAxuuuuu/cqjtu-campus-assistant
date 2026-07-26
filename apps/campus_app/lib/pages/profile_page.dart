@@ -8,6 +8,7 @@ import 'package:campus_platform/services/battery_optimization_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
 import 'package:core/models/dorm_room.dart';
 import '../services/app_update_coordinator.dart';
+import '../services/webview_session_scope.dart';
 import 'login_page.dart';
 import 'electricity_page.dart';
 
@@ -15,6 +16,13 @@ class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   void _logout(BuildContext context, WidgetRef ref) async {
+    final currentUsername =
+        ref.read(credentialsProvider)?.username.trim() ?? '';
+    if (currentUsername.isNotEmpty) {
+      await clearCurrentAccountCache(ref, currentUsername);
+    }
+    await WebViewSessionScope.clearOnLogout();
+
     ref.invalidate(sessionManagerProvider);
     ref.invalidate(campusGatewayProvider);
     await ref.read(credentialServiceProvider).clear();
@@ -24,7 +32,7 @@ class ProfilePage extends ConsumerWidget {
 
     await NotificationService.cancelAllClassReminders();
     await ScheduleWidgetService.clearScheduleWidgets();
-    debugPrint('[Profile] 账号已退出，所有本地通知调度已清空');
+    debugPrint('[Profile] 账号已退出，所有状态与本地通知调度已清空');
 
     if (context.mounted) {
       Navigator.of(context).pushAndRemoveUntil(
@@ -58,6 +66,9 @@ class ProfilePage extends ConsumerWidget {
           const SizedBox(height: 20),
           _sectionLabel('课表偏好'),
           const _SchedulePreferenceCard(),
+          const SizedBox(height: 20),
+          _sectionLabel('数据与缓存'),
+          const _CacheSettingsCard(),
           const SizedBox(height: 20),
           _sectionLabel('通知与后台'),
           const _BackgroundSettingsCard(),
@@ -309,6 +320,69 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CacheSettingsCard extends ConsumerWidget {
+  const _CacheSettingsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final creds = ref.watch(credentialsProvider);
+    final username = creds?.username ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: _SettingTile(
+        icon: Icons.cleaning_services_outlined,
+        iconColor: Colors.deepOrange,
+        title: '清空缓存',
+        subtitle: '清理当前账号的学业、课表与本地配置缓存',
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('确认清空缓存'),
+              content: const Text('确定要清空当前账号的本地缓存与设置吗？'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消', style: TextStyle(color: Colors.grey)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await clearCurrentAccountCache(ref, username);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('当前账号缓存已成功清空')),
+                    );
+                  },
+                  child: const Text(
+                    '确认清空',
+                    style: TextStyle(color: Colors.deepOrange),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

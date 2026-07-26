@@ -276,8 +276,8 @@ class SelectedSemesterNotifier extends AsyncNotifier<String?> {
   }
 
   Future<void> set(String? value) async {
-    state = AsyncData(value);
     await ref.read(semesterServiceProvider).saveSelectedSemester(value);
+    state = AsyncData(value);
   }
 }
 
@@ -305,9 +305,97 @@ const int maxSemesterTotalWeeks = 30;
 const _semesterTotalWeeksPrefix = 'schedule_total_weeks_';
 const _customCoursesPrefix = 'schedule_custom_courses_';
 
-String _semesterScopedKey(String prefix, String? semester) {
+/// 计算 DateTime 对应的学期字符串（如 2026-2027-1）。
+String calculateSemester(DateTime date) {
+  final year = date.year;
+  final month = date.month;
+  if (month >= 8) {
+    return '$year-${year + 1}-1';
+  } else if (month == 1) {
+    return '${year - 1}-$year-1';
+  } else {
+    return '${year - 1}-$year-2';
+  }
+}
+
+/// 动态解析学期 Key。
+/// 当 [semester] 为 null 或空串时，优先使用选中的学期字符串；
+/// 若未选择，则使用当前激活学期的 start date 计算学期字符串；
+/// 仍未设置 start date 时后备回退到当前时间的学期字符串。
+Future<String> resolveSemesterKey(
+  Ref ref,
+  String? semester, {
+  bool listen = true,
+}) async {
   final safeSemester = semester?.trim();
-  return '$prefix${safeSemester == null || safeSemester.isEmpty ? 'default' : safeSemester}';
+  if (safeSemester != null && safeSemester.isNotEmpty) {
+    return safeSemester;
+  }
+  if (listen) {
+    final selectedAsync = await ref.watch(selectedScheduleSemesterProvider.future);
+    final selected = selectedAsync?.trim();
+    if (selected != null && selected.isNotEmpty) {
+      return selected;
+    }
+    final startDate = await ref.watch(semesterStartProvider.future);
+    if (startDate != null) {
+      return calculateSemester(startDate);
+    }
+  } else {
+    final selectedAsync = ref.read(selectedScheduleSemesterProvider);
+    final selectedValue = selectedAsync.valueOrNull ??
+        (selectedAsync.isLoading
+            ? await ref.read(selectedScheduleSemesterProvider.future)
+            : null);
+    final selected = selectedValue?.trim();
+    if (selected != null && selected.isNotEmpty) {
+      return selected;
+    }
+    final startDateAsync = ref.read(semesterStartProvider);
+    final startDate = startDateAsync.valueOrNull ??
+        (startDateAsync.isLoading
+            ? await ref.read(semesterStartProvider.future)
+            : null);
+    if (startDate != null) {
+      return calculateSemester(startDate);
+    }
+  }
+
+  final service = ref.read(semesterServiceProvider);
+  if (service.cacheReady) {
+    final selectedSync = service.loadSelectedSemesterSync()?.trim();
+    if (selectedSync != null && selectedSync.isNotEmpty) {
+      return selectedSync;
+    }
+    final defaultStart = service.loadSync();
+    if (defaultStart != null) {
+      return calculateSemester(defaultStart);
+    }
+  } else {
+    final selectedAsync = await service.loadSelectedSemester();
+    final selected = selectedAsync?.trim();
+    if (selected != null && selected.isNotEmpty) {
+      return selected;
+    }
+    final defaultStart = await service.load();
+    if (defaultStart != null) {
+      return calculateSemester(defaultStart);
+    }
+  }
+
+  return calculateSemester(DateTime.now());
+}
+
+/// Helper function to generate account-scoped SharedPreferences keys.
+/// Format: `user_${accountId}_$key`. If [accountId] is empty or whitespace, defaults to `'guest'`.
+String userScopedKey(String accountId, String key) {
+  final safeAccount = accountId.trim().isNotEmpty ? accountId.trim() : 'default';
+  return 'user_${safeAccount}_$key';
+}
+
+String _userScopedKey(Ref ref, String key, {bool listen = true}) {
+  final accountId = getAccountId(ref, listen: listen);
+  return userScopedKey(accountId, key);
 }
 
 int _normalizeTotalWeeks(int value) {
@@ -317,21 +405,31 @@ int _normalizeTotalWeeks(int value) {
 class SemesterTotalWeeksNotifier extends FamilyAsyncNotifier<int, String?> {
   @override
   Future<int> build(String? arg) async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getInt(
-      _semesterScopedKey(_semesterTotalWeeksPrefix, arg),
+    final semesterKey = await resolveSemesterKey(ref, arg, listen: true);
+    final scopedKey = _userScopedKey(
+      ref,
+      '$_semesterTotalWeeksPrefix$semesterKey',
+      listen: true,
     );
+    final legacyKey = '$_semesterTotalWeeksPrefix$semesterKey';
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.containsKey(scopedKey)
+        ? prefs.getInt(scopedKey)
+        : prefs.getInt(legacyKey);
     return _normalizeTotalWeeks(stored ?? defaultSemesterTotalWeeks);
   }
 
   Future<void> setWeeks(int value) async {
     final safeValue = _normalizeTotalWeeks(value);
-    state = AsyncValue.data(safeValue);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(
-      _semesterScopedKey(_semesterTotalWeeksPrefix, arg),
-      safeValue,
+    final semesterKey = await resolveSemesterKey(ref, arg, listen: false);
+    final scopedKey = _userScopedKey(
+      ref,
+      '$_semesterTotalWeeksPrefix$semesterKey',
+      listen: false,
     );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(scopedKey, safeValue);
+    state = AsyncValue.data(safeValue);
   }
 }
 
@@ -343,8 +441,19 @@ final semesterTotalWeeksProvider =
 class CustomCoursesNotifier extends FamilyAsyncNotifier<List<Course>, String?> {
   @override
   Future<List<Course>> build(String? arg) async {
+    final semesterKey = await resolveSemesterKey(ref, arg, listen: true);
+    final scopedKey = _userScopedKey(
+      ref,
+      '$_customCoursesPrefix$semesterKey',
+      listen: true,
+    );
+    final legacyKey = '$_customCoursesPrefix$semesterKey';
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_semesterScopedKey(_customCoursesPrefix, arg));
+
+    var raw = prefs.getString(scopedKey);
+    if (raw == null || raw.isEmpty) {
+      raw = prefs.getString(legacyKey);
+    }
     if (raw == null || raw.isEmpty) return const [];
 
     try {
@@ -362,13 +471,13 @@ class CustomCoursesNotifier extends FamilyAsyncNotifier<List<Course>, String?> {
   }
 
   Future<void> addCourse(Course course) async {
-    final current = state.valueOrNull ?? await future;
+    final current = await future;
     final next = [...current, course.copyWith(isCustom: true, isExam: false)];
     await _save(next);
   }
 
   Future<void> removeCourse(Course course) async {
-    final current = state.valueOrNull ?? await future;
+    final current = await future;
     var removed = false;
     final next = <Course>[];
     for (final item in current) {
@@ -385,12 +494,18 @@ class CustomCoursesNotifier extends FamilyAsyncNotifier<List<Course>, String?> {
   Future<void> clearCourses() => _save(const []);
 
   Future<void> _save(List<Course> courses) async {
-    state = AsyncValue.data(courses);
+    final semesterKey = await resolveSemesterKey(ref, arg, listen: false);
+    final scopedKey = _userScopedKey(
+      ref,
+      '$_customCoursesPrefix$semesterKey',
+      listen: false,
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _semesterScopedKey(_customCoursesPrefix, arg),
+      scopedKey,
       jsonEncode(courses.map((course) => course.toJson()).toList()),
     );
+    state = AsyncValue.data(courses);
   }
 
   String _courseStorageIdentity(Course course) {
@@ -420,14 +535,19 @@ const _scheduleShowInactiveCoursesKey = 'schedule_show_inactive_courses';
 class ScheduleSundayFirstNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
+    final key = _userScopedKey(ref, _scheduleSundayFirstKey, listen: true);
     final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(key)) {
+      return prefs.getBool(key) ?? false;
+    }
     return prefs.getBool(_scheduleSundayFirstKey) ?? false;
   }
 
   Future<void> setSundayFirst(bool value) async {
+    final key = _userScopedKey(ref, _scheduleSundayFirstKey, listen: false);
     state = AsyncValue.data(value);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_scheduleSundayFirstKey, value);
+    await prefs.setBool(key, value);
   }
 }
 
@@ -439,14 +559,19 @@ final scheduleSundayFirstProvider =
 class ScheduleShowInactiveCoursesNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
+    final key = _userScopedKey(ref, _scheduleShowInactiveCoursesKey, listen: true);
     final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(key)) {
+      return prefs.getBool(key) ?? true;
+    }
     return prefs.getBool(_scheduleShowInactiveCoursesKey) ?? true;
   }
 
   Future<void> setShowInactiveCourses(bool value) async {
+    final key = _userScopedKey(ref, _scheduleShowInactiveCoursesKey, listen: false);
     state = AsyncValue.data(value);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_scheduleShowInactiveCoursesKey, value);
+    await prefs.setBool(key, value);
   }
 }
 

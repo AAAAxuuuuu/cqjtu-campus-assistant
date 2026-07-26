@@ -38,6 +38,11 @@ class SessionService implements SelfHostedSessionStore {
         value: ticket,
       );
 
+  Future<void> clearTicket(String username) async {
+    await _storage.delete(key: _ticketKey(username));
+    await _storage.delete(key: _ticketUpdatedAtKey(username));
+  }
+
   Future<int?> loadTicketUpdatedAt(String username) =>
       _readTimestamp(_ticketUpdatedAtKey(username));
 
@@ -119,7 +124,8 @@ class SessionService implements SelfHostedSessionStore {
     }
   }
 
-  Future<void> clearForUsername(String username) async {
+  @override
+  Future<void> clearLoginArtifacts(String username) async {
     await _storage.delete(key: _sessionKey(username));
     await _storage.delete(key: _ticketKey(username));
     await _storage.delete(key: _ticketUpdatedAtKey(username));
@@ -132,6 +138,9 @@ class SessionService implements SelfHostedSessionStore {
     await _storage.delete(key: _zoveTokenKey(username));
     await _storage.delete(key: _zoveTokenUpdatedAtKey(username));
   }
+
+  Future<void> clearForUsername(String username) =>
+      clearLoginArtifacts(username);
 
   Future<void> _writeWithTimestamp({
     required String key,
