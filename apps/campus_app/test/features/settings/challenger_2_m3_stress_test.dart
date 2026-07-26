@@ -50,19 +50,24 @@ void main() {
           final prefs = await SharedPreferences.getInstance();
 
           // User A data should be deleted
-          expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+            isFalse,
+          );
           expect(prefs.containsKey('user_user_schedule_sunday_first'), isFalse);
           expect(prefs.containsKey('user_user_dorm_campus'), isFalse);
 
           // User B ("user_extra") data MUST NOT be deleted
-          final userBIntact = prefs.containsKey('user_user_extra_schedule_sunday_first') &&
+          final userBIntact =
+              prefs.containsKey('user_user_extra_schedule_sunday_first') &&
               prefs.containsKey('user_user_extra_dorm_campus') &&
               prefs.containsKey('resource_cache_v1:schedule:$userBB64:default');
 
           expect(
             userBIntact,
             isTrue,
-            reason: 'User B ("user_extra") data was corrupted/deleted when clearing User A ("user")',
+            reason:
+                'User B ("user_extra") data was corrupted/deleted when clearing User A ("user")',
           );
         },
       );
@@ -88,14 +93,18 @@ void main() {
 
           final prefs = await SharedPreferences.getInstance();
 
-          expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+            isFalse,
+          );
           expect(prefs.containsKey('user_test_pref'), isFalse);
 
           // User B data ending with _test
           expect(
             prefs.containsKey('pref_for_my_test'),
             isTrue,
-            reason: 'User B ("my_test") key ending with "_test" was incorrectly deleted',
+            reason:
+                'User B ("my_test") key ending with "_test" was incorrectly deleted',
           );
         },
       );
@@ -129,17 +138,31 @@ void main() {
 
           // Verify session items & credentials exist before clear
           expect(await sessionService.loadTicket(username), 'ticket_abc123');
-          expect(await sessionService.loadCasCookies(username), 'CAS_JSESSIONID=xyz789');
-          expect(await sessionService.loadJwgCookies(username), 'JWG_COOKIE=12345');
-          expect(await sessionService.loadEcardCookies(username), 'ECARD_COOKIE=67890');
-          expect(await sessionService.loadZoveToken(username), 'zove_bearer_token_val');
+          expect(
+            await sessionService.loadCasCookies(username),
+            'CAS_JSESSIONID=xyz789',
+          );
+          expect(
+            await sessionService.loadJwgCookies(username),
+            'JWG_COOKIE=12345',
+          );
+          expect(
+            await sessionService.loadEcardCookies(username),
+            'ECARD_COOKIE=67890',
+          );
+          expect(
+            await sessionService.loadZoveToken(username),
+            'zove_bearer_token_val',
+          );
 
           final credsBefore = await credService.load();
           expect(credsBefore?.username, username);
           expect(credsBefore?.password, password);
 
           // 3. Perform cache clear
-          final cacheService = AccountCacheService(sessionService: sessionService);
+          final cacheService = AccountCacheService(
+            sessionService: sessionService,
+          );
           await cacheService.clearAccountCache(username);
 
           // 4. Assert session artifacts are completely wiped out

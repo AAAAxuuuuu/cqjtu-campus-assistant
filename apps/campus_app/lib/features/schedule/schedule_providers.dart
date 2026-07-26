@@ -332,7 +332,9 @@ Future<String> resolveSemesterKey(
     return safeSemester;
   }
   if (listen) {
-    final selectedAsync = await ref.watch(selectedScheduleSemesterProvider.future);
+    final selectedAsync = await ref.watch(
+      selectedScheduleSemesterProvider.future,
+    );
     final selected = selectedAsync?.trim();
     if (selected != null && selected.isNotEmpty) {
       return selected;
@@ -343,7 +345,8 @@ Future<String> resolveSemesterKey(
     }
   } else {
     final selectedAsync = ref.read(selectedScheduleSemesterProvider);
-    final selectedValue = selectedAsync.valueOrNull ??
+    final selectedValue =
+        selectedAsync.valueOrNull ??
         (selectedAsync.isLoading
             ? await ref.read(selectedScheduleSemesterProvider.future)
             : null);
@@ -352,7 +355,8 @@ Future<String> resolveSemesterKey(
       return selected;
     }
     final startDateAsync = ref.read(semesterStartProvider);
-    final startDate = startDateAsync.valueOrNull ??
+    final startDate =
+        startDateAsync.valueOrNull ??
         (startDateAsync.isLoading
             ? await ref.read(semesterStartProvider.future)
             : null);
@@ -389,7 +393,9 @@ Future<String> resolveSemesterKey(
 /// Helper function to generate account-scoped SharedPreferences keys.
 /// Format: `user_${accountId}_$key`. If [accountId] is empty or whitespace, defaults to `'guest'`.
 String userScopedKey(String accountId, String key) {
-  final safeAccount = accountId.trim().isNotEmpty ? accountId.trim() : 'default';
+  final safeAccount = accountId.trim().isNotEmpty
+      ? accountId.trim()
+      : 'default';
   return 'user_${safeAccount}_$key';
 }
 
@@ -559,7 +565,11 @@ final scheduleSundayFirstProvider =
 class ScheduleShowInactiveCoursesNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
-    final key = _userScopedKey(ref, _scheduleShowInactiveCoursesKey, listen: true);
+    final key = _userScopedKey(
+      ref,
+      _scheduleShowInactiveCoursesKey,
+      listen: true,
+    );
     final prefs = await SharedPreferences.getInstance();
     if (prefs.containsKey(key)) {
       return prefs.getBool(key) ?? true;
@@ -568,7 +578,11 @@ class ScheduleShowInactiveCoursesNotifier extends AsyncNotifier<bool> {
   }
 
   Future<void> setShowInactiveCourses(bool value) async {
-    final key = _userScopedKey(ref, _scheduleShowInactiveCoursesKey, listen: false);
+    final key = _userScopedKey(
+      ref,
+      _scheduleShowInactiveCoursesKey,
+      listen: false,
+    );
     state = AsyncValue.data(value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);

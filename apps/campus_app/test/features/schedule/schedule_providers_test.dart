@@ -60,10 +60,7 @@ void main() {
           prefs.containsKey('user_default_schedule_custom_courses_2026-2027-1'),
           isTrue,
         );
-        expect(
-          prefs.containsKey('schedule_custom_courses_default'),
-          isFalse,
-        );
+        expect(prefs.containsKey('schedule_custom_courses_default'), isFalse);
       },
     );
 
@@ -326,7 +323,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2024-2025-1');
-        await container.read(customCoursesProvider(null).notifier).addCourse(
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(
               const Course(
                 name: 'Course 2024-2025-1',
                 teacher: 'T1',
@@ -344,7 +343,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2024-2025-2');
-        await container.read(customCoursesProvider(null).notifier).addCourse(
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(
               const Course(
                 name: 'Course 2024-2025-2',
                 teacher: 'T2',
@@ -362,7 +363,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2025-2026-1');
-        await container.read(customCoursesProvider(null).notifier).addCourse(
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(
               const Course(
                 name: 'Course 2025-2026-1',
                 teacher: 'T3',
@@ -380,7 +383,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2025-2026-2');
-        await container.read(customCoursesProvider(null).notifier).addCourse(
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(
               const Course(
                 name: 'Course 2025-2026-2',
                 teacher: 'T4',
@@ -398,7 +403,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2026-2027-1');
-        await container.read(customCoursesProvider(null).notifier).addCourse(
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(
               const Course(
                 name: 'Course 2026-2027-1',
                 teacher: 'T5',
@@ -436,8 +443,9 @@ void main() {
         await container
             .read(selectedScheduleSemesterProvider.notifier)
             .set('2025-2026-1');
-        final courseToRemove =
-            (await container.read(customCoursesProvider(null).future)).first;
+        final courseToRemove = (await container.read(
+          customCoursesProvider(null).future,
+        )).first;
         await container
             .read(customCoursesProvider(null).notifier)
             .removeCourse(courseToRemove);
@@ -458,47 +466,35 @@ void main() {
       },
     );
 
-    test(
-      'Stress Test 4: Total weeks provider scoping per semester',
-      () async {
-        final container = ProviderContainer();
-        addTearDown(container.dispose);
+    test('Stress Test 4: Total weeks provider scoping per semester', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-        // Set total weeks for 2026-2027-1 to 16
-        await container
-            .read(selectedScheduleSemesterProvider.notifier)
-            .set('2026-2027-1');
-        await container
-            .read(semesterTotalWeeksProvider(null).notifier)
-            .setWeeks(16);
+      // Set total weeks for 2026-2027-1 to 16
+      await container
+          .read(selectedScheduleSemesterProvider.notifier)
+          .set('2026-2027-1');
+      await container
+          .read(semesterTotalWeeksProvider(null).notifier)
+          .setWeeks(16);
 
-        expect(
-          await container.read(semesterTotalWeeksProvider(null).future),
-          16,
-        );
+      expect(await container.read(semesterTotalWeeksProvider(null).future), 16);
 
-        // Switch to 2026-2027-2 and set total weeks to 18
-        await container
-            .read(selectedScheduleSemesterProvider.notifier)
-            .set('2026-2027-2');
-        await container
-            .read(semesterTotalWeeksProvider(null).notifier)
-            .setWeeks(18);
+      // Switch to 2026-2027-2 and set total weeks to 18
+      await container
+          .read(selectedScheduleSemesterProvider.notifier)
+          .set('2026-2027-2');
+      await container
+          .read(semesterTotalWeeksProvider(null).notifier)
+          .setWeeks(18);
 
-        expect(
-          await container.read(semesterTotalWeeksProvider(null).future),
-          18,
-        );
+      expect(await container.read(semesterTotalWeeksProvider(null).future), 18);
 
-        // Switch back to 2026-2027-1 and verify total weeks is still 16
-        await container
-            .read(selectedScheduleSemesterProvider.notifier)
-            .set('2026-2027-1');
-        expect(
-          await container.read(semesterTotalWeeksProvider(null).future),
-          16,
-        );
-      },
-    );
+      // Switch back to 2026-2027-1 and verify total weeks is still 16
+      await container
+          .read(selectedScheduleSemesterProvider.notifier)
+          .set('2026-2027-1');
+      expect(await container.read(semesterTotalWeeksProvider(null).future), 16);
+    });
   });
 }

@@ -43,16 +43,16 @@ final signedInUsernameHintProvider = Provider<String?>((ref) => null);
 
 /// 获取当前激活的账号 ID（若 credentialsProvider 或 username 为空则尝试 hint，否则回退为 'guest'）
 String getAccountId(Ref ref, {bool listen = true}) {
-  final creds =
-      listen ? ref.watch(credentialsProvider) : ref.read(credentialsProvider);
+  final creds = listen
+      ? ref.watch(credentialsProvider)
+      : ref.read(credentialsProvider);
   final username = creds?.username.trim();
   if (username != null && username.isNotEmpty) {
     return username;
   }
-  final hint =
-      listen
-          ? ref.watch(signedInUsernameHintProvider)?.trim()
-          : ref.read(signedInUsernameHintProvider)?.trim();
+  final hint = listen
+      ? ref.watch(signedInUsernameHintProvider)?.trim()
+      : ref.read(signedInUsernameHintProvider)?.trim();
   if (hint != null && hint.isNotEmpty) {
     return hint;
   }

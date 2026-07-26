@@ -493,7 +493,10 @@ class _RequiredCreditLegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final percent = !hasData || bucket.requiredCredits <= 0
         ? 0
-        : (bucket.earnedCredits / bucket.requiredCredits * 100).round().clamp(0, 100);
+        : (bucket.earnedCredits / bucket.requiredCredits * 100).round().clamp(
+            0,
+            100,
+          );
     final color = _creditCategoryColor(bucket.category);
 
     return Row(

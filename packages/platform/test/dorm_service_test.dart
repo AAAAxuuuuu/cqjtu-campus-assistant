@@ -31,7 +31,9 @@ void main() {
       expect(loadedB, isNull);
     });
 
-    test('load falls back to legacy un-prefixed keys if scoped keys are missing', () async {
+    test(
+        'load falls back to legacy un-prefixed keys if scoped keys are missing',
+        () async {
       SharedPreferences.setMockInitialValues({
         'dorm_campus': '科学城校区',
         'dorm_garden': 'deYuan',
@@ -46,7 +48,9 @@ void main() {
       expect(loaded.roomNumber, '0101');
     });
 
-    test('clear({String? accountId}) preserves legacy un-prefixed keys when accountId is provided', () async {
+    test(
+        'clear({String? accountId}) preserves legacy un-prefixed keys when accountId is provided',
+        () async {
       SharedPreferences.setMockInitialValues({
         'dorm_campus': '科学城校区',
         'dorm_garden': 'deYuan',
@@ -76,7 +80,9 @@ void main() {
       expect(prefs.getString('dorm_roomid'), '0101');
     });
 
-    test('clear() without accountId removes both default scoped keys and legacy un-prefixed keys', () async {
+    test(
+        'clear() without accountId removes both default scoped keys and legacy un-prefixed keys',
+        () async {
       SharedPreferences.setMockInitialValues({
         'dorm_campus': '科学城校区',
         'dorm_garden': 'deYuan',

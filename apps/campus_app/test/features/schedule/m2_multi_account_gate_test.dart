@@ -97,7 +97,10 @@ void main() {
             .addCourse(courseA);
 
         // Verify userA state immediately
-        expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
+        expect(
+          await container.read(scheduleSundayFirstProvider.future),
+          isTrue,
+        );
         expect(
           await container.read(semesterTotalWeeksProvider(null).future),
           equals(24),
@@ -106,10 +109,14 @@ void main() {
         expect(userADormRead?.buildingFullName, equals(dormA.buildingFullName));
         expect(userADormRead?.roomNumber, equals(dormA.roomNumber));
         expect(userADormRead?.garden, equals(dormA.garden));
-        final userACoursesRead =
-            await container.read(customCoursesProvider(null).future);
+        final userACoursesRead = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(userACoursesRead, hasLength(1));
-        expect(userACoursesRead.first.name, equals('Advanced Algorithms (User A)'));
+        expect(
+          userACoursesRead.first.name,
+          equals('Advanced Algorithms (User A)'),
+        );
 
         // ==========================================
         // STEP 2: Switch to userB (Verify no bleed, set userB values)
@@ -157,10 +164,14 @@ void main() {
         expect(userBDormRead?.buildingFullName, equals(dormB.buildingFullName));
         expect(userBDormRead?.roomNumber, equals(dormB.roomNumber));
         expect(userBDormRead?.garden, equals(dormB.garden));
-        final userBCoursesRead =
-            await container.read(customCoursesProvider(null).future);
+        final userBCoursesRead = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(userBCoursesRead, hasLength(1));
-        expect(userBCoursesRead.first.name, equals('Compiler Engineering (User B)'));
+        expect(
+          userBCoursesRead.first.name,
+          equals('Compiler Engineering (User B)'),
+        );
 
         // ==========================================
         // STEP 3: Switch to userC (Verify no bleed, set userC values)
@@ -196,7 +207,10 @@ void main() {
             .addCourse(courseC);
 
         // Verify userC state
-        expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
+        expect(
+          await container.read(scheduleSundayFirstProvider.future),
+          isTrue,
+        );
         expect(
           await container.read(semesterTotalWeeksProvider(null).future),
           equals(28),
@@ -205,8 +219,9 @@ void main() {
         expect(userCDormRead?.buildingFullName, equals(dormC.buildingFullName));
         expect(userCDormRead?.roomNumber, equals(dormC.roomNumber));
         expect(userCDormRead?.garden, equals(dormC.garden));
-        final userCCoursesRead =
-            await container.read(customCoursesProvider(null).future);
+        final userCCoursesRead = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(userCCoursesRead, hasLength(1));
         expect(userCCoursesRead.first.name, equals('Computer Vision (User C)'));
 
@@ -216,18 +231,25 @@ void main() {
         container.read(credentialsProvider.notifier).set('userA', 'passA');
         expect(container.read(credentialsProvider)?.username, equals('userA'));
 
-        expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
+        expect(
+          await container.read(scheduleSundayFirstProvider.future),
+          isTrue,
+        );
         expect(
           await container.read(semesterTotalWeeksProvider(null).future),
           equals(24),
         );
         final restoredUserADorm = await container.read(dormRoomProvider.future);
         expect(restoredUserADorm, isNotNull);
-        expect(restoredUserADorm?.buildingFullName, equals(dormA.buildingFullName));
+        expect(
+          restoredUserADorm?.buildingFullName,
+          equals(dormA.buildingFullName),
+        );
         expect(restoredUserADorm?.roomNumber, equals(dormA.roomNumber));
         expect(restoredUserADorm?.garden, equals(dormA.garden));
-        final restoredUserACourses =
-            await container.read(customCoursesProvider(null).future);
+        final restoredUserACourses = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(restoredUserACourses, hasLength(1));
         expect(
           restoredUserACourses.first.name,
@@ -244,30 +266,60 @@ void main() {
 
         // Pre-populate SharedPreferences for userA, userB, userC
         container.read(credentialsProvider.notifier).set('userA', 'passA');
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(true);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(22);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(true);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(22);
 
         container.read(credentialsProvider.notifier).set('userB', 'passB');
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(false);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(18);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(false);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(18);
 
         container.read(credentialsProvider.notifier).set('userC', 'passC');
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(true);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(26);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(true);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(26);
 
         // Perform 10 rapid switch cycles
         for (var i = 0; i < 10; i++) {
           container.read(credentialsProvider.notifier).set('userA', 'passA');
-          expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), 22);
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isTrue,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            22,
+          );
 
           container.read(credentialsProvider.notifier).set('userB', 'passB');
-          expect(await container.read(scheduleSundayFirstProvider.future), isFalse);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), 18);
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isFalse,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            18,
+          );
 
           container.read(credentialsProvider.notifier).set('userC', 'passC');
-          expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), 26);
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isTrue,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            26,
+          );
         }
       },
     );

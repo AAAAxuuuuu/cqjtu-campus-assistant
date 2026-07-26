@@ -47,18 +47,23 @@ void main() {
         final prefs = await SharedPreferences.getInstance();
 
         // User A data should be deleted
-        expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+        expect(
+          prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+          isFalse,
+        );
         expect(prefs.containsKey('user_user_schedule_sunday_first'), isFalse);
 
         // User B ("user_extra") data should be intact
-        final userBIntact = prefs.containsKey('user_user_extra_schedule_sunday_first') &&
+        final userBIntact =
+            prefs.containsKey('user_user_extra_schedule_sunday_first') &&
             prefs.containsKey('user_user_extra_dorm_campus') &&
             prefs.containsKey('resource_cache_v1:schedule:$userBB64:default');
 
         expect(
           userBIntact,
           isTrue,
-          reason: 'BUG CONFIRMED: Clearing User A ("user") deletes User B ("user_extra") data due to prefix matching on "user_user_"',
+          reason:
+              'BUG CONFIRMED: Clearing User A ("user") deletes User B ("user_extra") data due to prefix matching on "user_user_"',
         );
       },
     );
@@ -84,13 +89,17 @@ void main() {
 
         final prefs = await SharedPreferences.getInstance();
 
-        expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+        expect(
+          prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+          isFalse,
+        );
         expect(prefs.containsKey('user_test_pref'), isFalse);
 
         expect(
           prefs.containsKey('pref_for_my_test'),
           isTrue,
-          reason: 'BUG CONFIRMED: Clearing User A ("test") deletes User B ("my_test") key "pref_for_my_test" due to suffix matching on "_test"',
+          reason:
+              'BUG CONFIRMED: Clearing User A ("test") deletes User B ("my_test") key "pref_for_my_test" due to suffix matching on "_test"',
         );
       },
     );
@@ -115,9 +124,14 @@ void main() {
         );
 
         expect(await sessionService.loadTicket(username), 'ticket_abc123');
-        expect(await sessionService.loadCasCookies(username), 'CAS_JSESSIONID=xyz789');
+        expect(
+          await sessionService.loadCasCookies(username),
+          'CAS_JSESSIONID=xyz789',
+        );
 
-        final cacheService = AccountCacheService(sessionService: sessionService);
+        final cacheService = AccountCacheService(
+          sessionService: sessionService,
+        );
         await cacheService.clearAccountCache(username);
 
         // Session tokens removed
@@ -149,18 +163,23 @@ void main() {
         container.read(credentialsProvider.notifier).set('userA', 'passA');
 
         // Initial read -> false
-        final initialShowInactive = await container.read(scheduleShowInactiveCoursesProvider.future);
+        final initialShowInactive = await container.read(
+          scheduleShowInactiveCoursesProvider.future,
+        );
         expect(initialShowInactive, isFalse);
 
         // Execute clearCurrentAccountCache
         await clearCurrentAccountCache(container, 'userA');
 
         // Re-read -> after clear, should reset to default (true)
-        final resetShowInactive = await container.read(scheduleShowInactiveCoursesProvider.future);
+        final resetShowInactive = await container.read(
+          scheduleShowInactiveCoursesProvider.future,
+        );
         expect(
           resetShowInactive,
           isTrue,
-          reason: 'BUG CONFIRMED: scheduleShowInactiveCoursesProvider is missing ref.invalidate in clearCurrentAccountCache',
+          reason:
+              'BUG CONFIRMED: scheduleShowInactiveCoursesProvider is missing ref.invalidate in clearCurrentAccountCache',
         );
       },
     );

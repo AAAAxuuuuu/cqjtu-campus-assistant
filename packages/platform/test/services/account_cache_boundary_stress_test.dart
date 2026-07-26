@@ -13,8 +13,12 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  group('Challenger 1 - AccountCacheService Boundary Isolation & Clearing Stress Tests', () {
-    test('Prefix Boundary Isolation: user vs user_1 when user_1 has preference keys only (no resource_cache_v1)', () async {
+  group(
+      'Challenger 1 - AccountCacheService Boundary Isolation & Clearing Stress Tests',
+      () {
+    test(
+        'Prefix Boundary Isolation: user vs user_1 when user_1 has preference keys only (no resource_cache_v1)',
+        () async {
       final userAB64 = base64Url.encode(utf8.encode('user'));
 
       SharedPreferences.setMockInitialValues({
@@ -35,24 +39,34 @@ void main() {
       await service.clearAccountCache('user', accountId: 'user', prefs: prefs);
 
       // Verify 'user' keys are removed
-      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse, reason: "'user' resource cache must be cleared");
-      expect(prefs.containsKey('user_user_schedule_sunday_first'), isFalse, reason: "'user' sunday_first pref must be cleared");
-      expect(prefs.containsKey('user_user_dorm_campus'), isFalse, reason: "'user' dorm pref must be cleared");
+      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+          isFalse,
+          reason: "'user' resource cache must be cleared");
+      expect(prefs.containsKey('user_user_schedule_sunday_first'), isFalse,
+          reason: "'user' sunday_first pref must be cleared");
+      expect(prefs.containsKey('user_user_dorm_campus'), isFalse,
+          reason: "'user' dorm pref must be cleared");
 
       // Verify 'user_1' preference keys remain INTACT (Boundary Isolation)
-      expect(prefs.containsKey('user_user_1_schedule_sunday_first'), isTrue, reason: "'user_1' sunday_first pref MUST NOT be deleted when clearing 'user'");
-      expect(prefs.containsKey('user_user_1_dorm_campus'), isTrue, reason: "'user_1' dorm pref MUST NOT be deleted when clearing 'user'");
+      expect(prefs.containsKey('user_user_1_schedule_sunday_first'), isTrue,
+          reason:
+              "'user_1' sunday_first pref MUST NOT be deleted when clearing 'user'");
+      expect(prefs.containsKey('user_user_1_dorm_campus'), isTrue,
+          reason:
+              "'user_1' dorm pref MUST NOT be deleted when clearing 'user'");
     });
 
-    test('Prefix Boundary Isolation: user vs user_1 when both have resource_cache_v1 keys', () async {
+    test(
+        'Prefix Boundary Isolation: user vs user_1 when both have resource_cache_v1 keys',
+        () async {
       final userAB64 = base64Url.encode(utf8.encode('user'));
       final user1B64 = base64Url.encode(utf8.encode('user_1'));
 
       SharedPreferences.setMockInitialValues({
         'resource_cache_v1:schedule:$userAB64:default': '{"courses":["Math"]}',
         'user_user_schedule_sunday_first': true,
-
-        'resource_cache_v1:schedule:$user1B64:default': '{"courses":["English"]}',
+        'resource_cache_v1:schedule:$user1B64:default':
+            '{"courses":["English"]}',
         'user_user_1_schedule_sunday_first': false,
       });
 
@@ -61,14 +75,18 @@ void main() {
 
       await service.clearAccountCache('user', accountId: 'user', prefs: prefs);
 
-      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+          isFalse);
       expect(prefs.containsKey('user_user_schedule_sunday_first'), isFalse);
 
-      expect(prefs.containsKey('resource_cache_v1:schedule:$user1B64:default'), isTrue);
+      expect(prefs.containsKey('resource_cache_v1:schedule:$user1B64:default'),
+          isTrue);
       expect(prefs.containsKey('user_user_1_schedule_sunday_first'), isTrue);
     });
 
-    test('Prefix Boundary Isolation: test vs test_user when test_user has preference keys only', () async {
+    test(
+        'Prefix Boundary Isolation: test vs test_user when test_user has preference keys only',
+        () async {
       SharedPreferences.setMockInitialValues({
         'user_test_schedule_sunday_first': true,
         'user_test_user_schedule_sunday_first': true,
@@ -80,7 +98,8 @@ void main() {
       await service.clearAccountCache('test', accountId: 'test', prefs: prefs);
 
       expect(prefs.containsKey('user_test_schedule_sunday_first'), isFalse);
-      expect(prefs.containsKey('user_test_user_schedule_sunday_first'), isTrue, reason: "'test_user' pref MUST NOT be deleted when clearing 'test'");
+      expect(prefs.containsKey('user_test_user_schedule_sunday_first'), isTrue,
+          reason: "'test_user' pref MUST NOT be deleted when clearing 'test'");
     });
 
     test('Prefix Boundary Isolation: abc vs abcd', () async {
@@ -98,7 +117,9 @@ void main() {
       expect(prefs.containsKey('user_abcd_schedule_sunday_first'), isTrue);
     });
 
-    test('Exact Account Key Isolation: exact account key user_user_1 remains intact after clearAccountCache(user)', () async {
+    test(
+        'Exact Account Key Isolation: exact account key user_user_1 remains intact after clearAccountCache(user)',
+        () async {
       SharedPreferences.setMockInitialValues({
         'user_user': 'state_for_user',
         'user_user_1': 'state_for_user_1',
@@ -109,11 +130,16 @@ void main() {
 
       await service.clearAccountCache('user', accountId: 'user', prefs: prefs);
 
-      expect(prefs.containsKey('user_user'), isFalse, reason: "'user_user' must be cleared when clearing 'user'");
-      expect(prefs.containsKey('user_user_1'), isTrue, reason: "Exact account key 'user_user_1' MUST remain intact after clearing 'user'");
+      expect(prefs.containsKey('user_user'), isFalse,
+          reason: "'user_user' must be cleared when clearing 'user'");
+      expect(prefs.containsKey('user_user_1'), isTrue,
+          reason:
+              "Exact account key 'user_user_1' MUST remain intact after clearing 'user'");
     });
 
-    test('Exact Account Key Isolation: exact account key user_test_user remains intact after clearAccountCache(test)', () async {
+    test(
+        'Exact Account Key Isolation: exact account key user_test_user remains intact after clearAccountCache(test)',
+        () async {
       SharedPreferences.setMockInitialValues({
         'user_test': 'state_for_test',
         'user_test_user': 'state_for_test_user',
@@ -124,11 +150,16 @@ void main() {
 
       await service.clearAccountCache('test', accountId: 'test', prefs: prefs);
 
-      expect(prefs.containsKey('user_test'), isFalse, reason: "'user_test' must be cleared when clearing 'test'");
-      expect(prefs.containsKey('user_test_user'), isTrue, reason: "Exact account key 'user_test_user' MUST remain intact after clearing 'test'");
+      expect(prefs.containsKey('user_test'), isFalse,
+          reason: "'user_test' must be cleared when clearing 'test'");
+      expect(prefs.containsKey('user_test_user'), isTrue,
+          reason:
+              "Exact account key 'user_test_user' MUST remain intact after clearing 'test'");
     });
 
-    test('One-click Account Cache Clearing: Single and Multiple Account Sessions', () async {
+    test(
+        'One-click Account Cache Clearing: Single and Multiple Account Sessions',
+        () async {
       final userAB64 = base64Url.encode(utf8.encode('userA'));
       final userBB64 = base64Url.encode(utf8.encode('userB'));
       final userCB64 = base64Url.encode(utf8.encode('userC'));
@@ -148,7 +179,8 @@ void main() {
 
       // Clear userA
       await service.clearAccountCache('userA', prefs: prefs);
-      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+      expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+          isFalse);
       expect(prefs.containsKey('user_userA_pref'), isFalse);
       expect(prefs.containsKey('user_userB_pref'), isTrue);
       expect(prefs.containsKey('user_userC_pref'), isTrue);
