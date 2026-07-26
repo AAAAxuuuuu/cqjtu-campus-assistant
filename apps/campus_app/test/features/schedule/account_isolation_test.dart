@@ -30,10 +30,7 @@ void main() {
         userScopedKey('', 'schedule_sunday_first'),
         'user_default_schedule_sunday_first',
       );
-      expect(
-        userScopedKey('  ', 'dorm_roomid'),
-        'user_default_dorm_roomid',
-      );
+      expect(userScopedKey('  ', 'dorm_roomid'), 'user_default_dorm_roomid');
     });
 
     test(
@@ -91,8 +88,9 @@ void main() {
         expect(userADorm!.buildingFullName, '德园8舍');
         expect(userADorm.roomNumber, '0305');
 
-        final userACourses =
-            await container.read(customCoursesProvider(null).future);
+        final userACourses = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(userACourses, hasLength(1));
         expect(userACourses.first.name, 'Data Structures (User A)');
 
@@ -146,8 +144,9 @@ void main() {
         );
         final userBDorm = await container.read(dormRoomProvider.future);
         expect(userBDorm!.buildingFullName, '礼园6舍');
-        final userBCourses =
-            await container.read(customCoursesProvider(null).future);
+        final userBCourses = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(userBCourses, hasLength(1));
         expect(userBCourses.first.name, 'Operating Systems (User B)');
 
@@ -164,14 +163,14 @@ void main() {
           22,
         );
 
-        final restoredUserADorm =
-            await container.read(dormRoomProvider.future);
+        final restoredUserADorm = await container.read(dormRoomProvider.future);
         expect(restoredUserADorm, isNotNull);
         expect(restoredUserADorm!.buildingFullName, '德园8舍');
         expect(restoredUserADorm.roomNumber, '0305');
 
-        final restoredUserACourses =
-            await container.read(customCoursesProvider(null).future);
+        final restoredUserACourses = await container.read(
+          customCoursesProvider(null).future,
+        );
         expect(restoredUserACourses, hasLength(1));
         expect(restoredUserACourses.first.name, 'Data Structures (User A)');
       },
@@ -220,7 +219,9 @@ void main() {
           isTrue,
         );
         expect(
-          await container.read(semesterTotalWeeksProvider('2026-2027-1').future),
+          await container.read(
+            semesterTotalWeeksProvider('2026-2027-1').future,
+          ),
           18,
         );
         final dorm = await container.read(dormRoomProvider.future);
@@ -252,10 +253,7 @@ void main() {
         );
 
         final prefs = await SharedPreferences.getInstance();
-        expect(
-          prefs.containsKey('user_default_schedule_sunday_first'),
-          isTrue,
-        );
+        expect(prefs.containsKey('user_default_schedule_sunday_first'), isTrue);
       },
     );
   });

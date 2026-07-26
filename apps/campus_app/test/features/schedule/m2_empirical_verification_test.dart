@@ -80,54 +80,96 @@ void main() {
 
         // --- Step 1: Populate preferences for Account A ---
         container.read(credentialsProvider.notifier).set('userA', 'passA');
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(true);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(24);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(true);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(24);
         await container.read(dormRoomProvider.notifier).set(dormA);
-        await container.read(customCoursesProvider(null).notifier).addCourse(courseA);
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(courseA);
 
         // --- Step 2: Populate preferences for Account B ---
         container.read(credentialsProvider.notifier).set('userB', 'passB');
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(false);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(16);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(false);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(16);
         await container.read(dormRoomProvider.notifier).set(dormB);
-        await container.read(customCoursesProvider(null).notifier).addCourse(courseB);
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(courseB);
 
         // --- Step 3: Populate preferences for Guest Mode ---
         container.read(credentialsProvider.notifier).clear();
-        await container.read(scheduleSundayFirstProvider.notifier).setSundayFirst(true);
-        await container.read(semesterTotalWeeksProvider(null).notifier).setWeeks(18);
+        await container
+            .read(scheduleSundayFirstProvider.notifier)
+            .setSundayFirst(true);
+        await container
+            .read(semesterTotalWeeksProvider(null).notifier)
+            .setWeeks(18);
         await container.read(dormRoomProvider.notifier).set(dormGuest);
-        await container.read(customCoursesProvider(null).notifier).addCourse(courseGuest);
+        await container
+            .read(customCoursesProvider(null).notifier)
+            .addCourse(courseGuest);
 
         // --- Step 4: Rapid sequential switching loop (20 iterations) ---
         for (int cycle = 0; cycle < 20; cycle++) {
           // Switch to Account A
           container.read(credentialsProvider.notifier).set('userA', 'passA');
-          expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), equals(24));
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isTrue,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            equals(24),
+          );
           final readDormA = await container.read(dormRoomProvider.future);
           expect(readDormA?.roomNumber, equals('0305'));
-          final readCoursesA = await container.read(customCoursesProvider(null).future);
+          final readCoursesA = await container.read(
+            customCoursesProvider(null).future,
+          );
           expect(readCoursesA, hasLength(1));
           expect(readCoursesA.first.name, equals('Account A Course'));
 
           // Switch to Account B
           container.read(credentialsProvider.notifier).set('userB', 'passB');
-          expect(await container.read(scheduleSundayFirstProvider.future), isFalse);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), equals(16));
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isFalse,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            equals(16),
+          );
           final readDormB = await container.read(dormRoomProvider.future);
           expect(readDormB?.roomNumber, equals('0202'));
-          final readCoursesB = await container.read(customCoursesProvider(null).future);
+          final readCoursesB = await container.read(
+            customCoursesProvider(null).future,
+          );
           expect(readCoursesB, hasLength(1));
           expect(readCoursesB.first.name, equals('Account B Course'));
 
           // Switch to Guest
           container.read(credentialsProvider.notifier).clear();
-          expect(await container.read(scheduleSundayFirstProvider.future), isTrue);
-          expect(await container.read(semesterTotalWeeksProvider(null).future), equals(18));
+          expect(
+            await container.read(scheduleSundayFirstProvider.future),
+            isTrue,
+          );
+          expect(
+            await container.read(semesterTotalWeeksProvider(null).future),
+            equals(18),
+          );
           final readDormGuest = await container.read(dormRoomProvider.future);
           expect(readDormGuest?.roomNumber, equals('0101'));
-          final readCoursesGuest = await container.read(customCoursesProvider(null).future);
+          final readCoursesGuest = await container.read(
+            customCoursesProvider(null).future,
+          );
           expect(readCoursesGuest, hasLength(1));
           expect(readCoursesGuest.first.name, equals('Guest Course'));
         }
@@ -171,30 +213,68 @@ void main() {
 
         // Execute concurrent asynchronous sets across Account A and Account B
         await Future.wait([
-          containerA.read(scheduleSundayFirstProvider.notifier).setSundayFirst(true),
-          containerB.read(scheduleSundayFirstProvider.notifier).setSundayFirst(false),
-          containerA.read(semesterTotalWeeksProvider('2026-2027-1').notifier).setWeeks(25),
-          containerB.read(semesterTotalWeeksProvider('2026-2027-1').notifier).setWeeks(15),
-          containerA.read(customCoursesProvider('2026-2027-1').notifier).addCourse(courseA),
-          containerB.read(customCoursesProvider('2026-2027-1').notifier).addCourse(courseB),
+          containerA
+              .read(scheduleSundayFirstProvider.notifier)
+              .setSundayFirst(true),
+          containerB
+              .read(scheduleSundayFirstProvider.notifier)
+              .setSundayFirst(false),
+          containerA
+              .read(semesterTotalWeeksProvider('2026-2027-1').notifier)
+              .setWeeks(25),
+          containerB
+              .read(semesterTotalWeeksProvider('2026-2027-1').notifier)
+              .setWeeks(15),
+          containerA
+              .read(customCoursesProvider('2026-2027-1').notifier)
+              .addCourse(courseA),
+          containerB
+              .read(customCoursesProvider('2026-2027-1').notifier)
+              .addCourse(courseB),
         ]);
 
         // Inspect SharedPreferences to ensure non-overlapping key spaces
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getBool('user_accountA_schedule_sunday_first'), isTrue);
         expect(prefs.getBool('user_accountB_schedule_sunday_first'), isFalse);
-        expect(prefs.getInt('user_accountA_schedule_total_weeks_2026-2027-1'), equals(25));
-        expect(prefs.getInt('user_accountB_schedule_total_weeks_2026-2027-1'), equals(15));
-        expect(prefs.containsKey('user_accountA_schedule_custom_courses_2026-2027-1'), isTrue);
-        expect(prefs.containsKey('user_accountB_schedule_custom_courses_2026-2027-1'), isTrue);
+        expect(
+          prefs.getInt('user_accountA_schedule_total_weeks_2026-2027-1'),
+          equals(25),
+        );
+        expect(
+          prefs.getInt('user_accountB_schedule_total_weeks_2026-2027-1'),
+          equals(15),
+        );
+        expect(
+          prefs.containsKey(
+            'user_accountA_schedule_custom_courses_2026-2027-1',
+          ),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey(
+            'user_accountB_schedule_custom_courses_2026-2027-1',
+          ),
+          isTrue,
+        );
 
-        final coursesA = await containerA.read(customCoursesProvider('2026-2027-1').future);
-        final coursesB = await containerB.read(customCoursesProvider('2026-2027-1').future);
+        final coursesA = await containerA.read(
+          customCoursesProvider('2026-2027-1').future,
+        );
+        final coursesB = await containerB.read(
+          customCoursesProvider('2026-2027-1').future,
+        );
 
         expect(coursesA.map((c) => c.name), contains('Concurrent Course A'));
-        expect(coursesA.map((c) => c.name), isNot(contains('Concurrent Course B')));
+        expect(
+          coursesA.map((c) => c.name),
+          isNot(contains('Concurrent Course B')),
+        );
         expect(coursesB.map((c) => c.name), contains('Concurrent Course B'));
-        expect(coursesB.map((c) => c.name), isNot(contains('Concurrent Course A')));
+        expect(
+          coursesB.map((c) => c.name),
+          isNot(contains('Concurrent Course A')),
+        );
       },
     );
 
@@ -207,7 +287,9 @@ void main() {
         // Populate 3 custom courses for userA
         container.read(credentialsProvider.notifier).set('userA', 'passA');
         for (int i = 1; i <= 3; i++) {
-          await container.read(customCoursesProvider('2026-2027-1').notifier).addCourse(
+          await container
+              .read(customCoursesProvider('2026-2027-1').notifier)
+              .addCourse(
                 Course(
                   name: 'User A Course $i',
                   teacher: 'Teacher A',
@@ -224,13 +306,24 @@ void main() {
 
         // Switch to userB (which has no custom courses set)
         container.read(credentialsProvider.notifier).set('userB', 'passB');
-        final userBCourses = await container.read(customCoursesProvider('2026-2027-1').future);
-        expect(userBCourses, isEmpty, reason: "Account B state must be empty and free of Account A's courses");
+        final userBCourses = await container.read(
+          customCoursesProvider('2026-2027-1').future,
+        );
+        expect(
+          userBCourses,
+          isEmpty,
+          reason:
+              "Account B state must be empty and free of Account A's courses",
+        );
 
         // Clear courses for userA
         container.read(credentialsProvider.notifier).set('userA', 'passA');
-        await container.read(customCoursesProvider('2026-2027-1').notifier).clearCourses();
-        final userACoursesAfterClear = await container.read(customCoursesProvider('2026-2027-1').future);
+        await container
+            .read(customCoursesProvider('2026-2027-1').notifier)
+            .clearCourses();
+        final userACoursesAfterClear = await container.read(
+          customCoursesProvider('2026-2027-1').future,
+        );
         expect(userACoursesAfterClear, isEmpty);
       },
     );

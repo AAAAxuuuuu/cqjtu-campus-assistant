@@ -48,17 +48,16 @@ class ParsedCourseData {
           endWeek == other.endWeek;
 
   @override
-  int get hashCode =>
-      Object.hash(
-        name,
-        classroom,
-        teacher,
-        weekday,
-        startSlot,
-        endSlot,
-        startWeek,
-        endWeek,
-      );
+  int get hashCode => Object.hash(
+    name,
+    classroom,
+    teacher,
+    weekday,
+    startSlot,
+    endSlot,
+    startWeek,
+    endWeek,
+  );
 
   @override
   String toString() {
@@ -258,7 +257,8 @@ class CourseTextParser {
         r'(?:(?:[A-Za-z0-9\u4e00-\u9fa5]{0,8}(?:教学楼|基教楼|实验楼|科技楼|学院楼|三教|二教|一教|四教|楼|栋|区|馆|实验室))[\s-]*)?[A-Za-z]?\d{3,4}[A-Za-z]?(?:教室|室)?',
       ).firstMatch(text);
 
-      if (classroomMatch != null && classroomMatch.group(0)!.trim().isNotEmpty) {
+      if (classroomMatch != null &&
+          classroomMatch.group(0)!.trim().isNotEmpty) {
         final matchStr = classroomMatch.group(0)!.trim();
         // Ignore matches that are purely numbers or collide with slot/week numbers unless classroom-specific
         if (!_isPureNumberOrSlotWeek(matchStr)) {
@@ -279,7 +279,9 @@ class CourseTextParser {
 
       // Remove explicit tag labels
       cleanText = cleanText.replaceAll(
-        RegExp(r'(?:课程|课程名称|课名|科目|地点|教室|上课地点|场地|机房|实验室|教师|老师|主讲|授课教师|讲师|时间|上课时间|周次|周数)[:：]'),
+        RegExp(
+          r'(?:课程|课程名称|课名|科目|地点|教室|上课地点|场地|机房|实验室|教师|老师|主讲|授课教师|讲师|时间|上课时间|周次|周数)[:：]',
+        ),
         ' ',
       );
 

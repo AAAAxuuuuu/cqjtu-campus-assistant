@@ -29,24 +29,32 @@ void main() {
           // User A resource caches
           'resource_cache_v1:schedule:$userAB64Url:default': jsonEncode({
             'updatedAtMs': 1000,
-            'data': {'courses': [{'name': 'Math_A'}], 'remark': 'Remark_A'},
+            'data': {
+              'courses': [
+                {'name': 'Math_A'},
+              ],
+              'remark': 'Remark_A',
+            },
           }),
           'resource_cache_v1:grades:$userAB64Url:default': jsonEncode({
             'updatedAtMs': 1000,
-            'data': {'summary': {'GPA': '3.9'}, 'grades': []},
+            'data': {
+              'summary': {'GPA': '3.9'},
+              'grades': [],
+            },
           }),
           'resource_cache_v1:exams:$userAB64Url:default': jsonEncode({
             'updatedAtMs': 1000,
-            'data': [{'courseName': 'Math Exam A'}],
+            'data': [
+              {'courseName': 'Math Exam A'},
+            ],
           }),
           'resource_cache_v1:electricity:$userAB64Url:default': jsonEncode({
             'updatedAtMs': 1000,
             'data': '100.5',
           }),
-          'resource_cache_v1:campus_card_balance:$userAB64Url:default': jsonEncode({
-            'updatedAtMs': 1000,
-            'data': '50.00',
-          }),
+          'resource_cache_v1:campus_card_balance:$userAB64Url:default':
+              jsonEncode({'updatedAtMs': 1000, 'data': '50.00'}),
           'resource_cache_v1:study_progress:$userAB64Url:default': jsonEncode({
             'updatedAtMs': 1000,
             'data': {'completedCount': 10},
@@ -59,30 +67,39 @@ void main() {
           'user_userA_dorm_roomid': '0305',
           'user_userA_schedule_sunday_first': true,
           'user_userA_schedule_show_inactive_courses': false,
-          'user_userA_schedule_custom_courses_2026-2027-1': '[{"name":"Custom_A"}]',
+          'user_userA_schedule_custom_courses_2026-2027-1':
+              '[{"name":"Custom_A"}]',
           'user_userA_schedule_total_weeks_2026-2027-1': 16,
 
           // User B resource caches
           'resource_cache_v1:schedule:$userBB64Url:default': jsonEncode({
             'updatedAtMs': 2000,
-            'data': {'courses': [{'name': 'English_B'}], 'remark': 'Remark_B'},
+            'data': {
+              'courses': [
+                {'name': 'English_B'},
+              ],
+              'remark': 'Remark_B',
+            },
           }),
           'resource_cache_v1:grades:$userBB64Url:default': jsonEncode({
             'updatedAtMs': 2000,
-            'data': {'summary': {'GPA': '3.5'}, 'grades': []},
+            'data': {
+              'summary': {'GPA': '3.5'},
+              'grades': [],
+            },
           }),
           'resource_cache_v1:exams:$userBB64Url:default': jsonEncode({
             'updatedAtMs': 2000,
-            'data': [{'courseName': 'English Exam B'}],
+            'data': [
+              {'courseName': 'English Exam B'},
+            ],
           }),
           'resource_cache_v1:electricity:$userBB64Url:default': jsonEncode({
             'updatedAtMs': 2000,
             'data': '200.0',
           }),
-          'resource_cache_v1:campus_card_balance:$userBB64Url:default': jsonEncode({
-            'updatedAtMs': 2000,
-            'data': '150.00',
-          }),
+          'resource_cache_v1:campus_card_balance:$userBB64Url:default':
+              jsonEncode({'updatedAtMs': 2000, 'data': '150.00'}),
           'resource_cache_v1:study_progress:$userBB64Url:default': jsonEncode({
             'updatedAtMs': 2000,
             'data': {'completedCount': 20},
@@ -95,7 +112,8 @@ void main() {
           'user_userB_dorm_roomid': '0406',
           'user_userB_schedule_sunday_first': false,
           'user_userB_schedule_show_inactive_courses': true,
-          'user_userB_schedule_custom_courses_2026-2027-1': '[{"name":"Custom_B"}]',
+          'user_userB_schedule_custom_courses_2026-2027-1':
+              '[{"name":"Custom_B"}]',
           'user_userB_schedule_total_weeks_2026-2027-1': 24,
 
           // Global / system settings
@@ -122,12 +140,36 @@ void main() {
         final prefs = await SharedPreferences.getInstance();
 
         // Check userA resource caches deleted
-        expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64Url:default'), isFalse);
-        expect(prefs.containsKey('resource_cache_v1:grades:$userAB64Url:default'), isFalse);
-        expect(prefs.containsKey('resource_cache_v1:exams:$userAB64Url:default'), isFalse);
-        expect(prefs.containsKey('resource_cache_v1:electricity:$userAB64Url:default'), isFalse);
-        expect(prefs.containsKey('resource_cache_v1:campus_card_balance:$userAB64Url:default'), isFalse);
-        expect(prefs.containsKey('resource_cache_v1:study_progress:$userAB64Url:default'), isFalse);
+        expect(
+          prefs.containsKey('resource_cache_v1:schedule:$userAB64Url:default'),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey('resource_cache_v1:grades:$userAB64Url:default'),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey('resource_cache_v1:exams:$userAB64Url:default'),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:electricity:$userAB64Url:default',
+          ),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:campus_card_balance:$userAB64Url:default',
+          ),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:study_progress:$userAB64Url:default',
+          ),
+          isFalse,
+        );
 
         // Check userA preferences deleted
         expect(prefs.containsKey('user_userA_dorm_campus'), isFalse);
@@ -135,28 +177,67 @@ void main() {
         expect(prefs.containsKey('user_userA_dorm_number'), isFalse);
         expect(prefs.containsKey('user_userA_dorm_roomid'), isFalse);
         expect(prefs.containsKey('user_userA_schedule_sunday_first'), isFalse);
-        expect(prefs.containsKey('user_userA_schedule_show_inactive_courses'), isFalse);
-        expect(prefs.containsKey('user_userA_schedule_custom_courses_2026-2027-1'), isFalse);
-        expect(prefs.containsKey('user_userA_schedule_total_weeks_2026-2027-1'), isFalse);
+        expect(
+          prefs.containsKey('user_userA_schedule_show_inactive_courses'),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey('user_userA_schedule_custom_courses_2026-2027-1'),
+          isFalse,
+        );
+        expect(
+          prefs.containsKey('user_userA_schedule_total_weeks_2026-2027-1'),
+          isFalse,
+        );
 
         // Check userA SessionService tokens deleted
         expect(await sessionSvc.loadSessionId('userA'), isNull);
         expect(await sessionSvc.loadTicket('userA'), isNull);
 
         // Check userB resource caches PRESERVED 100%
-        expect(prefs.containsKey('resource_cache_v1:schedule:$userBB64Url:default'), isTrue);
-        expect(prefs.containsKey('resource_cache_v1:grades:$userBB64Url:default'), isTrue);
-        expect(prefs.containsKey('resource_cache_v1:exams:$userBB64Url:default'), isTrue);
-        expect(prefs.containsKey('resource_cache_v1:electricity:$userBB64Url:default'), isTrue);
-        expect(prefs.containsKey('resource_cache_v1:campus_card_balance:$userBB64Url:default'), isTrue);
-        expect(prefs.containsKey('resource_cache_v1:study_progress:$userBB64Url:default'), isTrue);
+        expect(
+          prefs.containsKey('resource_cache_v1:schedule:$userBB64Url:default'),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey('resource_cache_v1:grades:$userBB64Url:default'),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey('resource_cache_v1:exams:$userBB64Url:default'),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:electricity:$userBB64Url:default',
+          ),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:campus_card_balance:$userBB64Url:default',
+          ),
+          isTrue,
+        );
+        expect(
+          prefs.containsKey(
+            'resource_cache_v1:study_progress:$userBB64Url:default',
+          ),
+          isTrue,
+        );
 
         // Check userB preferences PRESERVED 100%
         expect(prefs.getString('user_userB_dorm_campus'), '南岸校区');
         expect(prefs.getString('user_userB_dorm_garden'), 'liYuan');
         expect(prefs.getBool('user_userB_schedule_sunday_first'), false);
-        expect(prefs.getBool('user_userB_schedule_show_inactive_courses'), true);
-        expect(prefs.getString('user_userB_schedule_custom_courses_2026-2027-1'), '[{"name":"Custom_B"}]');
+        expect(
+          prefs.getBool('user_userB_schedule_show_inactive_courses'),
+          true,
+        );
+        expect(
+          prefs.getString('user_userB_schedule_custom_courses_2026-2027-1'),
+          '[{"name":"Custom_B"}]',
+        );
         expect(prefs.getInt('user_userB_schedule_total_weeks_2026-2027-1'), 24);
 
         // Check userB SessionService tokens PRESERVED 100%
@@ -174,7 +255,9 @@ void main() {
         final container = ProviderContainer();
         addTearDown(container.dispose);
 
-        container.read(credentialsProvider.notifier).set('userA', 'secretPassword123');
+        container
+            .read(credentialsProvider.notifier)
+            .set('userA', 'secretPassword123');
 
         // Clear cache
         await clearCurrentAccountCache(container, 'userA');
@@ -212,31 +295,48 @@ void main() {
         container.read(credentialsProvider.notifier).set('userA', 'passA');
 
         // Read initial state of providers
-        final initialSundayFirst = await container.read(scheduleSundayFirstProvider.future);
+        final initialSundayFirst = await container.read(
+          scheduleSundayFirstProvider.future,
+        );
         expect(initialSundayFirst, isTrue);
 
         final initialDorm = await container.read(dormRoomProvider.future);
         expect(initialDorm, isNotNull);
         expect(initialDorm?.roomNumber, '0305');
 
-        final initialShowInactive = await container.read(scheduleShowInactiveCoursesProvider.future);
+        final initialShowInactive = await container.read(
+          scheduleShowInactiveCoursesProvider.future,
+        );
         expect(initialShowInactive, isFalse);
 
         // Execute clearCurrentAccountCache
         await clearCurrentAccountCache(container, 'userA');
 
         // Re-read providers to check if live invalidation updated state in RAM:
-        final resetSundayFirst = await container.read(scheduleSundayFirstProvider.future);
-        expect(resetSundayFirst, isFalse, reason: 'scheduleSundayFirstProvider reset to default (false)');
+        final resetSundayFirst = await container.read(
+          scheduleSundayFirstProvider.future,
+        );
+        expect(
+          resetSundayFirst,
+          isFalse,
+          reason: 'scheduleSundayFirstProvider reset to default (false)',
+        );
 
         final resetDorm = await container.read(dormRoomProvider.future);
         expect(resetDorm, isNull, reason: 'dormRoomProvider reset to null');
 
         // Check scheduleShowInactiveCoursesProvider
-        final resetShowInactive = await container.read(scheduleShowInactiveCoursesProvider.future);
+        final resetShowInactive = await container.read(
+          scheduleShowInactiveCoursesProvider.future,
+        );
 
         // We assert resetShowInactive is true (will fail if not invalidated)
-        expect(resetShowInactive, isTrue, reason: 'BUG DETECTED: scheduleShowInactiveCoursesProvider is missing ref.invalidate in clearCurrentAccountCache');
+        expect(
+          resetShowInactive,
+          isTrue,
+          reason:
+              'BUG DETECTED: scheduleShowInactiveCoursesProvider is missing ref.invalidate in clearCurrentAccountCache',
+        );
       },
     );
   });

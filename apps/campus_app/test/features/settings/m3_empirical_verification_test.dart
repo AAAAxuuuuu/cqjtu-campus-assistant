@@ -29,15 +29,18 @@ void main() {
 
           for (final acc in accounts) {
             final b64 = base64Url.encode(utf8.encode(acc));
-            initialPrefs['resource_cache_v1:schedule:$b64:default'] = '{"courses":["$acc-math"]}';
-            initialPrefs['resource_cache_v1:grades:$b64:default'] = '{"gpa":3.9}';
+            initialPrefs['resource_cache_v1:schedule:$b64:default'] =
+                '{"courses":["$acc-math"]}';
+            initialPrefs['resource_cache_v1:grades:$b64:default'] =
+                '{"gpa":3.9}';
             initialPrefs['user_${acc}_schedule_sunday_first'] = true;
             initialPrefs['user_${acc}_dorm_campus'] = 'Campus_$acc';
           }
 
           // Add a preserved account 'userKeeper'
           final keeperB64 = base64Url.encode(utf8.encode('userKeeper'));
-          initialPrefs['resource_cache_v1:schedule:$keeperB64:default'] = '{"courses":["keeper-math"]}';
+          initialPrefs['resource_cache_v1:schedule:$keeperB64:default'] =
+              '{"courses":["keeper-math"]}';
           initialPrefs['user_userKeeper_schedule_sunday_first'] = false;
 
           SharedPreferences.setMockInitialValues(initialPrefs);
@@ -53,15 +56,30 @@ void main() {
           // Verify all 5 cleared accounts have no remaining cache/preference keys
           for (final acc in accounts) {
             final b64 = base64Url.encode(utf8.encode(acc));
-            expect(prefs.containsKey('resource_cache_v1:schedule:$b64:default'), isFalse);
-            expect(prefs.containsKey('resource_cache_v1:grades:$b64:default'), isFalse);
-            expect(prefs.containsKey('user_${acc}_schedule_sunday_first'), isFalse);
+            expect(
+              prefs.containsKey('resource_cache_v1:schedule:$b64:default'),
+              isFalse,
+            );
+            expect(
+              prefs.containsKey('resource_cache_v1:grades:$b64:default'),
+              isFalse,
+            );
+            expect(
+              prefs.containsKey('user_${acc}_schedule_sunday_first'),
+              isFalse,
+            );
             expect(prefs.containsKey('user_${acc}_dorm_campus'), isFalse);
           }
 
           // Verify userKeeper is intact
-          expect(prefs.containsKey('resource_cache_v1:schedule:$keeperB64:default'), isTrue);
-          expect(prefs.containsKey('user_userKeeper_schedule_sunday_first'), isTrue);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$keeperB64:default'),
+            isTrue,
+          );
+          expect(
+            prefs.containsKey('user_userKeeper_schedule_sunday_first'),
+            isTrue,
+          );
 
           // Verify global settings remain intact
           expect(prefs.getString('app_theme_mode'), 'system');
@@ -87,7 +105,10 @@ void main() {
             await service.clearAccountCache('userA', prefs: prefs);
           }
 
-          expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+            isFalse,
+          );
           expect(prefs.containsKey('user_userA_pref'), isFalse);
           expect(prefs.getString('app_global_key'), 'intact');
         },
@@ -114,12 +135,21 @@ void main() {
             for (final target in accounts) {
               await service.clearAccountCache(target, prefs: prefs);
               final targetB64 = base64Url.encode(utf8.encode(target));
-              expect(prefs.containsKey('resource_cache_v1:data:$targetB64:default'), isFalse);
+              expect(
+                prefs.containsKey('resource_cache_v1:data:$targetB64:default'),
+                isFalse,
+              );
               expect(prefs.containsKey('user_${target}_setting'), isFalse);
 
               // Re-seed target data to test repeated clear cycles
-              await prefs.setString('resource_cache_v1:data:$targetB64:default', 'reseeded_$cycle');
-              await prefs.setString('user_${target}_setting', 'reseeded_val_$cycle');
+              await prefs.setString(
+                'resource_cache_v1:data:$targetB64:default',
+                'reseeded_$cycle',
+              );
+              await prefs.setString(
+                'user_${target}_setting',
+                'reseeded_val_$cycle',
+              );
             }
           }
 
@@ -150,8 +180,14 @@ void main() {
           ]);
 
           final prefs = await SharedPreferences.getInstance();
-          expect(prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'), isFalse);
-          expect(prefs.containsKey('resource_cache_v1:schedule:$userBB64:default'), isFalse);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$userAB64:default'),
+            isFalse,
+          );
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$userBB64:default'),
+            isFalse,
+          );
 
           // Check userA credentials retained
           final creds = container.read(credentialsProvider);
@@ -195,7 +231,10 @@ void main() {
 
           await service.clearAccountCache('userEmpty', prefs: prefs);
 
-          expect(prefs.containsKey('resource_cache_v1:schedule:$otherB64:default'), isTrue);
+          expect(
+            prefs.containsKey('resource_cache_v1:schedule:$otherB64:default'),
+            isTrue,
+          );
           expect(prefs.containsKey('user_otherUser_pref'), isTrue);
           expect(prefs.getString('global_app_theme'), 'light');
         },

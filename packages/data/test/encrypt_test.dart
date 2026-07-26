@@ -29,7 +29,8 @@ void main() {
           null,
         ));
 
-    final encrypted = cipher.process(Uint8List.fromList(utf8.encode(plaintext)));
+    final encrypted =
+        cipher.process(Uint8List.fromList(utf8.encode(plaintext)));
     final result = base64.encode(encrypted);
 
     final expected =

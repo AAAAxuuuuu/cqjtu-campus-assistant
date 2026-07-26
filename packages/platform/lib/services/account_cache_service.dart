@@ -29,9 +29,10 @@ class AccountCacheService {
     if (trimmedUsername.isEmpty) return;
 
     final sp = prefs ?? await SharedPreferences.getInstance();
-    final effectiveAccountId = (accountId != null && accountId.trim().isNotEmpty)
-        ? accountId.trim()
-        : trimmedUsername;
+    final effectiveAccountId =
+        (accountId != null && accountId.trim().isNotEmpty)
+            ? accountId.trim()
+            : trimmedUsername;
 
     final usernameB64Url = base64Url.encode(utf8.encode(trimmedUsername));
     final usernameB64Std = base64.encode(utf8.encode(trimmedUsername));
@@ -68,7 +69,8 @@ class AccountCacheService {
     String username, {
     String? accountId,
     SharedPreferences? prefs,
-  }) => clearAccountCache(username, accountId: accountId, prefs: prefs);
+  }) =>
+      clearAccountCache(username, accountId: accountId, prefs: prefs);
 
   /// Clears account cache and invalidates specified Riverpod providers.
   Future<void> clearAndInvalidate({
@@ -197,7 +199,8 @@ class AccountCacheService {
         bool matchesLongerAccount = false;
         for (final otherAcc in knownAccounts) {
           if (otherAcc != acc && otherAcc.startsWith('${acc}_')) {
-            if (key.startsWith('user_${otherAcc}_') || key == 'user_$otherAcc') {
+            if (key.startsWith('user_${otherAcc}_') ||
+                key == 'user_$otherAcc') {
               matchesLongerAccount = true;
               break;
             }
