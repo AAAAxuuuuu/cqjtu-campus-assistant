@@ -4,6 +4,7 @@ import 'package:campus_platform/services/credential_service.dart';
 import 'package:data/data.dart';
 
 import '../utils/providers.dart';
+import '../utils/campus_error_message.dart';
 import 'webview_login_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -32,6 +33,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     String username,
     String password,
   ) async {
+    final previousUsername = ref.read(credentialsProvider)?.username.trim();
+    if (previousUsername != null &&
+        previousUsername.isNotEmpty &&
+        previousUsername != username) {
+      await clearCurrentAccountCache(ref, previousUsername);
+    }
     await ref.read(credentialServiceProvider).save(username, password);
     ref.read(credentialsProvider.notifier).set(username, password);
   }
@@ -55,10 +62,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     try {
+      await _resetLocalLoginSession(username);
       await _verifyLoginForCurrentMode(username, password);
       await _saveCredentialsAndFinish(username, password);
     } catch (error) {
-      final errorText = error.toString();
       if (_requiresSecurityVerification(error)) {
         setState(() {
           _error = '需要安全验证，正在打开网页登录...';
@@ -66,7 +73,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         });
         await _openWebViewLogin(username, password);
       } else {
-        setState(() => _error = errorText.replaceAll('Exception: ', ''));
+        setState(() => _error = formatCampusError(error));
       }
     } finally {
       if (mounted && _loading) {
@@ -87,15 +94,59 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
 
     final gateway = ref.read(campusGatewayProvider);
+    if (gateway is DirectSchoolCampusGateway) {
+      await gateway.loginWithPassword(username, password);
+      return;
+    }
+
     await gateway.getSchedule(username, password, forceRefresh: true);
   }
 
+  Future<void> _resetLocalLoginSession(String username) async {
+    if (ref.read(campusRuntimeModeProvider) != CampusRuntimeMode.localAndroid) {
+      return;
+    }
+
+    final gateway = ref.read(campusGatewayProvider);
+    if (gateway is DirectSchoolCampusGateway) {
+      await gateway.resetLoginSession(username);
+    }
+  }
+
+  Future<void> _verifyWebLoginForCurrentMode(
+    String username,
+    String password,
+  ) async {
+    if (ref.read(campusRuntimeModeProvider) != CampusRuntimeMode.localAndroid) {
+      await _verifyLoginForCurrentMode(username, password);
+      return;
+    }
+
+    final gateway = ref.read(campusGatewayProvider);
+    if (gateway is DirectSchoolCampusGateway) {
+      await gateway.verifyImportedSession(username);
+      return;
+    }
+
+    await _verifyLoginForCurrentMode(username, password);
+  }
+
   bool _requiresSecurityVerification(Object error) {
+    if (error is AuthInvalidFailure) return false;
     if (error is CaptchaRequiredFailure) return true;
 
     final sessionManager = ref.read(sessionManagerProvider);
     final errorText = error.toString();
     final lowerError = errorText.toLowerCase();
+
+    if (errorText.contains('账号或密码错误') ||
+        errorText.contains('密码不正确') ||
+        errorText.contains('密码错误') ||
+        errorText.contains('密码不匹配') ||
+        errorText.contains('账号不存在')) {
+      return false;
+    }
+
     return sessionManager.isSecurityVerificationError(error) ||
         sessionManager.isManualVerificationRequired(
           error,
@@ -103,8 +154,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ) ||
         errorText.contains('449') ||
         lowerError.contains('captcha') ||
-        lowerError.contains('cas') ||
-        lowerError.contains('authserver/login') ||
+        lowerError.contains('needcaptcha') ||
         lowerError.contains('security');
   }
 
@@ -149,12 +199,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return;
       }
 
-      // Do not enter home until schedule domain is confirmed healthy.
-      await _verifyLoginForCurrentMode(username, passwordToSave);
+      // Do not re-enter the password CAS flow after WebView established a
+      // session. Validate only the imported Cookie/Ticket state.
+      await _verifyWebLoginForCurrentMode(username, passwordToSave);
       await _saveCredentialsAndFinish(username, passwordToSave);
     } catch (error) {
       setState(() {
-        _error = '网页登录处理失败: ${error.toString().replaceAll('Exception: ', '')}';
+        _error = '网页登录处理失败: ${formatCampusError(error)}';
       });
     } finally {
       if (mounted) {

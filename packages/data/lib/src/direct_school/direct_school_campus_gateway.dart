@@ -73,6 +73,7 @@ class SchoolSystemConfig {
   final String scheduleUrl;
   final String gradesUrl;
   final String gradeDetailUrl;
+  final String studentHomeUrl;
   final String studyProgressUrl;
   final String studentExecutionPlanUrl;
   final String examsUrl;
@@ -90,6 +91,8 @@ class SchoolSystemConfig {
     this.scheduleUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/xskb/xskb_list.do',
     this.gradesUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/kscj/cjcx_list',
     this.gradeDetailUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/kscj/pscj_list.do',
+    this.studentHomeUrl =
+        'https://jwgln.cqjtu.edu.cn/jsxsd/framework/xsdPerson_cqjtdx.jsp',
     this.studyProgressUrl =
         'https://jwgln.cqjtu.edu.cn/jsxsd/xxwcqk/xxwcqk_idxOntx.do',
     this.studentExecutionPlanUrl =
@@ -560,29 +563,38 @@ class _CasAuthenticator {
 
     final resultBody = loginResult.body;
 
-    // Step 6: Evaluate result — check cookie jar for jwgln session
+    // Step 6: Evaluate result — check for login error / password invalid
+    final extractedError = _extractLoginErrorMessage(resultBody);
+    if (extractedError != null && extractedError.isNotEmpty) {
+      dev.log('[_CasAuth] Extracted login error: $extractedError',
+          name: 'DirectSchool');
+      throw AuthInvalidFailure(extractedError);
+    }
+
     if (_isLoginError(resultBody)) {
-      throw const AuthInvalidFailure();
+      throw const AuthInvalidFailure('账号或密码错误，请重新输入');
     }
 
     // Check if we got jwgln cookies (real success signal)
     if (_httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'JSESSIONID') ||
-        _httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'SESSION')) {
+        _httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'SESSION') ||
+        _httpClient._jar.hasCookieForHost('ids.cqjtu.edu.cn', 'CASTGC')) {
       _cachedPassword = password;
       dev.log(
         '[_CasAuth] Login successful for ${_redactIdentifier(username)} '
-        '(jwgln cookie found)',
+        '(cookie found)',
         name: 'DirectSchool',
       );
       return username;
     }
 
     // Still on CAS page
-    if (resultBody.contains('authserver/login')) {
+    if (resultBody.contains('authserver/login') ||
+        resultBody.contains('casLoginForm')) {
       if (_containsCaptcha(resultBody)) {
         throw const CaptchaRequiredFailure();
       }
-      throw const NetworkFailure('登录失败，请检查网络连接');
+      throw const AuthInvalidFailure('账号或密码错误，请检查学号与密码');
     }
 
     // Fallback: check body for academic system content
@@ -760,25 +772,67 @@ class _CasAuthenticator {
   /// Check if the login page requires a CAPTCHA by calling the check API.
   /// Returns true only if the server explicitly requires one.
   bool _containsCaptcha(String html) {
-    // Don't rely on static HTML keywords - the page always contains
-    // "captcha", "inputCodeTip" etc. as part of the template.
-    // Instead, check for the actual captcha input element being visible.
-    // The server sets needCaptcha dynamically.
     if (html.contains('needCaptcha') &&
         (html.contains('needCaptcha = "1"') ||
             html.contains("needCaptcha = '1'") ||
-            html.contains('needCaptcha=1'))) {
+            html.contains('needCaptcha=1') ||
+            html.contains('"needCaptcha":true') ||
+            html.contains('needCaptcha: true'))) {
+      return true;
+    }
+    if (html.contains('captchaResponse') ||
+        html.contains('captcha_code') ||
+        html.contains('caja-captcha') ||
+        html.contains('geetest') ||
+        html.contains('aliyunCaptcha')) {
       return true;
     }
     return false;
   }
 
-  /// Check if the response indicates wrong credentials.
   bool _isLoginError(String html) {
     final lower = html.toLowerCase();
     return lower.contains('账号或密码错误') ||
         lower.contains('用户名或密码错误') ||
-        lower.contains('password error');
+        lower.contains('密码不正确') ||
+        lower.contains('密码错误') ||
+        lower.contains('密码不匹配') ||
+        lower.contains('账号不存在') ||
+        lower.contains('用户不存在') ||
+        lower.contains('无效凭据') ||
+        lower.contains('无效的凭据') ||
+        lower.contains('身份认证失败') ||
+        lower.contains('showerrortip') ||
+        lower.contains('password error') ||
+        lower.contains('bad credentials') ||
+        lower.contains('invalid credentials');
+  }
+
+  String? _extractLoginErrorMessage(String html) {
+    final document = html_parser.parse(html);
+    final errorElem = document.getElementById('showErrorTip') ??
+        document.getElementById('msg') ??
+        document.getElementById('error') ??
+        document.querySelector('.error_tip') ??
+        document.querySelector('.err_msg') ??
+        document.querySelector('.error-message');
+
+    final text = errorElem?.text.trim();
+    if (text != null && text.isNotEmpty) {
+      return text;
+    }
+
+    final match = RegExp(
+      'id=["\']showErrorTip["\'][^>]*>(.*?)</span>',
+      caseSensitive: false,
+      dotAll: true,
+    ).firstMatch(html);
+    if (match != null) {
+      final raw = match.group(1)?.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+      if (raw != null && raw.isNotEmpty) return raw;
+    }
+
+    return null;
   }
 
   bool _isAcademicSystemBody(String html) {
@@ -1017,28 +1071,67 @@ class _GradeParser {
   static List<Grade> _parseGradeList(String html) {
     final grades = <Grade>[];
     final document = html_parser.parse(html);
-    final table = document.getElementById('dataList');
+    final table =
+        document.getElementById('dataList') ?? document.querySelector('table');
 
     if (table == null) return grades;
 
     final rows = table.querySelectorAll('tr');
+    if (rows.length < 2) return grades;
+
+    final headerCells =
+        rows.first.querySelectorAll('th,td').map((c) => c.text.trim()).toList();
+    final attrIdx = headerCells.indexOf('课程属性');
+    final natureIdx = headerCells.indexOf('课程性质');
+    final nameIdx = headerCells.indexOf('课程名称');
+    final codeIdx = headerCells.indexOf('课程编号');
+    final scoreIdx = headerCells.indexOf('成绩');
+    final creditIdx = headerCells.indexOf('学分');
+    final pointIdx = headerCells.indexOf('绩点');
+    final semIdx = headerCells.indexOf('开课学期');
+
     for (int i = 1; i < rows.length; i++) {
       final cellElements = rows[i].querySelectorAll('td');
       final cells = cellElements.map((cell) => cell.text.trim()).toList();
-      if (cells.length < 14) continue;
+      if (cells.length < 5) continue;
       final detailParams = _parseDetailParams(
         cellElements.length > 4 ? cellElements[4] : null,
       );
 
+      final semester = semIdx >= 0 && semIdx < cells.length
+          ? cells[semIdx]
+          : (cells.length > 1 ? cells[1] : '');
+      final courseCode = codeIdx >= 0 && codeIdx < cells.length
+          ? cells[codeIdx]
+          : (cells.length > 2 ? cells[2] : '');
+      final courseName = nameIdx >= 0 && nameIdx < cells.length
+          ? cells[nameIdx]
+          : (cells.length > 3 ? cells[3] : '');
+      final score = scoreIdx >= 0 && scoreIdx < cells.length
+          ? cells[scoreIdx]
+          : (cells.length > 4 ? cells[4] : '-');
+      final credits = creditIdx >= 0 && creditIdx < cells.length
+          ? cells[creditIdx]
+          : (cells.length > 6 ? cells[6] : '-');
+      final gradePoint = pointIdx >= 0 && pointIdx < cells.length
+          ? cells[pointIdx]
+          : (cells.length > 8 ? cells[8] : '-');
+      final courseAttribute = attrIdx >= 0 && attrIdx < cells.length
+          ? cells[attrIdx]
+          : (cells.length > 12 ? cells[12] : '');
+      final courseNature = natureIdx >= 0 && natureIdx < cells.length
+          ? cells[natureIdx]
+          : (cells.length > 13 ? cells[13] : '');
+
       grades.add(Grade(
-        semester: cells.length > 1 ? cells[1] : '',
-        courseCode: cells.length > 2 ? cells[2] : '',
-        courseName: cells.length > 3 ? cells[3] : '',
-        score: cells.length > 4 ? cells[4] : '-',
-        credits: cells.length > 6 ? cells[6] : '-',
-        gradePoint: cells.length > 8 ? cells[8] : '-',
-        courseAttribute: cells.length > 12 ? cells[12] : '',
-        courseNature: cells.length > 13 ? cells[13] : '',
+        semester: semester,
+        courseCode: courseCode,
+        courseName: courseName,
+        score: score,
+        credits: credits,
+        gradePoint: gradePoint,
+        courseAttribute: courseAttribute,
+        courseNature: courseNature,
         studentId: detailParams?['xs0101id'] ?? '',
         teachingClassId: detailParams?['jx0404id'] ?? '',
         gradeRecordId: detailParams?['cj0708id'] ?? '',
@@ -1117,6 +1210,91 @@ class _GradeParser {
   }
 }
 
+/// Parses the required-credit ledger displayed on the academic system home.
+///
+/// The home page is the authoritative source for a student's graduation
+/// requirements. The execution-plan report can omit school-elective rules for
+/// some programmes, so it remains only as a per-category fallback.
+class StudyProgressDashboardParser {
+  static const _labelsByCategory = <String, String>{
+    'compulsory': '应修必修',
+    'elective': '应修选修',
+    'schoolElective': '应修校选',
+  };
+
+  static Map<String, double> parseRequiredCredits(String html) {
+    if (html.trim().isEmpty) return const {};
+
+    final document = html_parser.parse(html);
+    final result = <String, double>{};
+    for (final entry in _labelsByCategory.entries) {
+      final credit = _findCredit(document, entry.value);
+      if (credit != null) result[entry.key] = credit;
+    }
+    return result;
+  }
+
+  static double? _findCredit(dom.Document document, String label) {
+    final candidates = document
+        .querySelectorAll('*')
+        .where((element) => _normalize(element.text).contains(label))
+        .toList()
+      ..sort(
+        (left, right) => _normalize(left.text)
+            .length
+            .compareTo(_normalize(right.text).length),
+      );
+
+    for (final element in candidates) {
+      var container = element;
+      for (var depth = 0; depth < 4; depth++) {
+        final text = _normalize(container.text);
+        if (!_containsOtherRequiredCreditLabel(text, label)) {
+          final credit = _creditAfterLabel(text, label);
+          if (credit != null) return credit;
+        }
+
+        final parent = container.parent;
+        if (parent == null) break;
+        container = parent;
+      }
+    }
+
+    return null;
+  }
+
+  static bool _containsOtherRequiredCreditLabel(String text, String label) =>
+      _labelsByCategory.values.any(
+        (otherLabel) => otherLabel != label && text.contains(otherLabel),
+      );
+
+  static String _normalize(String value) =>
+      value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  static double? _creditAfterLabel(String text, String label) {
+    final labelIndex = text.indexOf(label);
+    if (labelIndex < 0) return null;
+
+    final valueStart = labelIndex + label.length;
+    var valueEnd = text.length;
+    for (final otherLabel in _labelsByCategory.values) {
+      if (otherLabel == label) continue;
+      final nextIndex = text.indexOf(otherLabel, valueStart);
+      if (nextIndex >= 0 && nextIndex < valueEnd) valueEnd = nextIndex;
+    }
+
+    final numbers = RegExp(r'\d+(?:\.\d+)?')
+        .allMatches(text.substring(valueStart, valueEnd))
+        .map((match) => double.tryParse(match.group(0)!))
+        .whereType<double>()
+        .toList(growable: false);
+    if (numbers.isEmpty) return null;
+
+    // The home card renders, for example, "应修必修 49% 157.5分".
+    return numbers.last;
+  }
+}
+
 class _StudyProgressParser {
   static Map<String, String> parseIndexForm(String html) {
     final document = html_parser.parse(html);
@@ -1135,6 +1313,7 @@ class _StudyProgressParser {
   static StudyProgressData parseReportHtml(
     String html, {
     required String currentSemester,
+    Map<String, double> requiredCreditsByCategory = const {},
   }) {
     final document = html_parser.parse(html);
     final summaryTable = _findStudyProgressTable(
@@ -1150,6 +1329,7 @@ class _StudyProgressParser {
         groups: const [],
         currentSemester: currentSemester,
         currentSemesterCourses: const [],
+        requiredCreditsByCategory: requiredCreditsByCategory,
       );
     }
 
@@ -1187,6 +1367,7 @@ class _StudyProgressParser {
       groups: groups,
       currentSemester: currentSemester,
       currentSemesterCourses: const [],
+      requiredCreditsByCategory: requiredCreditsByCategory,
     );
   }
 
@@ -1574,6 +1755,46 @@ class DirectSchoolCampusGateway implements CampusGateway {
     await session.loginWithTicket(username, ticket);
   }
 
+  /// Starts an explicit credential login from a clean, per-account session.
+  ///
+  /// This intentionally retains resource caches and saved credentials. It only
+  /// removes volatile authentication artifacts that can otherwise cause CAS to
+  /// redirect away from the login form before an `execution` token is issued.
+  Future<void> resetLoginSession(String username) async {
+    _sessions.remove(username);
+    await _sessionStore?.clearLoginArtifacts(username);
+  }
+
+  /// Authenticates credentials with CAS without making a schedule request part
+  /// of the login gate.
+  Future<void> loginWithPassword(String username, String password) async {
+    await _session(username).forceRelogin(username, password);
+  }
+
+  /// Confirms that WebView artifacts were imported without making a schedule
+  /// request part of the login gate.
+  Future<void> verifyImportedSession(String username) async {
+    final session = _sessions[username];
+    if (session == null || !session.isAuthenticated) {
+      throw const AuthInvalidFailure('网页登录会话未建立，请重新完成网页登录');
+    }
+  }
+
+  Future<void> loginWithCookies(
+    String username, {
+    String? casCookies,
+    String? jwgCookies,
+    String? ecardCookies,
+  }) async {
+    final session = _session(username);
+    await session.loginWithCookies(
+      username,
+      casCookies: casCookies,
+      jwgCookies: jwgCookies,
+      ecardCookies: ecardCookies,
+    );
+  }
+
   @override
   Future<({List<Course> courses, String remark})> getSchedule(
     String username,
@@ -1689,6 +1910,20 @@ class DirectSchoolCampusGateway implements CampusGateway {
     final session = _session(username);
     await session.ensureAuth(username, password);
 
+    Map<String, double> dashboardRequiredCredits = const {};
+    try {
+      final homeBody = await _fetchStudentHomeBody(session, username, password);
+      dashboardRequiredCredits =
+          StudyProgressDashboardParser.parseRequiredCredits(homeBody);
+    } catch (error, stackTrace) {
+      dev.log(
+        'Could not read required-credit dashboard; using plan report fallback.',
+        name: 'DirectSchool',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
     final indexBody = await _fetchStudyProgressIndexBody(
       session,
       username,
@@ -1704,6 +1939,7 @@ class DirectSchoolCampusGateway implements CampusGateway {
     return _StudyProgressParser.parseReportHtml(
       reportBody,
       currentSemester: _currentSemester(),
+      requiredCreditsByCategory: dashboardRequiredCredits,
     );
   }
 
@@ -1764,6 +2000,22 @@ class DirectSchoolCampusGateway implements CampusGateway {
     if (_isSessionExpired(resp.body)) {
       await session.forceRelogin(username, password);
       final retryResp = await session.httpClient.get(_config.studyProgressUrl);
+      return retryResp.body;
+    }
+
+    return resp.body;
+  }
+
+  Future<String> _fetchStudentHomeBody(
+    _UserSession session,
+    String username,
+    String password,
+  ) async {
+    final resp = await session.httpClient.get(_config.studentHomeUrl);
+
+    if (_isSessionExpired(resp.body)) {
+      await session.forceRelogin(username, password);
+      final retryResp = await session.httpClient.get(_config.studentHomeUrl);
       return retryResp.body;
     }
 
@@ -2050,6 +2302,8 @@ class _UserSession {
 
   _SchoolHttpClient get httpClient => _httpClient;
 
+  Future<bool> isSessionValid() => _authenticator.isSessionValid();
+
   /// Ensure the user is authenticated, performing login if needed.
   Future<void> ensureAuth(String username, String password) async {
     _authenticator.cachePassword(password);
@@ -2078,9 +2332,37 @@ class _UserSession {
   }
 
   Future<void> loginWithTicket(String username, String ticket) async {
+    _httpClient.clearCookies();
+    _authenticated = false;
     await _authenticator.loginWithTicket(username, ticket);
     _authenticated = true;
     await _persistCookies(username);
+  }
+
+  Future<void> loginWithCookies(
+    String username, {
+    String? casCookies,
+    String? jwgCookies,
+    String? ecardCookies,
+  }) async {
+    _httpClient.clearCookies();
+    _authenticated = false;
+    if (casCookies != null && casCookies.trim().isNotEmpty) {
+      _httpClient.importCookieHeader(_casCookieUrl, casCookies);
+    }
+    if (jwgCookies != null && jwgCookies.trim().isNotEmpty) {
+      _httpClient.importCookieHeader(_jwgCookieUrl, jwgCookies);
+    }
+    if (ecardCookies != null && ecardCookies.trim().isNotEmpty) {
+      _httpClient.importCookieHeader(_ecardCookieUrl, ecardCookies);
+    }
+
+    _authenticated = true;
+    await _persistCookies(username);
+    dev.log(
+      '[_Session] Logged in via imported cookies for ${_redactIdentifier(username)}',
+      name: 'DirectSchool',
+    );
   }
 
   /// Force a full re-login.

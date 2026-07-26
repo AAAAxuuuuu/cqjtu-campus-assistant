@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../utils/providers.dart';
+import '../utils/campus_error_message.dart';
 
 /// Silently warms up h-zove-token in background after user login.
 /// It stays hidden in widget tree and does not block entering main pages.
@@ -36,7 +37,6 @@ class _SilentZoveTokenBootstrapperState
   Completer<void>? _pageLoadCompleter;
   Completer<String>? _tokenCompleter;
   String? _capturedZoveToken;
-  String? _latestTicket;
   Timer? _healthTimer;
 
   bool _running = false;
@@ -61,11 +61,8 @@ class _SilentZoveTokenBootstrapperState
       )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) {
-            _captureTicket(url);
-          },
+          onPageStarted: (_) {},
           onPageFinished: (url) async {
-            _captureTicket(url);
             if (!(_pageLoadCompleter?.isCompleted ?? true)) {
               _pageLoadCompleter?.complete();
             }
@@ -99,13 +96,6 @@ class _SilentZoveTokenBootstrapperState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_maybeStart());
-    }
-  }
-
-  void _captureTicket(String url) {
-    final ticket = Uri.tryParse(url)?.queryParameters['ticket'];
-    if (ticket != null && ticket.isNotEmpty) {
-      _latestTicket = ticket;
     }
   }
 
@@ -191,7 +181,6 @@ class _SilentZoveTokenBootstrapperState
   ) async {
     var updated = false;
     try {
-      _latestTicket = null;
       updated = await _refreshCookieArtifacts(username, sessionService);
 
       _capturedZoveToken = null;
@@ -205,8 +194,10 @@ class _SilentZoveTokenBootstrapperState
         await sessionService.saveZoveToken(username, token);
         updated = true;
       }
-    } catch (_) {
-      // Silent mode: ignore errors and let leave page handle fallback.
+    } catch (error) {
+      debugPrint(
+        '[SilentZoveToken] bootstrap failed: ${formatCampusError(error)}',
+      );
     } finally {
       _running = false;
       if (updated) {
@@ -241,14 +232,10 @@ class _SilentZoveTokenBootstrapperState
         await sessionService.saveEcardCookies(username, ecardCookies);
         updated = true;
       }
-
-      final ticket = _latestTicket?.trim() ?? '';
-      if (ticket.isNotEmpty) {
-        await sessionService.saveTicket(username, ticket);
-        updated = true;
-      }
-    } catch (_) {
-      // Silent mode: ignore errors and let foreground fallback handle it.
+    } catch (error) {
+      debugPrint(
+        '[SilentZoveToken] cookie refresh failed: ${formatCampusError(error)}',
+      );
     }
     return updated;
   }

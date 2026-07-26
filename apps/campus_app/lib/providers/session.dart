@@ -277,11 +277,23 @@ class SessionManager {
 
   Future<void> restoreLoginState(String username, String sessionId) async {
     final ticket = await _sessionService.loadTicket(username);
+    Object? ticketFailure;
+    var restored = false;
     if (ticket != null && ticket.isNotEmpty) {
       debugPrint(
         '[SessionManager] restoreLoginState use ticket username=${_redactUsernameForLog(username)}',
       );
-      await _api.loginWithTicket(username, ticket, sessionId: sessionId);
+      try {
+        await _api.loginWithTicket(username, ticket, sessionId: sessionId);
+        restored = true;
+      } catch (error) {
+        ticketFailure = error;
+        debugPrint(
+          '[SessionManager] restore ticket failed; falling back to cookies: ${_sanitizeSensitiveText(error.toString())}',
+        );
+      } finally {
+        await _sessionService.clearTicket(username);
+      }
     }
 
     final casCookies = await _sessionService.loadCasCookies(username);
@@ -295,6 +307,7 @@ class SessionManager {
         casCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
 
     final jwgCookies = await _sessionService.loadJwgCookies(username);
@@ -308,6 +321,7 @@ class SessionManager {
         jwgCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
 
     final ecardCookies = await _sessionService.loadEcardCookies(username);
@@ -321,7 +335,10 @@ class SessionManager {
         ecardCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
+
+    if (!restored && ticketFailure != null) throw ticketFailure;
   }
 
   bool isSessionExpiredError(Object error) {

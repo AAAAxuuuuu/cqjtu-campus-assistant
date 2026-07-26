@@ -75,12 +75,25 @@ class SelfHostedSessionManager {
   /// 恢复后端登录状态（注入 ticket 和 cookies）。
   Future<void> restoreLoginState(String username, String sessionId) async {
     final ticket = await _sessionService.loadTicket(username);
+    Object? ticketFailure;
+    var restored = false;
     if (ticket != null && ticket.isNotEmpty) {
       dev.log(
         '[SelfHostedSession] restoreLoginState use ticket username=${_redactIdentifier(username)}',
         name: 'SelfHostedSession',
       );
-      await _api.loginWithTicket(username, ticket, sessionId: sessionId);
+      try {
+        await _api.loginWithTicket(username, ticket, sessionId: sessionId);
+        restored = true;
+      } catch (error) {
+        ticketFailure = error;
+        dev.log(
+          '[SelfHostedSession] restore ticket failed; falling back to cookies',
+          name: 'SelfHostedSession',
+        );
+      } finally {
+        await _sessionService.clearTicket(username);
+      }
     }
 
     final casCookies = await _sessionService.loadCasCookies(username);
@@ -91,6 +104,7 @@ class SelfHostedSessionManager {
         casCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
 
     final jwgCookies = await _sessionService.loadJwgCookies(username);
@@ -101,6 +115,7 @@ class SelfHostedSessionManager {
         jwgCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
 
     final ecardCookies = await _sessionService.loadEcardCookies(username);
@@ -111,7 +126,10 @@ class SelfHostedSessionManager {
         ecardCookies,
         sessionId: sessionId,
       );
+      restored = true;
     }
+
+    if (!restored && ticketFailure != null) throw ticketFailure;
   }
 }
 
@@ -124,6 +142,11 @@ abstract class SelfHostedSessionStore {
 
   Future<String?> loadTicket(String username);
   Future<void> saveTicket(String username, String ticket);
+  Future<void> clearTicket(String username);
+
+  /// Removes all persisted authentication artifacts for one account while
+  /// leaving its non-session data cache untouched.
+  Future<void> clearLoginArtifacts(String username);
 
   Future<String?> loadCasCookies(String username);
   Future<void> saveCasCookies(String username, String cookies);
