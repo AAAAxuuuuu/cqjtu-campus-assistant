@@ -199,22 +199,21 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
 
   Future<void> _extractAndReturnArtifacts() async {
     try {
-      final casCookies = await _cookieChannel.invokeMethod<String>(
-        'getCookies',
-        {'url': 'https://ids.cqjtu.edu.cn/authserver/'},
+      final casCookies = await _readCookiesWithRetry(
+        'https://ids.cqjtu.edu.cn/authserver/',
       );
       String jwgCookies = '';
       String ecardCookies = '';
       if (widget.mode == WebViewLoginMode.jwgSession) {
-        jwgCookies =
-            await _cookieChannel.invokeMethod<String>('getCookies', {
-              'url': 'https://jwgln.cqjtu.edu.cn/jsxsd/',
-            }) ??
-            '';
+        // The CAS callback can finish before Chromium commits the JSESSIONID.
+        // Do not return a CAS-only session while that write is still pending.
+        jwgCookies = await _readCookiesWithRetry(
+          'https://jwgln.cqjtu.edu.cn/jsxsd/',
+        );
         ecardCookies = await _captureEcardCookies();
       }
 
-      if (casCookies == null || casCookies.isEmpty) {
+      if (casCookies.isEmpty) {
         _fail('未能获取到统一认证 Cookie，请重试');
         return;
       }
@@ -226,6 +225,16 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           ? (_latestTicket ?? '')
           : '';
 
+      if (widget.mode == WebViewLoginMode.jwgSession &&
+          jwgCookies.isEmpty &&
+          ticket.isEmpty) {
+        _fail('未能获取教务系统会话，请在验证完成后稍候重试');
+        return;
+      }
+
+      if (mounted) {
+        await WebViewSessionScope.markAuthenticated(widget.username);
+      }
       if (mounted) {
         await WebViewSessionScope.markAuthenticated(widget.username);
       }
@@ -269,13 +278,27 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
   Future<String> _captureEcardCookies() async {
     try {
       await _loadAndWait(_ecardEntryUrl);
-      return await _cookieChannel.invokeMethod<String>('getCookies', {
-            'url': 'https://ecard.cqjtu.edu.cn/epay/h5/',
-          }) ??
-          '';
+      return _readCookiesWithRetry('https://ecard.cqjtu.edu.cn/epay/h5/');
     } catch (_) {
       return '';
     }
+  }
+
+  Future<String> _readCookiesWithRetry(
+    String url, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    do {
+      final cookies =
+          await _cookieChannel.invokeMethod<String>('getCookies', {
+            'url': url,
+          }) ??
+          '';
+      if (cookies.trim().isNotEmpty) return cookies;
+      if (DateTime.now().isAfter(deadline)) return '';
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    } while (true);
   }
 
   Future<String?> _waitTokenFromChannel({required Duration timeout}) async {

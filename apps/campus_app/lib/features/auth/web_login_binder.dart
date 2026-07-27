@@ -24,6 +24,7 @@ class WebLoginBinder {
     }
 
     ref.read(sessionUpdateProvider.notifier).triggerRefresh();
+    ref.read(zoveTokenRefreshProvider.notifier).requestRefresh();
   }
 
   Future<void> _bindLocalAndroid({

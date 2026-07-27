@@ -39,12 +39,9 @@ final accountCacheProvider = Provider<AccountCacheService>((ref) {
   return ref.watch(accountCacheServiceProvider);
 });
 
-/// Clears current account cache in persistent storage and session service,
-/// and invalidates live Riverpod providers for immediate UI update.
-Future<void> clearCurrentAccountCache(dynamic ref, String username) async {
-  final cacheService = ref.read(accountCacheProvider) as AccountCacheService;
-  await cacheService.clearAccountCache(username);
-
+/// Reloads account-bound state after a sign-in switch without deleting the
+/// previous account's local preferences or cached course data.
+void resetAccountBoundProviders(dynamic ref) {
   ref.invalidate(scheduleProvider);
   ref.invalidate(gradesProvider);
   ref.invalidate(gradeDetailProvider);
@@ -56,7 +53,21 @@ Future<void> clearCurrentAccountCache(dynamic ref, String username) async {
   ref.invalidate(semesterTotalWeeksProvider);
   ref.invalidate(scheduleSundayFirstProvider);
   ref.invalidate(scheduleShowInactiveCoursesProvider);
+  ref.invalidate(scheduleDensityProvider);
+  ref.invalidate(scheduleBackgroundImageProvider);
+  ref.invalidate(scheduleCalendarRulesProvider);
   ref.invalidate(dormRoomProvider);
   ref.invalidate(selectedScheduleSemesterProvider);
   ref.invalidate(semesterStartProvider);
+  ref.invalidate(semesterStartForKeyProvider);
+  ref.invalidate(activeSemesterStartProvider);
+}
+
+/// Clears current account cache in persistent storage and session service,
+/// and invalidates live Riverpod providers for immediate UI update.
+Future<void> clearCurrentAccountCache(dynamic ref, String username) async {
+  final cacheService = ref.read(accountCacheProvider) as AccountCacheService;
+  await cacheService.clearAccountCache(username);
+
+  resetAccountBoundProviders(ref);
 }
