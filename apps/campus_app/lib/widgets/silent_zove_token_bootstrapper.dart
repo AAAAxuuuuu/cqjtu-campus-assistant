@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:campus_platform/services/session_service.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,12 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../utils/providers.dart';
 import '../utils/campus_error_message.dart';
+
+String _redactUsername(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length <= 4) return 'user_****';
+  return 'user_${trimmed.substring(0, 2)}****${trimmed.substring(trimmed.length - 2)}';
+}
 
 /// Silently warms up h-zove-token in background after user login.
 /// It stays hidden in widget tree and does not block entering main pages.
@@ -30,7 +37,7 @@ class _SilentZoveTokenBootstrapperState
   static const _casCookieUrl = 'https://ids.cqjtu.edu.cn/authserver/';
   static const _jwgCookieUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/';
   static const _ecardCookieUrl = 'https://ecard.cqjtu.edu.cn/epay/h5/';
-  static const _healthCheckInterval = Duration(minutes: 10);
+  static const _healthCheckInterval = Duration(minutes: 25);
   static const _cookieChannel = MethodChannel('campus_app/cookie_manager');
 
   late final WebViewController _controller;
@@ -46,6 +53,9 @@ class _SilentZoveTokenBootstrapperState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.listenManual<int>(zoveTokenRefreshProvider, (_, next) {
+      unawaited(_maybeStart(force: true));
+    });
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
@@ -73,6 +83,12 @@ class _SilentZoveTokenBootstrapperState
                 await _autofillAndSubmit(creds.username, creds.password);
               }
             }
+            if (Uri.tryParse(url)?.host.toLowerCase() == 'zhxg.cqjtu.edu.cn') {
+              final creds = ref.read(credentialsProvider);
+              if (creds != null) {
+                await _autofillZhxgAndSubmit(creds.username, creds.password);
+              }
+            }
           },
         ),
       );
@@ -81,7 +97,9 @@ class _SilentZoveTokenBootstrapperState
       unawaited(_maybeStart());
     });
     _healthTimer = Timer.periodic(_healthCheckInterval, (_) {
-      unawaited(_maybeStart());
+      // h-zove-token can expire before the broader leave-session freshness
+      // window. Renew it on every health interval while the app is alive.
+      unawaited(_maybeStart(force: true));
     });
   }
 
@@ -192,6 +210,10 @@ class _SilentZoveTokenBootstrapperState
       final token = await _waitForToken(timeout: const Duration(seconds: 8));
       if (token != null && token.isNotEmpty) {
         await sessionService.saveZoveToken(username, token);
+        debugPrint(
+          '[SilentZoveToken] refreshed token for ${_redactUsername(username)} '
+          '(length=${token.length})',
+        );
         updated = true;
       }
     } catch (error) {
@@ -248,15 +270,15 @@ class _SilentZoveTokenBootstrapperState
   }
 
   Future<void> _autofillAndSubmit(String username, String password) async {
-    final escapedUsername = _escapeJs(username);
-    final escapedPassword = _escapeJs(password);
+    final encodedUsername = jsonEncode(username);
+    final encodedPassword = jsonEncode(password);
     await _controller.runJavaScript('''
       (function () {
         var u = document.getElementById('username');
         var p = document.getElementById('password');
         if (u && p) {
-          u.value = '$escapedUsername';
-          p.value = '$escapedPassword';
+          u.value = $encodedUsername;
+          p.value = $encodedPassword;
           u.dispatchEvent(new Event('input', { bubbles: true }));
           p.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -271,12 +293,58 @@ class _SilentZoveTokenBootstrapperState
     ''');
   }
 
-  String _escapeJs(String input) {
-    return input
-        .replaceAll('\\', r'\\')
-        .replaceAll("'", r"\'")
-        .replaceAll('\n', r'\n')
-        .replaceAll('\r', r'\r');
+  Future<void> _autofillZhxgAndSubmit(String username, String password) async {
+    final encodedUsername = jsonEncode(username);
+    final encodedPassword = jsonEncode(password);
+    await _controller.runJavaScript('''
+      (function () {
+        var username = $encodedUsername;
+        var password = $encodedPassword;
+        var attempts = 0;
+
+        function findUsername() {
+          return document.getElementById('username') ||
+            document.querySelector('input[name="username"], input[name="account"], input[name="userName"], input[name="userNo"], input[autocomplete="username"], input[placeholder*="账号"], input[placeholder*="学号"]');
+        }
+
+        function findPassword() {
+          return document.getElementById('password') ||
+            document.querySelector('input[name="password"], input[type="password"], input[autocomplete="current-password"], input[placeholder*="密码"]');
+        }
+
+        function setValue(input, value) {
+          var setter = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            'value'
+          ).set;
+          setter.call(input, value);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function fillAndSubmit() {
+          var userInput = findUsername();
+          var passwordInput = findPassword();
+          if (!userInput || !passwordInput) return false;
+          if (!userInput.value) setValue(userInput, username);
+          if (!passwordInput.value) setValue(passwordInput, password);
+          var button = document.querySelector('#login_submit') ||
+            document.querySelector('button[type="submit"]') ||
+            document.querySelector('input[type="submit"]') ||
+            Array.prototype.find.call(document.querySelectorAll('button'), function (item) {
+              return item.textContent && item.textContent.trim() === '登录';
+            });
+          if (button && !button.disabled) button.click();
+          return true;
+        }
+
+        function retry() {
+          if (fillAndSubmit() || attempts++ >= 20) return;
+          setTimeout(retry, 250);
+        }
+        retry();
+      })();
+    ''');
   }
 
   Future<void> _loadAndWait(String url) async {

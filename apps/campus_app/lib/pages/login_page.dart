@@ -34,13 +34,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     String password,
   ) async {
     final previousUsername = ref.read(credentialsProvider)?.username.trim();
+    await ref.read(credentialServiceProvider).save(username, password);
+    ref.read(credentialsProvider.notifier).set(username, password);
     if (previousUsername != null &&
         previousUsername.isNotEmpty &&
         previousUsername != username) {
-      await clearCurrentAccountCache(ref, previousUsername);
+      resetAccountBoundProviders(ref);
     }
-    await ref.read(credentialServiceProvider).save(username, password);
-    ref.read(credentialsProvider.notifier).set(username, password);
+    ref.read(zoveTokenRefreshProvider.notifier).requestRefresh();
   }
 
   Future<void> _login() async {
@@ -224,7 +225,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.school, size: 72, color: Colors.blue),
+                Image.asset(
+                  'assets/campus_app_mark.png',
+                  width: 118,
+                  height: 118,
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   'CQJTU Hub',

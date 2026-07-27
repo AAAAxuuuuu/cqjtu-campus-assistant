@@ -15,5 +15,20 @@ final sessionUpdateProvider = NotifierProvider<SessionUpdateNotifier, int>(
   SessionUpdateNotifier.new,
 );
 
+/// Explicit request for the hidden WebView to obtain a fresh h-zove-token.
+/// Kept separate from [sessionUpdateProvider] so a successful token write does
+/// not recursively schedule another token refresh.
+class ZoveTokenRefreshNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void requestRefresh() => state++;
+}
+
+final zoveTokenRefreshProvider =
+    NotifierProvider<ZoveTokenRefreshNotifier, int>(
+      ZoveTokenRefreshNotifier.new,
+    );
+
 /// 校园卡页面二维码滚动信号。
 final campusCardQrScrollSignalProvider = StateProvider<int>((ref) => 0);
