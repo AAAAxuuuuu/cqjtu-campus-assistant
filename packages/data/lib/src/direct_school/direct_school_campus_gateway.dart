@@ -732,22 +732,10 @@ class _CasAuthenticator {
 
   /// Extract the value of a hidden input by name or id.
   String? _extractInputValue(String html, String name) {
-    // Search for: id="name" value="xxx" or name="name" value="xxx"
-    final idStr = 'id="$name"';
-    final nameStr = 'name="$name"';
-    final idPos = html.indexOf(idStr);
-    final namePos = html.indexOf(nameStr);
-    final pos = (idPos >= 0 && (namePos < 0 || idPos < namePos))
-        ? idPos
-        : (namePos >= 0 ? namePos : -1);
-    if (pos < 0) return null;
-
-    // Find the value attribute after this position
-    final valueStart = html.indexOf('value="', pos);
-    if (valueStart < 0) return null;
-    final valueEnd = html.indexOf('"', valueStart + 7);
-    if (valueEnd < 0) return null;
-    return html.substring(valueStart + 7, valueEnd);
+    final document = html_parser.parse(html);
+    final element = document.querySelector('input[name="$name"]') ??
+        document.querySelector('input#$name');
+    return element?.attributes['value']?.trim();
   }
 
   /// Extract the pwdEncryptSalt from the login page.

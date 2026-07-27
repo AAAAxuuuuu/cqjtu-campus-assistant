@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:campus_platform/services/session_service.dart';
 import 'package:data/data.dart';
@@ -48,6 +49,12 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
           }
         },
       )
+      ..addJavaScriptChannel(
+        'LeaveAutofill',
+        onMessageReceived: (msg) {
+          debugPrint('[LeaveApply] credential fields filled: ${msg.message}');
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
@@ -60,6 +67,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
               _pageLoadCompleter?.complete();
             }
             await _controller.runJavaScript(_tokenHookScript);
+            if (_shouldAutofillKnownCredentials(url)) {
+              await _autofillKnownCredentials();
+            }
             if (mounted) setState(() => _loadingPage = false);
           },
         ),
@@ -251,41 +261,71 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
 
   bool _isAuthRedirect(String url) =>
       url.contains('ids.cqjtu.edu.cn/authserver/login') ||
-      url.contains('zhxg.cqjtu.edu.cn/mobile/sso');
+      url.contains('zhxg.cqjtu.edu.cn/mobile/sso') ||
+      _shouldAutofillKnownCredentials(url);
+
+  bool _shouldAutofillKnownCredentials(String url) =>
+      Uri.tryParse(url)?.host.toLowerCase() == 'zhxg.cqjtu.edu.cn';
+
+  Future<void> _autofillKnownCredentials() async {
+    final credentials = ref.read(credentialsProvider);
+    if (credentials == null || credentials.password.trim().isEmpty) return;
+
+    final username = jsonEncode(credentials.username);
+    final password = jsonEncode(credentials.password);
+    await _controller.runJavaScript('''
+      (function () {
+        var username = $username;
+        var password = $password;
+        var attempts = 0;
+
+        function findUsername() {
+          return document.getElementById('username') ||
+            document.querySelector('input[name="username"], input[name="account"], input[name="userName"], input[name="userNo"], input[autocomplete="username"], input[placeholder*="账号"], input[placeholder*="学号"]');
+        }
+
+        function findPassword() {
+          return document.getElementById('password') ||
+            document.querySelector('input[name="password"], input[type="password"], input[autocomplete="current-password"], input[placeholder*="密码"]');
+        }
+
+        function setValue(input, value) {
+          var setter = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            'value'
+          ).set;
+          setter.call(input, value);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('blur', { bubbles: true }));
+        }
+
+        function fill() {
+          var userInput = findUsername();
+          var passwordInput = findPassword();
+          if (!userInput || !passwordInput) return false;
+          if (!userInput.value) setValue(userInput, username);
+          if (!passwordInput.value) setValue(passwordInput, password);
+          try { LeaveAutofill.postMessage('username,password'); } catch (_) {}
+          return true;
+        }
+
+        function retry() {
+          if (fill() || attempts++ >= 20) return;
+          setTimeout(retry, 250);
+        }
+        retry();
+      })();
+    ''');
+  }
 
   Future<void> _installTokenHook() async {
     final creds = ref.read(credentialsProvider);
     if (creds != null && _isAuthRedirect(_lastUrl)) {
-      await _controller.runJavaScript('''
-        (function () {
-          var u = document.getElementById('username');
-          var p = document.getElementById('password');
-          if (u && p) {
-            u.value = '${_escapeJs(creds.username)}';
-            p.value = '${_escapeJs(creds.password)}';
-            u.dispatchEvent(new Event('input', { bubbles: true }));
-            p.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-          var btn =
-            document.querySelector('#login_submit') ||
-            document.querySelector('button[type="submit"]') ||
-            document.querySelector('input[type="submit"]');
-          if (btn && !btn.disabled) {
-            btn.click();
-          }
-        })();
-      ''');
+      await _autofillKnownCredentials();
     }
 
     await _controller.runJavaScript(_tokenHookScript);
-  }
-
-  String _escapeJs(String input) {
-    return input
-        .replaceAll('\\', r'\\')
-        .replaceAll("'", r"\'")
-        .replaceAll('\n', r'\n')
-        .replaceAll('\r', r'\r');
   }
 
   Future<String?> _waitForToken({required Duration timeout}) async {

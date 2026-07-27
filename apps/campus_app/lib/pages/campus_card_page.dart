@@ -108,7 +108,7 @@ class _BalanceCard extends ConsumerWidget {
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blue.shade700, Colors.blue.shade400],
+            colors: [Color(0xFFBB6688), Color(0xFF8888CC)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -226,7 +226,7 @@ class _BalanceCard extends ConsumerWidget {
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(96, 48),
                     backgroundColor: Colors.white,
-                    foregroundColor: Colors.blue.shade700,
+                    foregroundColor: const Color(0xFFBB6688),
                   ),
                 ),
               ],
@@ -269,7 +269,7 @@ class _QrCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.qr_code_2, color: Colors.blue),
+                const Icon(Icons.qr_code_2, color: Color(0xFFBB6688)),
                 const SizedBox(width: 8),
                 const Text(
                   '消费二维码',
