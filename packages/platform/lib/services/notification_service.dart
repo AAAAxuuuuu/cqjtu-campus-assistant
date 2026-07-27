@@ -45,13 +45,16 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
     debugPrint('[NOTIF] timezone initialized: ${tzInfo.identifier}');
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
 
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
@@ -150,10 +153,8 @@ class NotificationService {
     }
 
     try {
-      final result =
-          await _classReminderChannel.invokeMapMethod<String, Object?>(
-        'getLiveReminderCapabilities',
-      );
+      final result = await _classReminderChannel
+          .invokeMapMethod<String, Object?>('getLiveReminderCapabilities');
       return result ?? const {'isAndroid': true};
     } catch (error) {
       debugPrint('[NOTIF] getLiveReminderCapabilities failed: $error');
@@ -164,12 +165,9 @@ class NotificationService {
   static Future<void> _scheduleNativeAndroidClassReminders(
     List<ClassReminder> reminders,
   ) async {
-    await _classReminderChannel.invokeMethod<void>(
-      'scheduleClassReminders',
-      {
-        'reminders': reminders.map((r) => r.toPlatformMap()).toList(),
-      },
-    );
+    await _classReminderChannel.invokeMethod<void>('scheduleClassReminders', {
+      'reminders': reminders.map((r) => r.toPlatformMap()).toList(),
+    });
   }
 
   static Future<void> _cancelNativeAndroidClassReminders() async {
@@ -329,19 +327,18 @@ class NotificationService {
       value = prefs.getInt(scopedKey) ?? defaultCourseReminderMinutes;
     } else if (scopedKey != null &&
         prefs.containsKey(_courseReminderMinutesKey)) {
-      value = prefs.getInt(_courseReminderMinutesKey) ??
+      value =
+          prefs.getInt(_courseReminderMinutesKey) ??
           defaultCourseReminderMinutes;
       await prefs.setInt(scopedKey, value);
       await prefs.remove(_courseReminderMinutesKey);
     } else {
-      value = prefs.getInt(_courseReminderMinutesKey) ??
+      value =
+          prefs.getInt(_courseReminderMinutesKey) ??
           defaultCourseReminderMinutes;
     }
     return value
-        .clamp(
-          minCourseReminderMinutes,
-          maxCourseReminderMinutes,
-        )
+        .clamp(minCourseReminderMinutes, maxCourseReminderMinutes)
         .toInt();
   }
 
@@ -351,10 +348,7 @@ class NotificationService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final safeValue = value
-        .clamp(
-          minCourseReminderMinutes,
-          maxCourseReminderMinutes,
-        )
+        .clamp(minCourseReminderMinutes, maxCourseReminderMinutes)
         .toInt();
     await prefs.setInt(
       _scopedPreferenceKey(_courseReminderMinutesKey, accountId) ??

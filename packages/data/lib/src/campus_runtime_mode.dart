@@ -5,7 +5,4 @@
 ///   school systems and keeps credentials on the device.
 /// - [selfHosted]: optional user-hosted backend mode for web console,
 ///   multi-device access, and automation integrations.
-enum CampusRuntimeMode {
-  localAndroid,
-  selfHosted,
-}
+enum CampusRuntimeMode { localAndroid, selfHosted }

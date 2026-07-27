@@ -31,8 +31,7 @@ CampusRuntimeMode resolveBackgroundRuntimeMode(String env) {
   return switch (normalized) {
     'selfhosted' ||
     'remotebackend' ||
-    'backend' =>
-      CampusRuntimeMode.selfHosted,
+    'backend' => CampusRuntimeMode.selfHosted,
     _ => CampusRuntimeMode.localAndroid,
   };
 }
@@ -66,8 +65,10 @@ void backgroundCallbackDispatcher() {
         ),
       );
 
-      final androidPlugin = plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           _elecChannelId,
@@ -344,11 +345,14 @@ Future<void> _checkSelfHostedCard(
   String sessionId,
   double threshold,
 ) async {
-  var res = await dio.get('/api/elec/cardBalance', queryParameters: {
-    'username': username,
-    'password': password,
-    'sessionId': sessionId,
-  });
+  var res = await dio.get(
+    '/api/elec/cardBalance',
+    queryParameters: {
+      'username': username,
+      'password': password,
+      'sessionId': sessionId,
+    },
+  );
   if (_isSessionExpiredResponse(res.data)) {
     throw _BgSessionExpiredException();
   }
@@ -356,12 +360,15 @@ Future<void> _checkSelfHostedCard(
     debugPrint(
       '[BG] card first attempt failed code=${res.data['code']} msg=${res.data['msg']}, retry with forceRefresh',
     );
-    res = await dio.get('/api/elec/cardBalance', queryParameters: {
-      'username': username,
-      'password': password,
-      'sessionId': sessionId,
-      'forceRefresh': true,
-    });
+    res = await dio.get(
+      '/api/elec/cardBalance',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        'sessionId': sessionId,
+        'forceRefresh': true,
+      },
+    );
     if (_isSessionExpiredResponse(res.data)) {
       throw _BgSessionExpiredException();
     }

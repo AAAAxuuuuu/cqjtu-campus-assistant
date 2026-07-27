@@ -67,7 +67,8 @@ class SelfHostedCampusGateway implements CampusGateway {
     try {
       return await request(sessionId);
     } catch (error) {
-      final recoverable = _isSessionExpiredError(error) ||
+      final recoverable =
+          _isSessionExpiredError(error) ||
           (shouldRecoverOnError?.call(error) ?? false);
       if (!recoverable) rethrow;
 

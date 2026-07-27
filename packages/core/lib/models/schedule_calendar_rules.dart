@@ -14,9 +14,9 @@ class ScheduleDateAdjustment {
   String get targetKey => scheduleDateKey(targetDate);
 
   Map<String, String> toJson() => {
-        'sourceDate': sourceKey,
-        'targetDate': targetKey,
-      };
+    'sourceDate': sourceKey,
+    'targetDate': targetKey,
+  };
 
   static ScheduleDateAdjustment? fromJson(Object? value) {
     if (value is! Map) return null;
@@ -43,10 +43,8 @@ class ScheduleCourseOccurrence {
   bool get isAdjusted =>
       scheduleDateKey(originalDate) != scheduleDateKey(scheduledDate);
 
-  Course asCourseForWeek(int week) => course.copyWith(
-        dayOfWeek: scheduledDate.weekday,
-        weekList: [week],
-      );
+  Course asCourseForWeek(int week) =>
+      course.copyWith(dayOfWeek: scheduledDate.weekday, weekList: [week]);
 }
 
 /// Date rules shared by timetable display, reminders and exported calendars.
@@ -149,8 +147,9 @@ class ScheduleCalendarRules {
   }
 
   int weekOf(DateTime date, DateTime semesterStart) {
-    final days =
-        _dateOnly(date).difference(_semesterMonday(semesterStart)).inDays;
+    final days = _dateOnly(
+      date,
+    ).difference(_semesterMonday(semesterStart)).inDays;
     return days ~/ 7 + 1;
   }
 
@@ -158,39 +157,41 @@ class ScheduleCalendarRules {
     bool? skipOfficialHolidays,
     List<String>? additionalNoClassDates,
     List<ScheduleDateAdjustment>? adjustments,
-  }) =>
-      ScheduleCalendarRules(
-        skipOfficialHolidays: skipOfficialHolidays ?? this.skipOfficialHolidays,
-        additionalNoClassDates:
-            additionalNoClassDates ?? this.additionalNoClassDates,
-        adjustments: adjustments ?? this.adjustments,
-      );
+  }) => ScheduleCalendarRules(
+    skipOfficialHolidays: skipOfficialHolidays ?? this.skipOfficialHolidays,
+    additionalNoClassDates:
+        additionalNoClassDates ?? this.additionalNoClassDates,
+    adjustments: adjustments ?? this.adjustments,
+  );
 
   Map<String, Object> toJson() => {
-        'skipOfficialHolidays': skipOfficialHolidays,
-        'additionalNoClassDates': additionalNoClassDates,
-        'adjustments':
-            adjustments.map((adjustment) => adjustment.toJson()).toList(),
-      };
+    'skipOfficialHolidays': skipOfficialHolidays,
+    'additionalNoClassDates': additionalNoClassDates,
+    'adjustments': adjustments
+        .map((adjustment) => adjustment.toJson())
+        .toList(),
+  };
 
   static ScheduleCalendarRules fromJson(Object? value) {
     if (value is! Map) return empty;
-    final noClassDates = (value['additionalNoClassDates'] as List? ?? const [])
-        .map((date) => date.toString())
-        .where((date) => DateTime.tryParse(date) != null)
-        .toSet()
-        .toList()
-      ..sort();
-    final adjustments = (value['adjustments'] as List? ?? const [])
-        .map(ScheduleDateAdjustment.fromJson)
-        .whereType<ScheduleDateAdjustment>()
-        .fold(<String, ScheduleDateAdjustment>{}, (result, adjustment) {
-          result[adjustment.sourceKey] = adjustment;
-          return result;
-        })
-        .values
-        .toList()
-      ..sort((a, b) => a.sourceKey.compareTo(b.sourceKey));
+    final noClassDates =
+        (value['additionalNoClassDates'] as List? ?? const [])
+            .map((date) => date.toString())
+            .where((date) => DateTime.tryParse(date) != null)
+            .toSet()
+            .toList()
+          ..sort();
+    final adjustments =
+        (value['adjustments'] as List? ?? const [])
+            .map(ScheduleDateAdjustment.fromJson)
+            .whereType<ScheduleDateAdjustment>()
+            .fold(<String, ScheduleDateAdjustment>{}, (result, adjustment) {
+              result[adjustment.sourceKey] = adjustment;
+              return result;
+            })
+            .values
+            .toList()
+          ..sort((a, b) => a.sourceKey.compareTo(b.sourceKey));
 
     return ScheduleCalendarRules(
       skipOfficialHolidays: value['skipOfficialHolidays'] != false,

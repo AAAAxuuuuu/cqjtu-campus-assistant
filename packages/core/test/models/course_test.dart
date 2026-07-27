@@ -102,8 +102,11 @@ void main() {
     });
 
     test('weekList 缺失时返回空列表', () {
-      final c =
-          Course.fromJson({'name': 'test', 'dayOfWeek': 1, 'timeSlot': 1});
+      final c = Course.fromJson({
+        'name': 'test',
+        'dayOfWeek': 1,
+        'timeSlot': 1,
+      });
       expect(c.weekList, isEmpty);
     });
   });

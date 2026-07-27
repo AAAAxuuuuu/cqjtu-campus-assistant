@@ -131,7 +131,7 @@ class Course {
       // 关键：将后端传过来的 JSON 数组强转为 List<int>
       weekList:
           (json['weekList'] as List<dynamic>?)?.map((e) => e as int).toList() ??
-              [],
+          [],
       isExam: isExam,
       isCustom: _boolValue(json['isCustom']),
       seatNumber: json['seatNumber']?.toString() ?? '',

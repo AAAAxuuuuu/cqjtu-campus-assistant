@@ -44,19 +44,19 @@ class StudyProgressCourse {
       );
 
   Map<String, dynamic> toJson() => {
-        'code': code,
-        'name': name,
-        'credits': credits,
-        'attribute': attribute,
-        'nature': nature,
-        'semester': semester,
-        'status': status,
-        'score': score,
-        'remark': remark,
-        'isDegreeCourse': isDegreeCourse,
-        'totalHours': totalHours,
-        'isPlannedCourse': isPlannedCourse,
-      };
+    'code': code,
+    'name': name,
+    'credits': credits,
+    'attribute': attribute,
+    'nature': nature,
+    'semester': semester,
+    'status': status,
+    'score': score,
+    'remark': remark,
+    'isDegreeCourse': isDegreeCourse,
+    'totalHours': totalHours,
+    'isPlannedCourse': isPlannedCourse,
+  };
 }
 
 class StudyProgressGroup {
@@ -99,22 +99,19 @@ class StudyProgressGroup {
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'creditCategory': creditCategory,
-        'requiredCredits': requiredCredits,
-        'earnedCredits': earnedCredits,
-        'remainingCredits': remainingCredits,
-        'completionRate': completionRate,
-        'courses': courses.map((course) => course.toJson()).toList(),
-      };
+    'id': id,
+    'title': title,
+    'creditCategory': creditCategory,
+    'requiredCredits': requiredCredits,
+    'earnedCredits': earnedCredits,
+    'remainingCredits': remainingCredits,
+    'completionRate': completionRate,
+    'courses': courses.map((course) => course.toJson()).toList(),
+  };
 }
 
 class ExecutionPlanCourse {
-  const ExecutionPlanCourse({
-    required this.code,
-    required this.name,
-  });
+  const ExecutionPlanCourse({required this.code, required this.name});
 
   final String code;
   final String name;
@@ -125,10 +122,7 @@ class ExecutionPlanCourse {
         name: json['name'] as String? ?? '',
       );
 
-  Map<String, dynamic> toJson() => {
-        'code': code,
-        'name': name,
-      };
+  Map<String, dynamic> toJson() => {'code': code, 'name': name};
 }
 
 class StudyProgressData {
@@ -144,39 +138,38 @@ class StudyProgressData {
   final List<ExecutionPlanCourse> currentSemesterCourses;
   final Map<String, double> requiredCreditsByCategory;
 
-  factory StudyProgressData.fromJson(Map<String, dynamic> json) =>
-      StudyProgressData(
-        groups: (json['groups'] as List? ?? const [])
+  factory StudyProgressData.fromJson(
+    Map<String, dynamic> json,
+  ) => StudyProgressData(
+    groups: (json['groups'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) =>
+              StudyProgressGroup.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(),
+    currentSemester: json['currentSemester'] as String? ?? '',
+    currentSemesterCourses:
+        (json['currentSemesterCourses'] as List? ?? const [])
             .whereType<Map>()
             .map(
               (item) =>
-                  StudyProgressGroup.fromJson(Map<String, dynamic>.from(item)),
+                  ExecutionPlanCourse.fromJson(Map<String, dynamic>.from(item)),
             )
             .toList(),
-        currentSemester: json['currentSemester'] as String? ?? '',
-        currentSemesterCourses:
-            (json['currentSemesterCourses'] as List? ?? const [])
-                .whereType<Map>()
-                .map(
-                  (item) => ExecutionPlanCourse.fromJson(
-                    Map<String, dynamic>.from(item),
-                  ),
-                )
-                .toList(),
-        requiredCreditsByCategory:
-            (json['requiredCreditsByCategory'] as Map? ?? const {}).map(
-          (key, value) => MapEntry(
-            key.toString(),
-            double.tryParse(value.toString()) ?? 0,
-          ),
+    requiredCreditsByCategory:
+        (json['requiredCreditsByCategory'] as Map? ?? const {}).map(
+          (key, value) =>
+              MapEntry(key.toString(), double.tryParse(value.toString()) ?? 0),
         ),
-      );
+  );
 
   Map<String, dynamic> toJson() => {
-        'groups': groups.map((group) => group.toJson()).toList(),
-        'currentSemester': currentSemester,
-        'currentSemesterCourses':
-            currentSemesterCourses.map((course) => course.toJson()).toList(),
-        'requiredCreditsByCategory': requiredCreditsByCategory,
-      };
+    'groups': groups.map((group) => group.toJson()).toList(),
+    'currentSemester': currentSemester,
+    'currentSemesterCourses': currentSemesterCourses
+        .map((course) => course.toJson())
+        .toList(),
+    'requiredCreditsByCategory': requiredCreditsByCategory,
+  };
 }

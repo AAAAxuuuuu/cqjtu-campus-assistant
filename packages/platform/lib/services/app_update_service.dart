@@ -7,10 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum AppUpdateCheckStatus { notConfigured, upToDate, updateAvailable }
 
 class InstalledAppVersion {
-  const InstalledAppVersion({
-    required this.version,
-    required this.buildNumber,
-  });
+  const InstalledAppVersion({required this.version, required this.buildNumber});
 
   final String version;
   final int buildNumber;
@@ -39,7 +36,8 @@ class AppUpdateInfo {
     final ios = AppUpdateService._asMap(json['ios']);
     final assets = AppUpdateService._asList(json['assets']);
     final apkAsset = AppUpdateService._pickAndroidAsset(assets);
-    final rawVersion = AppUpdateService._readString(json, const [
+    final rawVersion =
+        AppUpdateService._readString(json, const [
           'version',
           'latestVersion',
           'tag_name',
@@ -54,7 +52,8 @@ class AppUpdateInfo {
       throw const FormatException('Update feed missing version');
     }
 
-    final buildNumber = AppUpdateService._readInt(json, const [
+    final buildNumber =
+        AppUpdateService._readInt(json, const [
           'buildNumber',
           'build',
           'versionCode',
@@ -68,33 +67,40 @@ class AppUpdateInfo {
     return AppUpdateInfo(
       version: version,
       buildNumber: buildNumber,
-      force: AppUpdateService._readBool(json, const ['force', 'mandatory']) ??
+      force:
+          AppUpdateService._readBool(json, const ['force', 'mandatory']) ??
           false,
-      title: AppUpdateService._readString(json, const ['title', 'name']) ??
+      title:
+          AppUpdateService._readString(json, const ['title', 'name']) ??
           '发现新版本',
       notes: AppUpdateService._readNotes(json),
-      releasePageUrl: AppUpdateService._readString(
-            json,
-            const ['releasePageUrl', 'html_url', 'htmlUrl'],
-          ) ??
+      releasePageUrl:
+          AppUpdateService._readString(json, const [
+            'releasePageUrl',
+            'html_url',
+            'htmlUrl',
+          ]) ??
           defaultReleasePageUrl,
       downloadUrl: AppUpdateService._readString(json, const [
         'downloadUrl',
         'url',
         'storeUrl',
       ]),
-      androidDownloadUrl: AppUpdateService._readString(
-            android,
-            const ['downloadUrl', 'url', 'apkUrl'],
-          ) ??
-          AppUpdateService._readString(
-            apkAsset,
-            const ['browser_download_url'],
-          ),
-      iosDownloadUrl: AppUpdateService._readString(
-        ios,
-        const ['downloadUrl', 'url', 'storeUrl', 'browser_download_url'],
-      ),
+      androidDownloadUrl:
+          AppUpdateService._readString(android, const [
+            'downloadUrl',
+            'url',
+            'apkUrl',
+          ]) ??
+          AppUpdateService._readString(apkAsset, const [
+            'browser_download_url',
+          ]),
+      iosDownloadUrl: AppUpdateService._readString(ios, const [
+        'downloadUrl',
+        'url',
+        'storeUrl',
+        'browser_download_url',
+      ]),
     );
   }
 
@@ -297,10 +303,7 @@ class AppUpdateService {
     );
   }
 
-  static Map<String, String> _buildRequestHeaders(
-    Uri? uri,
-    String? etag,
-  ) {
+  static Map<String, String> _buildRequestHeaders(Uri? uri, String? etag) {
     final headers = <String, String>{};
     if (uri?.host.toLowerCase() != 'api.github.com') {
       return headers;
@@ -354,13 +357,11 @@ class AppUpdateService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _updateFeedCacheKey,
-      jsonEncode(
-        {
-          'data': payload.data,
-          'etag': payload.etag,
-          'checkedAtMs': payload.checkedAtMs,
-        },
-      ),
+      jsonEncode({
+        'data': payload.data,
+        'etag': payload.etag,
+        'checkedAtMs': payload.checkedAtMs,
+      }),
     );
   }
 
@@ -475,8 +476,8 @@ class AppUpdateService {
   ) {
     for (final asset in assets) {
       final name = (_readString(asset, const ['name']) ?? '').toLowerCase();
-      final contentType =
-          (_readString(asset, const ['content_type']) ?? '').toLowerCase();
+      final contentType = (_readString(asset, const ['content_type']) ?? '')
+          .toLowerCase();
       if (name.endsWith('.apk') ||
           contentType.contains('android.package-archive')) {
         return asset;
@@ -486,7 +487,8 @@ class AppUpdateService {
   }
 
   static String _readNotes(Map<String, dynamic> json) {
-    final dynamic value = json['notes'] ??
+    final dynamic value =
+        json['notes'] ??
         json['releaseNotes'] ??
         json['changelog'] ??
         json['body'] ??
