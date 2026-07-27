@@ -9,6 +9,40 @@ import '../widgets/error_view.dart';
 class ElectricityPage extends ConsumerWidget {
   const ElectricityPage({super.key});
 
+  static Future<void> open(BuildContext context, WidgetRef ref) async {
+    try {
+      final dorm = await ref.read(dormRoomProvider.future);
+      if (!context.mounted) return;
+
+      if (dorm == null) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.home_outlined),
+            title: const Text('请先选择宿舍'),
+            content: const Text('电费查询和充值需要宿舍信息。请前往“我的”页面的“宿舍设置”完成选择。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('知道了'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ElectricityPage()));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('宿舍信息读取失败，请稍后重试')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balanceAsync = ref.watch(electricityProvider);

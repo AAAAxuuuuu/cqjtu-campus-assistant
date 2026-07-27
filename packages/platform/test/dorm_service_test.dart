@@ -31,6 +31,32 @@ void main() {
       expect(loadedB, isNull);
     });
 
+    test('saving a science-city room clears stale South-Campus IDs', () async {
+      final service = DormService();
+      final southRoom = DormRoom.southCampus(
+        district: southDormDistricts.first,
+        building: southDormDistricts.first.buildings.first,
+        roomNumber: '0305',
+      );
+      const scienceCityRoom = DormRoom(
+        campusName: '科学城校区',
+        garden: DormGarden.liYuan,
+        buildingNumber: 6,
+        roomNumber: '0202',
+      );
+
+      await service.save(southRoom, accountId: 'userA');
+      await service.save(scienceCityRoom, accountId: 'userA');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('user_userA_dorm_areaid'), isFalse);
+      expect(prefs.containsKey('user_userA_dorm_districtid'), isFalse);
+      expect(prefs.containsKey('user_userA_dorm_buildid'), isFalse);
+
+      final restored = await service.load(accountId: 'userA');
+      expect(restored?.toQueryParams(), scienceCityRoom.toQueryParams());
+    });
+
     test(
         'load falls back to legacy un-prefixed keys if scoped keys are missing',
         () async {
