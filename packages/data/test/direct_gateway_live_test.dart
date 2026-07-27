@@ -9,11 +9,11 @@ void main() {
   final skipReason = credentials.isComplete
       ? null
       : 'Set CAMPUS_TEST_USERNAME and CAMPUS_TEST_PASSWORD in the process '
-            'environment or a local .env.local file to run live direct-school tests.';
+          'environment or a local .env.local file to run live direct-school tests.';
   final dormSkipReason = dormParams.isComplete
       ? skipReason
       : 'Set CAMPUS_TEST_ELEC_BUILDID and CAMPUS_TEST_ELEC_ROOMID in the '
-            'process environment or a local .env.local file to run live electricity tests.';
+          'process environment or a local .env.local file to run live electricity tests.';
 
   group('DirectSchoolCampusGateway live', () {
     final gateway = DirectSchoolCampusGateway();
@@ -128,11 +128,11 @@ class _LiveDormParams {
   bool get isComplete => buildid.isNotEmpty && roomid.isNotEmpty;
 
   Map<String, String> toQueryParams() => {
-    'sysid': sysid.isEmpty ? '1' : sysid,
-    'areaid': areaid.isEmpty ? '1' : areaid,
-    'buildid': buildid,
-    'roomid': roomid,
-  };
+        'sysid': sysid.isEmpty ? '1' : sysid,
+        'areaid': areaid.isEmpty ? '1' : areaid,
+        'buildid': buildid,
+        'roomid': roomid,
+      };
 
   static _LiveDormParams load() {
     final localEnv = _loadLocalEnv();

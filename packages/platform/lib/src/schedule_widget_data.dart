@@ -145,19 +145,18 @@ ScheduleWidgetSnapshot buildScheduleWidgetSnapshot({
     now: now,
     totalWeeks: totalWeeks,
   );
-  final nextOccurrence = futureOccurrences.isEmpty
-      ? null
-      : futureOccurrences.first;
+  final nextOccurrence =
+      futureOccurrences.isEmpty ? null : futureOccurrences.first;
 
   final status = currentWeek == 0 && nextOccurrence != null
       ? NextClassWidgetStatus.next
       : currentWeek == 0
-      ? NextClassWidgetStatus.beforeSemester
-      : currentWeek > totalWeeks
-      ? NextClassWidgetStatus.semesterDone
-      : todayCourses.isEmpty
-      ? NextClassWidgetStatus.todayEmpty
-      : NextClassWidgetStatus.todayDone;
+          ? NextClassWidgetStatus.beforeSemester
+          : currentWeek > totalWeeks
+              ? NextClassWidgetStatus.semesterDone
+              : todayCourses.isEmpty
+                  ? NextClassWidgetStatus.todayEmpty
+                  : NextClassWidgetStatus.todayDone;
 
   return ScheduleWidgetSnapshot(
     currentWeek: currentWeek,
@@ -210,13 +209,12 @@ List<ScheduleWidgetOccurrence> _occurrencesForDay({
   if (week < 1 || week > totalWeeks) return const [];
 
   final weekday = date.weekday;
-  final occurrences =
-      courses
-          .where((c) => c.dayOfWeek == weekday && c.isActiveInWeek(week))
-          .map((course) => _occurrenceForCourse(course, week, date))
-          .whereType<ScheduleWidgetOccurrence>()
-          .toList()
-        ..sort(_compareOccurrences);
+  final occurrences = courses
+      .where((c) => c.dayOfWeek == weekday && c.isActiveInWeek(week))
+      .map((course) => _occurrenceForCourse(course, week, date))
+      .whereType<ScheduleWidgetOccurrence>()
+      .toList()
+    ..sort(_compareOccurrences);
   return occurrences;
 }
 

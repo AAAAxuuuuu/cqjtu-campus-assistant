@@ -29,18 +29,18 @@ class ClassReminder {
   final String seatNumber;
 
   Map<String, Object?> toPlatformMap() => {
-    'id': id,
-    'courseName': courseName,
-    'classroom': classroom,
-    'teacher': teacher,
-    'timeText': timeText,
-    'week': week,
-    'weekday': weekday,
-    'remindAtMillis': remindAt.millisecondsSinceEpoch,
-    'classStartAtMillis': classStartAt.millisecondsSinceEpoch,
-    'isExam': isExam,
-    'seatNumber': seatNumber,
-  };
+        'id': id,
+        'courseName': courseName,
+        'classroom': classroom,
+        'teacher': teacher,
+        'timeText': timeText,
+        'week': week,
+        'weekday': weekday,
+        'remindAtMillis': remindAt.millisecondsSinceEpoch,
+        'classStartAtMillis': classStartAt.millisecondsSinceEpoch,
+        'isExam': isExam,
+        'seatNumber': seatNumber,
+      };
 }
 
 const Map<int, String> classSlotStartTimes = {

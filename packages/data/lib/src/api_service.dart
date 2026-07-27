@@ -15,16 +15,15 @@ String _redactIdentifier(String value) {
 
 class ApiService {
   ApiService({required String baseUrl, Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: baseUrl,
-              connectTimeout: const Duration(seconds: 15),
-              receiveTimeout: const Duration(seconds: 30),
-              validateStatus: (status) => status != null && status < 600,
-            ),
-          );
+      : _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: baseUrl,
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 30),
+                validateStatus: (status) => status != null && status < 600,
+              ),
+            );
 
   final Dio _dio;
 

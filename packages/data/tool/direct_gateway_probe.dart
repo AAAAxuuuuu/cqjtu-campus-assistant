@@ -46,9 +46,8 @@ Future<void> main(List<String> args) async {
       stdout.writeln(
         '  grades=${result.grades.length} summary=${result.summary}',
       );
-      final detailGrade = result.grades
-          .where((grade) => grade.hasDetail)
-          .firstOrNull;
+      final detailGrade =
+          result.grades.where((grade) => grade.hasDetail).firstOrNull;
       if (detailGrade != null) {
         final detail = await gateway.getGradeDetail(
           username,
