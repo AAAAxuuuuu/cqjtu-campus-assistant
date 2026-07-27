@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
 import 'package:core/models/course.dart';
 import 'package:core/models/exam.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:core/utils/exam_time_utils.dart';
 import 'package:core/utils/schedule_time_utils.dart';
 import 'package:data/data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/runtime_mode.dart';
@@ -124,11 +127,14 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
     final totalWeeks =
         ref.read(semesterTotalWeeksProvider(selectedSemester)).valueOrNull ??
         defaultSemesterTotalWeeks;
+    final calendarRules = await ref.read(scheduleCalendarRulesProvider.future);
 
     await NotificationService.scheduleClassReminders(
       data.courses,
       semesterStart,
       totalWeeks: totalWeeks,
+      calendarRules: calendarRules,
+      accountId: ref.read(credentialsProvider)?.username,
     );
     await ScheduleWidgetService.updateScheduleWidgets(
       courses: data.courses,
@@ -136,6 +142,7 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
       selectedSemester: selectedSemester,
       remark: data.remark,
       totalWeeks: totalWeeks,
+      calendarRules: calendarRules,
     );
   }
 }
@@ -229,13 +236,17 @@ int _startSlotForExactTime(DateTime value) {
 class SemesterStartNotifier extends AsyncNotifier<DateTime?> {
   @override
   Future<DateTime?> build() async {
+    final accountId = getAccountId(ref, listen: true);
     final service = ref.read(semesterServiceProvider);
-    if (service.cacheReady) return service.loadSync();
-    return service.load();
+    if (service.cacheReadyFor(accountId)) {
+      return service.loadSync(accountId: accountId);
+    }
+    return service.load(accountId: accountId);
   }
 
   Future<void> set(DateTime date) async {
-    await ref.read(semesterServiceProvider).save(date);
+    final accountId = getAccountId(ref, listen: false);
+    await ref.read(semesterServiceProvider).save(date, accountId: accountId);
     state = AsyncData(date);
   }
 }
@@ -249,13 +260,19 @@ class SemesterStartForKeyNotifier
     extends FamilyAsyncNotifier<DateTime?, String> {
   @override
   Future<DateTime?> build(String arg) async {
+    final accountId = getAccountId(ref, listen: true);
     final service = ref.read(semesterServiceProvider);
-    if (service.cacheReady) return service.loadForKeySync(arg);
-    return service.loadForKey(arg);
+    if (service.cacheReadyFor(accountId)) {
+      return service.loadForKeySync(arg, accountId: accountId);
+    }
+    return service.loadForKey(arg, accountId: accountId);
   }
 
   Future<void> set(DateTime date) async {
-    await ref.read(semesterServiceProvider).saveForKey(arg, date);
+    final accountId = getAccountId(ref, listen: false);
+    await ref
+        .read(semesterServiceProvider)
+        .saveForKey(arg, date, accountId: accountId);
     state = AsyncData(date);
   }
 }
@@ -270,13 +287,19 @@ final semesterStartForKeyProvider =
 class SelectedSemesterNotifier extends AsyncNotifier<String?> {
   @override
   Future<String?> build() async {
+    final accountId = getAccountId(ref, listen: true);
     final service = ref.read(semesterServiceProvider);
-    if (service.cacheReady) return service.loadSelectedSemesterSync();
-    return service.loadSelectedSemester();
+    if (service.cacheReadyFor(accountId)) {
+      return service.loadSelectedSemesterSync(accountId: accountId);
+    }
+    return service.loadSelectedSemester(accountId: accountId);
   }
 
   Future<void> set(String? value) async {
-    await ref.read(semesterServiceProvider).saveSelectedSemester(value);
+    final accountId = getAccountId(ref, listen: false);
+    await ref
+        .read(semesterServiceProvider)
+        .saveSelectedSemester(value, accountId: accountId);
     state = AsyncData(value);
   }
 }
@@ -365,23 +388,28 @@ Future<String> resolveSemesterKey(
     }
   }
 
+  final accountId = getAccountId(ref, listen: listen);
   final service = ref.read(semesterServiceProvider);
-  if (service.cacheReady) {
-    final selectedSync = service.loadSelectedSemesterSync()?.trim();
+  if (service.cacheReadyFor(accountId)) {
+    final selectedSync = service
+        .loadSelectedSemesterSync(accountId: accountId)
+        ?.trim();
     if (selectedSync != null && selectedSync.isNotEmpty) {
       return selectedSync;
     }
-    final defaultStart = service.loadSync();
+    final defaultStart = service.loadSync(accountId: accountId);
     if (defaultStart != null) {
       return calculateSemester(defaultStart);
     }
   } else {
-    final selectedAsync = await service.loadSelectedSemester();
+    final selectedAsync = await service.loadSelectedSemester(
+      accountId: accountId,
+    );
     final selected = selectedAsync?.trim();
     if (selected != null && selected.isNotEmpty) {
       return selected;
     }
-    final defaultStart = await service.load();
+    final defaultStart = await service.load(accountId: accountId);
     if (defaultStart != null) {
       return calculateSemester(defaultStart);
     }
@@ -419,10 +447,13 @@ class SemesterTotalWeeksNotifier extends FamilyAsyncNotifier<int, String?> {
     );
     final legacyKey = '$_semesterTotalWeeksPrefix$semesterKey';
     final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.containsKey(scopedKey)
-        ? prefs.getInt(scopedKey)
-        : prefs.getInt(legacyKey);
-    return _normalizeTotalWeeks(stored ?? defaultSemesterTotalWeeks);
+    final stored = await _readScopedIntWithMigration(
+      prefs,
+      scopedKey: scopedKey,
+      legacyKey: legacyKey,
+      fallback: defaultSemesterTotalWeeks,
+    );
+    return _normalizeTotalWeeks(stored);
   }
 
   Future<void> setWeeks(int value) async {
@@ -456,10 +487,11 @@ class CustomCoursesNotifier extends FamilyAsyncNotifier<List<Course>, String?> {
     final legacyKey = '$_customCoursesPrefix$semesterKey';
     final prefs = await SharedPreferences.getInstance();
 
-    var raw = prefs.getString(scopedKey);
-    if (raw == null || raw.isEmpty) {
-      raw = prefs.getString(legacyKey);
-    }
+    final raw = await _readScopedStringWithMigration(
+      prefs,
+      scopedKey: scopedKey,
+      legacyKey: legacyKey,
+    );
     if (raw == null || raw.isEmpty) return const [];
 
     try {
@@ -537,16 +569,72 @@ final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, int>(
 
 const _scheduleSundayFirstKey = 'schedule_sunday_first';
 const _scheduleShowInactiveCoursesKey = 'schedule_show_inactive_courses';
+const _scheduleDensityKey = 'schedule_density';
+const _scheduleBackgroundKey = 'schedule_background';
+const _scheduleCalendarRulesKey = 'schedule_calendar_rules';
+
+enum ScheduleDensity { compact, standard, spacious }
+
+Future<bool> _readScopedBoolWithMigration(
+  SharedPreferences prefs, {
+  required String scopedKey,
+  required String legacyKey,
+  required bool fallback,
+}) async {
+  if (prefs.containsKey(scopedKey)) {
+    return prefs.getBool(scopedKey) ?? fallback;
+  }
+  if (!prefs.containsKey(legacyKey)) return fallback;
+
+  final value = prefs.getBool(legacyKey) ?? fallback;
+  await prefs.setBool(scopedKey, value);
+  await prefs.remove(legacyKey);
+  return value;
+}
+
+Future<int> _readScopedIntWithMigration(
+  SharedPreferences prefs, {
+  required String scopedKey,
+  required String legacyKey,
+  required int fallback,
+}) async {
+  if (prefs.containsKey(scopedKey)) {
+    return prefs.getInt(scopedKey) ?? fallback;
+  }
+  if (!prefs.containsKey(legacyKey)) return fallback;
+
+  final value = prefs.getInt(legacyKey) ?? fallback;
+  await prefs.setInt(scopedKey, value);
+  await prefs.remove(legacyKey);
+  return value;
+}
+
+Future<String?> _readScopedStringWithMigration(
+  SharedPreferences prefs, {
+  required String scopedKey,
+  required String legacyKey,
+}) async {
+  final scoped = prefs.getString(scopedKey);
+  if (scoped != null) return scoped;
+  final legacy = prefs.getString(legacyKey);
+  if (legacy == null) return null;
+
+  await prefs.setString(scopedKey, legacy);
+  await prefs.remove(legacyKey);
+  return legacy;
+}
 
 class ScheduleSundayFirstNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
     final key = _userScopedKey(ref, _scheduleSundayFirstKey, listen: true);
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(key)) {
-      return prefs.getBool(key) ?? false;
-    }
-    return prefs.getBool(_scheduleSundayFirstKey) ?? false;
+    return _readScopedBoolWithMigration(
+      prefs,
+      scopedKey: key,
+      legacyKey: _scheduleSundayFirstKey,
+      fallback: false,
+    );
   }
 
   Future<void> setSundayFirst(bool value) async {
@@ -571,10 +659,12 @@ class ScheduleShowInactiveCoursesNotifier extends AsyncNotifier<bool> {
       listen: true,
     );
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(key)) {
-      return prefs.getBool(key) ?? true;
-    }
-    return prefs.getBool(_scheduleShowInactiveCoursesKey) ?? true;
+    return _readScopedBoolWithMigration(
+      prefs,
+      scopedKey: key,
+      legacyKey: _scheduleShowInactiveCoursesKey,
+      fallback: true,
+    );
   }
 
   Future<void> setShowInactiveCourses(bool value) async {
@@ -592,4 +682,197 @@ class ScheduleShowInactiveCoursesNotifier extends AsyncNotifier<bool> {
 final scheduleShowInactiveCoursesProvider =
     AsyncNotifierProvider<ScheduleShowInactiveCoursesNotifier, bool>(
       ScheduleShowInactiveCoursesNotifier.new,
+    );
+
+class ScheduleDensityNotifier extends AsyncNotifier<ScheduleDensity> {
+  @override
+  Future<ScheduleDensity> build() async {
+    final key = _userScopedKey(ref, _scheduleDensityKey, listen: true);
+    final prefs = await SharedPreferences.getInstance();
+    final stored = await _readScopedStringWithMigration(
+      prefs,
+      scopedKey: key,
+      legacyKey: _scheduleDensityKey,
+    );
+    return ScheduleDensity.values.firstWhere(
+      (value) => value.name == stored,
+      orElse: () => ScheduleDensity.standard,
+    );
+  }
+
+  Future<void> setDensity(ScheduleDensity value) async {
+    state = AsyncValue.data(value);
+    final key = _userScopedKey(ref, _scheduleDensityKey, listen: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value.name);
+  }
+}
+
+final scheduleDensityProvider =
+    AsyncNotifierProvider<ScheduleDensityNotifier, ScheduleDensity>(
+      ScheduleDensityNotifier.new,
+    );
+
+class ScheduleBackgroundImageNotifier extends AsyncNotifier<String?> {
+  @override
+  Future<String?> build() async {
+    final key = _userScopedKey(ref, _scheduleBackgroundKey, listen: true);
+    final prefs = await SharedPreferences.getInstance();
+    final stored = await _readScopedStringWithMigration(
+      prefs,
+      scopedKey: key,
+      legacyKey: _scheduleBackgroundKey,
+    );
+    if (stored == null || stored.trim().isEmpty) return null;
+    if (await File(stored).exists()) return stored;
+    await prefs.remove(key);
+    return null;
+  }
+
+  Future<void> setImage(String sourcePath) async {
+    final source = File(sourcePath);
+    if (!await source.exists()) {
+      throw StateError('未找到选择的背景图片');
+    }
+
+    final directory = Directory(
+      '${(await getApplicationDocumentsDirectory()).path}${Platform.pathSeparator}schedule_backgrounds',
+    );
+    await directory.create(recursive: true);
+    final extensionMatch = RegExp(
+      r'\.(jpg|jpeg|png|webp)$',
+      caseSensitive: false,
+    ).firstMatch(sourcePath);
+    final extension = extensionMatch?.group(1)?.toLowerCase() ?? 'jpg';
+    final destination = File(
+      '${directory.path}${Platform.pathSeparator}schedule_${DateTime.now().microsecondsSinceEpoch}.$extension',
+    );
+    await source.copy(destination.path);
+
+    final key = _userScopedKey(ref, _scheduleBackgroundKey, listen: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, destination.path);
+    state = AsyncValue.data(destination.path);
+  }
+
+  Future<void> clearImage() async {
+    final key = _userScopedKey(ref, _scheduleBackgroundKey, listen: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+    state = const AsyncValue.data(null);
+  }
+}
+
+final scheduleBackgroundImageProvider =
+    AsyncNotifierProvider<ScheduleBackgroundImageNotifier, String?>(
+      ScheduleBackgroundImageNotifier.new,
+    );
+
+class ScheduleCalendarRulesNotifier
+    extends AsyncNotifier<ScheduleCalendarRules> {
+  @override
+  Future<ScheduleCalendarRules> build() async {
+    final key = _userScopedKey(ref, _scheduleCalendarRulesKey, listen: true);
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.isEmpty) return ScheduleCalendarRules.empty;
+
+    try {
+      return ScheduleCalendarRules.fromJson(jsonDecode(raw));
+    } catch (error) {
+      debugPrint('[Schedule] 课表日期规则读取失败: $error');
+      return ScheduleCalendarRules.empty;
+    }
+  }
+
+  Future<void> setSkipOfficialHolidays(bool value) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    return _save(current.copyWith(skipOfficialHolidays: value));
+  }
+
+  Future<void> addNoClassDate(DateTime date) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    final dates = {
+      ...current.additionalNoClassDates,
+      scheduleDateKey(date),
+    }.toList()..sort();
+    return _save(current.copyWith(additionalNoClassDates: dates));
+  }
+
+  Future<void> removeNoClassDate(String dateKey) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    return _save(
+      current.copyWith(
+        additionalNoClassDates: current.additionalNoClassDates
+            .where((date) => date != dateKey)
+            .toList(),
+      ),
+    );
+  }
+
+  Future<void> saveAdjustment(ScheduleDateAdjustment adjustment) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    final adjustments = [
+      ...current.adjustments.where(
+        (item) => item.sourceKey != adjustment.sourceKey,
+      ),
+      adjustment,
+    ]..sort((a, b) => a.sourceKey.compareTo(b.sourceKey));
+    return _save(current.copyWith(adjustments: adjustments));
+  }
+
+  Future<void> removeAdjustment(String sourceDateKey) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    return _save(
+      current.copyWith(
+        adjustments: current.adjustments
+            .where((adjustment) => adjustment.sourceKey != sourceDateKey)
+            .toList(),
+      ),
+    );
+  }
+
+  Future<void> _save(ScheduleCalendarRules rules) async {
+    final key = _userScopedKey(ref, _scheduleCalendarRulesKey, listen: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(rules.toJson()));
+    state = AsyncData(rules);
+    await _rescheduleClassReminders(rules);
+  }
+
+  Future<void> _rescheduleClassReminders(ScheduleCalendarRules rules) async {
+    final credentials = ref.read(credentialsProvider);
+    final semesterStart = ref.read(activeSemesterStartProvider).valueOrNull;
+    if (credentials == null || semesterStart == null) return;
+
+    final selectedSemester = ref
+        .read(selectedScheduleSemesterProvider)
+        .valueOrNull;
+    final schedule = ref.read(scheduleProvider(selectedSemester)).valueOrNull;
+    if (schedule == null) return;
+
+    final totalWeeks =
+        ref.read(semesterTotalWeeksProvider(selectedSemester)).valueOrNull ??
+        defaultSemesterTotalWeeks;
+    await NotificationService.scheduleClassReminders(
+      schedule.courses,
+      semesterStart,
+      totalWeeks: totalWeeks,
+      calendarRules: rules,
+      accountId: credentials.username,
+    );
+    await ScheduleWidgetService.updateScheduleWidgets(
+      courses: schedule.courses,
+      semesterStart: semesterStart,
+      selectedSemester: selectedSemester,
+      remark: schedule.remark,
+      totalWeeks: totalWeeks,
+      calendarRules: rules,
+    );
+  }
+}
+
+final scheduleCalendarRulesProvider =
+    AsyncNotifierProvider<ScheduleCalendarRulesNotifier, ScheduleCalendarRules>(
+      ScheduleCalendarRulesNotifier.new,
     );

@@ -6,6 +6,7 @@ class CourseCell extends StatelessWidget {
   final bool isActive;
   final Color? color;
   final VoidCallback? onDelete;
+  final double densityScale;
 
   const CourseCell({
     super.key,
@@ -13,9 +14,10 @@ class CourseCell extends StatelessWidget {
     this.isActive = true,
     this.color,
     this.onDelete,
+    this.densityScale = 1,
   });
 
-  Color get _baseColor => color ?? const Color(0xFFE1ECF7);
+  Color get _baseColor => color ?? const Color(0xFFF9ECF2);
 
   Color get _cellColor => isActive ? _baseColor : Colors.grey.shade300;
   Color get _textColor =>
@@ -37,7 +39,10 @@ class CourseCell extends StatelessWidget {
       onTap: () => _showDetail(context),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: 5 * densityScale,
+          vertical: 4 * densityScale,
+        ),
         decoration: BoxDecoration(
           color: _cellColor,
           borderRadius: BorderRadius.circular(6),
@@ -49,7 +54,7 @@ class CourseCell extends StatelessWidget {
             Text(
               course.name,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 11 * densityScale,
                 fontWeight: FontWeight.bold,
                 color: _textColor,
               ),
@@ -61,7 +66,7 @@ class CourseCell extends StatelessWidget {
               const Spacer(),
               Text(
                 course.placeText,
-                style: TextStyle(fontSize: 10, color: _subColor),
+                style: TextStyle(fontSize: 10 * densityScale, color: _subColor),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

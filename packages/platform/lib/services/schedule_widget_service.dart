@@ -1,4 +1,5 @@
 import 'package:core/models/course.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -14,12 +15,30 @@ class ScheduleWidgetService {
     String? selectedSemester,
     String remark = '',
     int totalWeeks = 20,
+    ScheduleCalendarRules calendarRules = ScheduleCalendarRules.empty,
   }) async {
     if (!_usesNativeAndroidWidgets) return;
 
     try {
+      final actualCourses = calendarRules
+          .resolveOccurrences(
+            courses: courses,
+            semesterStart: semesterStart,
+            totalWeeks: totalWeeks,
+          )
+          .map((occurrence) {
+            final week = calendarRules.weekOf(
+              occurrence.scheduledDate,
+              semesterStart,
+            );
+            return week < 1 || week > totalWeeks
+                ? null
+                : occurrence.asCourseForWeek(week);
+          })
+          .whereType<Course>()
+          .toList();
       await _channel.invokeMethod<void>('updateScheduleWidgets', {
-        'courses': courses.map(_courseToMap).toList(),
+        'courses': actualCourses.map(_courseToMap).toList(),
         'semesterStartMillis': semesterStart.millisecondsSinceEpoch,
         'selectedSemester': selectedSemester,
         'remark': remark,

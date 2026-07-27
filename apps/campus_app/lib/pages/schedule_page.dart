@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:core/models/course.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:core/utils/schedule_time_utils.dart';
 import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
+import '../features/schedule/schedule_export_service.dart';
 import '../features/schedule/utils/course_text_parser.dart';
 import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
@@ -157,6 +162,57 @@ Color _pastelCourseColor(int seed, int attempt) {
   return HSLColor.fromAHSL(1, hue, saturation, lightness).toColor();
 }
 
+class _ScheduleGridPalette {
+  final bool usesDirectImage;
+  final Color header;
+  final Color surface;
+  final Color timeColumn;
+  final Color morning;
+  final Color afternoon;
+  final Color evening;
+  final Color divider;
+  final Color timeText;
+
+  const _ScheduleGridPalette({
+    required this.usesDirectImage,
+    required this.header,
+    required this.surface,
+    required this.timeColumn,
+    required this.morning,
+    required this.afternoon,
+    required this.evening,
+    required this.divider,
+    required this.timeText,
+  });
+
+  factory _ScheduleGridPalette.forBackground(bool hasCustomImage) {
+    if (hasCustomImage) {
+      return const _ScheduleGridPalette(
+        usesDirectImage: true,
+        header: Colors.transparent,
+        surface: Colors.transparent,
+        timeColumn: Colors.transparent,
+        morning: Colors.transparent,
+        afternoon: Colors.transparent,
+        evening: Colors.transparent,
+        divider: Color(0x4D0F172A),
+        timeText: Color(0xFF1F2937),
+      );
+    }
+    return _ScheduleGridPalette(
+      usesDirectImage: false,
+      header: const Color(0xFFFAF2F5),
+      surface: Colors.white,
+      timeColumn: Colors.white,
+      morning: Colors.white,
+      afternoon: const Color(0xFFBB6688).withValues(alpha: 0.04),
+      evening: const Color(0xFF1A4A7A).withValues(alpha: 0.07),
+      divider: const Color(0xFFCBD5E1),
+      timeText: const Color(0xFF475569),
+    );
+  }
+}
+
 int _stableCourseHash(String value) {
   var hash = 0x811C9DC5;
   for (final unit in value.codeUnits) {
@@ -180,6 +236,12 @@ class SchedulePage extends ConsumerWidget {
     final totalWeeks =
         ref.watch(semesterTotalWeeksProvider(selectedSemester)).valueOrNull ??
         defaultSemesterTotalWeeks;
+    final density =
+        ref.watch(scheduleDensityProvider).valueOrNull ??
+        ScheduleDensity.standard;
+    final backgroundImagePath = ref
+        .watch(scheduleBackgroundImageProvider)
+        .valueOrNull;
 
     ref.listen<AsyncValue<DateTime?>>(activeSemesterStartProvider, (_, next) {
       final start = next.valueOrNull;
@@ -206,6 +268,8 @@ class SchedulePage extends ConsumerWidget {
       selectedSemester: selectedSemester,
       sundayFirst: sundayFirst,
       totalWeeks: totalWeeks,
+      density: density,
+      backgroundImagePath: backgroundImagePath,
     );
   }
 }
@@ -261,12 +325,16 @@ class _ScheduleBody extends ConsumerWidget {
   final String? selectedSemester;
   final bool sundayFirst;
   final int totalWeeks;
+  final ScheduleDensity density;
+  final String? backgroundImagePath;
 
   const _ScheduleBody({
     required this.semesterStart,
     this.selectedSemester,
     required this.sundayFirst,
     required this.totalWeeks,
+    required this.density,
+    required this.backgroundImagePath,
   });
 
   // ── 统一的刷新逻辑（包含验证码拦截和 WebView 处理）──────────────────
@@ -291,10 +359,15 @@ class _ScheduleBody extends ConsumerWidget {
 
       // 刷新本地状态
       debugPrint('[刷新] 课表已更新，重新调度课程通知...');
+      final calendarRules = await ref.read(
+        scheduleCalendarRulesProvider.future,
+      );
       await NotificationService.scheduleClassReminders(
         result.courses,
         semesterStart,
         totalWeeks: totalWeeks,
+        calendarRules: calendarRules,
+        accountId: creds.username,
       );
       await ScheduleWidgetService.updateScheduleWidgets(
         courses: result.courses,
@@ -302,6 +375,7 @@ class _ScheduleBody extends ConsumerWidget {
         selectedSemester: selectedSemester,
         remark: result.remark,
         totalWeeks: totalWeeks,
+        calendarRules: calendarRules,
       );
 
       if (context.mounted) {
@@ -357,12 +431,16 @@ class _ScheduleBody extends ConsumerWidget {
     final scheduleAsync = ref.watch(scheduleProvider(selectedSemester));
     final showInactiveCourses =
         ref.watch(scheduleShowInactiveCoursesProvider).valueOrNull ?? true;
+    final calendarRules =
+        ref.watch(scheduleCalendarRulesProvider).valueOrNull ??
+        ScheduleCalendarRules.empty;
     final selectedWeek = ref.watch(selectedWeekProvider);
     final currentWeek = _calcCurrentWeek(
       semesterStart,
       sundayFirst: sundayFirst,
       totalWeeks: totalWeeks,
     );
+    final scheduleData = scheduleAsync.valueOrNull;
 
     final semLabel = selectedSemester != null
         ? _semesterLabel(selectedSemester!)
@@ -400,6 +478,21 @@ class _ScheduleBody extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
             // ✅ 将右上角的刷新也指向通用的 _doRefresh
             onPressed: () => _doRefresh(context, ref),
+          ),
+          IconButton(
+            tooltip: '更多课程表功能',
+            icon: const Icon(Icons.more_horiz),
+            onPressed: scheduleData == null
+                ? null
+                : () => _showScheduleMoreSheet(
+                    context,
+                    ref,
+                    courses: scheduleData.courses,
+                    semesterStart: semesterStart,
+                    sundayFirst: sundayFirst,
+                    totalWeeks: totalWeeks,
+                    semesterLabel: semLabel,
+                  ),
           ),
         ],
       ),
@@ -450,7 +543,14 @@ class _ScheduleBody extends ConsumerWidget {
             ),
             Expanded(
               child: _TimetableGrid(
-                courses: result.courses,
+                courses: _coursesForDisplayedWeek(
+                  courses: result.courses,
+                  semesterStart: semesterStart,
+                  selectedWeek: selectedWeek,
+                  totalWeeks: totalWeeks,
+                  calendarRules: calendarRules,
+                  includeInactiveCourses: showInactiveCourses,
+                ),
                 remark: result.remark,
                 semesterStart: semesterStart,
                 selectedWeek: selectedWeek,
@@ -458,6 +558,8 @@ class _ScheduleBody extends ConsumerWidget {
                 totalWeeks: totalWeeks,
                 selectedSemester: selectedSemester,
                 showInactiveCourses: showInactiveCourses,
+                density: density,
+                backgroundImagePath: backgroundImagePath,
               ),
             ),
           ],
@@ -468,6 +570,534 @@ class _ScheduleBody extends ConsumerWidget {
 }
 
 // ── 以下其余部分保持不变 (选期逻辑、导航栏、表格绘制等) ─────────────────────────────────────────
+
+Future<void> _showScheduleMoreSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required List<Course> courses,
+  required DateTime semesterStart,
+  required bool sundayFirst,
+  required int totalWeeks,
+  required String semesterLabel,
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  showDragHandle: true,
+  builder: (_) => _ScheduleMoreSheet(
+    pageContext: context,
+    courses: courses,
+    semesterStart: semesterStart,
+    sundayFirst: sundayFirst,
+    totalWeeks: totalWeeks,
+    semesterLabel: semesterLabel,
+  ),
+);
+
+class _ScheduleMoreSheet extends ConsumerWidget {
+  final BuildContext pageContext;
+  final List<Course> courses;
+  final DateTime semesterStart;
+  final bool sundayFirst;
+  final int totalWeeks;
+  final String semesterLabel;
+
+  const _ScheduleMoreSheet({
+    required this.pageContext,
+    required this.courses,
+    required this.semesterStart,
+    required this.sundayFirst,
+    required this.totalWeeks,
+    required this.semesterLabel,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final density =
+        ref.watch(scheduleDensityProvider).valueOrNull ??
+        ScheduleDensity.standard;
+    final backgroundImagePath = ref
+        .watch(scheduleBackgroundImageProvider)
+        .valueOrNull;
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          children: [
+            const Text(
+              '课程表工具',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 14),
+            _sheetSectionLabel('下载'),
+            _SheetActionTile(
+              icon: Icons.picture_as_pdf_outlined,
+              title: '全学期周课表 PDF',
+              subtitle: '按周分页导出第 1-$totalWeeks 周的课程网格',
+              onTap: () =>
+                  _export(context, ref, _ScheduleExportType.allWeeksPdf),
+            ),
+            _SheetActionTile(
+              icon: Icons.format_list_bulleted_outlined,
+              title: '课程清单 PDF',
+              subtitle: '按星期和节次整理整个学期课程',
+              onTap: () => _export(context, ref, _ScheduleExportType.listPdf),
+            ),
+            _SheetActionTile(
+              icon: Icons.calendar_month_outlined,
+              title: '日历 ICS',
+              subtitle: '导入系统日历或第三方日历',
+              onTap: () => _export(context, ref, _ScheduleExportType.ics),
+            ),
+            const Divider(height: 32),
+            _sheetSectionLabel('显示'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.edit_calendar_outlined),
+              title: const Text('学期开学日期'),
+              subtitle: Text(semesterLabel),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                _pickSemesterStart(pageContext, ref);
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_repeat_outlined),
+              title: const Text('节假日与调休'),
+              subtitle: const Text('节假日停课，调休日由你按学校安排手动添加'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                Navigator.pop(context);
+                await _showScheduleCalendarRulesSheet(
+                  pageContext,
+                  semesterStart: semesterStart,
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text('课表密度', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            SegmentedButton<ScheduleDensity>(
+              segments: const [
+                ButtonSegment(
+                  value: ScheduleDensity.compact,
+                  label: Text('紧凑'),
+                ),
+                ButtonSegment(
+                  value: ScheduleDensity.standard,
+                  label: Text('标准'),
+                ),
+                ButtonSegment(
+                  value: ScheduleDensity.spacious,
+                  label: Text('宽松'),
+                ),
+              ],
+              selected: {density},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) => ref
+                  .read(scheduleDensityProvider.notifier)
+                  .setDensity(selection.first),
+            ),
+            const SizedBox(height: 18),
+            const Text('课表背景', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: _BackgroundThumbnail(path: backgroundImagePath),
+              title: const Text('从相册选择'),
+              subtitle: Text(
+                backgroundImagePath == null ? '未设置自定义背景' : '正在使用自定义背景',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _chooseBackground(context, ref),
+            ),
+            if (backgroundImagePath != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    await ref
+                        .read(scheduleBackgroundImageProvider.notifier)
+                        .clearImage();
+                  },
+                  icon: const Icon(Icons.layers_clear_outlined, size: 18),
+                  label: const Text('移除背景'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _chooseBackground(BuildContext context, WidgetRef ref) async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2000,
+      imageQuality: 90,
+    );
+    if (image == null) return;
+
+    try {
+      await ref
+          .read(scheduleBackgroundImageProvider.notifier)
+          .setImage(image.path);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已应用自定义课表背景')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('设置背景失败：$error')));
+      }
+    }
+  }
+
+  Future<void> _export(
+    BuildContext sheetContext,
+    WidgetRef ref,
+    _ScheduleExportType type,
+  ) async {
+    Navigator.pop(sheetContext);
+    final messenger = ScaffoldMessenger.of(pageContext);
+    messenger.showSnackBar(const SnackBar(content: Text('正在生成导出文件...')));
+    try {
+      final calendarRules = await ref.read(
+        scheduleCalendarRulesProvider.future,
+      );
+      switch (type) {
+        case _ScheduleExportType.allWeeksPdf:
+          await ScheduleExportService.shareAllWeeksPdf(
+            courses: courses,
+            semesterStart: semesterStart,
+            totalWeeks: totalWeeks,
+            sundayFirst: sundayFirst,
+            semesterLabel: semesterLabel,
+            calendarRules: calendarRules,
+          );
+        case _ScheduleExportType.listPdf:
+          await ScheduleExportService.shareCourseListPdf(
+            courses: courses,
+            semesterStart: semesterStart,
+            totalWeeks: totalWeeks,
+            semesterLabel: semesterLabel,
+            calendarRules: calendarRules,
+          );
+        case _ScheduleExportType.ics:
+          await ScheduleExportService.shareIcs(
+            courses: courses,
+            semesterStart: semesterStart,
+            totalWeeks: totalWeeks,
+            sundayFirst: sundayFirst,
+            semesterLabel: semesterLabel,
+            calendarRules: calendarRules,
+          );
+      }
+    } catch (error) {
+      if (pageContext.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('导出失败：$error')));
+      }
+    }
+  }
+}
+
+enum _ScheduleExportType { allWeeksPdf, listPdf, ics }
+
+List<Course> _coursesForDisplayedWeek({
+  required List<Course> courses,
+  required DateTime semesterStart,
+  required int selectedWeek,
+  required int totalWeeks,
+  required ScheduleCalendarRules calendarRules,
+  required bool includeInactiveCourses,
+}) {
+  if (selectedWeek < 1 || selectedWeek > totalWeeks) return const [];
+
+  final activeOccurrences = calendarRules
+      .resolveOccurrences(
+        courses: courses,
+        semesterStart: semesterStart,
+        totalWeeks: totalWeeks,
+      )
+      .where(
+        (occurrence) =>
+            calendarRules.weekOf(occurrence.scheduledDate, semesterStart) ==
+            selectedWeek,
+      )
+      .toList();
+  final activeCourses = activeOccurrences
+      .map((occurrence) => occurrence.asCourseForWeek(selectedWeek))
+      .toList();
+  if (!includeInactiveCourses) return activeCourses;
+
+  final coursesMovedIntoThisWeek = activeOccurrences
+      .map((occurrence) => occurrence.course)
+      .toSet();
+  final inactiveCourses = courses
+      .where(
+        (course) =>
+            !course.isActiveInWeek(selectedWeek) &&
+            !coursesMovedIntoThisWeek.contains(course),
+      )
+      .map((course) => course.copyWith(weekList: const []))
+      .toList();
+  return [...inactiveCourses, ...activeCourses];
+}
+
+Future<void> _showScheduleCalendarRulesSheet(
+  BuildContext context, {
+  required DateTime semesterStart,
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  showDragHandle: true,
+  builder: (_) => _ScheduleCalendarRulesSheet(semesterStart: semesterStart),
+);
+
+class _ScheduleCalendarRulesSheet extends ConsumerWidget {
+  const _ScheduleCalendarRulesSheet({required this.semesterStart});
+
+  final DateTime semesterStart;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rulesAsync = ref.watch(scheduleCalendarRulesProvider);
+    final rules = rulesAsync.valueOrNull ?? ScheduleCalendarRules.empty;
+    final isLoading = rulesAsync.isLoading;
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          children: [
+            const Text(
+              '节假日与调休',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.beach_access_outlined),
+              title: const Text('避开 2026 法定节假日'),
+              subtitle: const Text('节假日课程不显示，也不会生成上课提醒'),
+              value: rules.skipOfficialHolidays,
+              onChanged: isLoading
+                  ? null
+                  : (value) => ref
+                        .read(scheduleCalendarRulesProvider.notifier)
+                        .setSkipOfficialHolidays(value),
+            ),
+            const Divider(height: 32),
+            _sheetSectionLabel('额外停课日期'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_busy_outlined),
+              title: const Text('添加停课日期'),
+              trailing: const Icon(Icons.add),
+              enabled: !isLoading,
+              onTap: isLoading ? null : () => _addNoClassDate(context, ref),
+            ),
+            if (rules.additionalNoClassDates.isEmpty)
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('暂无额外停课日期'),
+              )
+            else
+              ...rules.additionalNoClassDates.map(
+                (date) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(_scheduleDateLabel(date)),
+                  trailing: IconButton(
+                    tooltip: '移除停课日期',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => ref
+                        .read(scheduleCalendarRulesProvider.notifier)
+                        .removeNoClassDate(date),
+                  ),
+                ),
+              ),
+            const Divider(height: 32),
+            _sheetSectionLabel('手动调休'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.swap_horiz_outlined),
+              title: const Text('添加调休安排'),
+              subtitle: const Text('选择原上课日期，再选择实际补课日期'),
+              trailing: const Icon(Icons.add),
+              enabled: !isLoading,
+              onTap: isLoading ? null : () => _addAdjustment(context, ref),
+            ),
+            if (rules.adjustments.isEmpty)
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('暂无手动调休安排'),
+              )
+            else
+              ...rules.adjustments.map(
+                (adjustment) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_repeat_outlined),
+                  title: Text(
+                    '${_scheduleDateLabel(adjustment.sourceKey)} 的课程',
+                  ),
+                  subtitle: Text(
+                    '改至 ${_scheduleDateLabel(adjustment.targetKey)} 上课',
+                  ),
+                  trailing: IconButton(
+                    tooltip: '移除调休安排',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => ref
+                        .read(scheduleCalendarRulesProvider.notifier)
+                        .removeAdjustment(adjustment.sourceKey),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addNoClassDate(BuildContext context, WidgetRef ref) async {
+    final date = await _pickScheduleRuleDate(context, semesterStart);
+    if (date == null) return;
+    await ref.read(scheduleCalendarRulesProvider.notifier).addNoClassDate(date);
+  }
+
+  Future<void> _addAdjustment(BuildContext context, WidgetRef ref) async {
+    final sourceDate = await _pickScheduleRuleDate(context, semesterStart);
+    if (sourceDate == null || !context.mounted) return;
+    final targetDate = await _pickScheduleRuleDate(
+      context,
+      semesterStart,
+      initialDate: sourceDate.add(const Duration(days: 1)),
+    );
+    if (targetDate == null || !context.mounted) return;
+    if (scheduleDateKey(sourceDate) == scheduleDateKey(targetDate)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('原上课日期和补课日期不能相同')));
+      return;
+    }
+    await ref
+        .read(scheduleCalendarRulesProvider.notifier)
+        .saveAdjustment(
+          ScheduleDateAdjustment(
+            sourceDate: sourceDate,
+            targetDate: targetDate,
+          ),
+        );
+  }
+}
+
+Future<DateTime?> _pickScheduleRuleDate(
+  BuildContext context,
+  DateTime semesterStart, {
+  DateTime? initialDate,
+}) {
+  final firstDate = DateTime(semesterStart.year - 1, 1, 1);
+  final lastDate = DateTime(semesterStart.year + 2, 12, 31);
+  final candidate = initialDate ?? DateTime.now();
+  final safeInitialDate = candidate.isBefore(firstDate)
+      ? firstDate
+      : candidate.isAfter(lastDate)
+      ? lastDate
+      : candidate;
+  return showDatePicker(
+    context: context,
+    firstDate: firstDate,
+    lastDate: lastDate,
+    initialDate: safeInitialDate,
+  );
+}
+
+String _scheduleDateLabel(String value) {
+  final date = DateTime.tryParse(value);
+  if (date == null) return value;
+  return '${date.year}年${date.month}月${date.day}日';
+}
+
+class _BackgroundThumbnail extends StatelessWidget {
+  final String? path;
+
+  const _BackgroundThumbnail({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    if (path == null) {
+      return const SizedBox(
+        width: 44,
+        height: 44,
+        child: Icon(Icons.wallpaper_outlined),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.file(
+        File(path!),
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.broken_image_outlined),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _SheetActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: Icon(icon),
+    title: Text(title),
+    subtitle: Text(subtitle),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: onTap,
+  );
+}
+
+Widget _sheetSectionLabel(String value) => Padding(
+  padding: const EdgeInsets.only(bottom: 4),
+  child: Text(
+    value,
+    style: const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      color: Color(0xFF64748B),
+    ),
+  ),
+);
 
 Future<void> _pickSemesterStart(BuildContext context, WidgetRef ref) async {
   final now = DateTime.now();
@@ -539,6 +1169,7 @@ Future<void> _showAddCustomCourseSheet(
   var endSlot = 2;
   var startWeek = initialWeek;
   var endWeek = initialWeek;
+  var recognizedEntries = const <ParsedCourseData>[];
 
   try {
     await showModalBottomSheet<void>(
@@ -550,7 +1181,10 @@ Future<void> _showAddCustomCourseSheet(
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
-            void applyParsedData(ParsedCourseData parsed) {
+            void applyParsedData(
+              ParsedCourseData parsed, {
+              int recognizedCount = 1,
+            }) {
               var count = 0;
               if (parsed.name != null && parsed.name!.isNotEmpty) {
                 nameController.text = parsed.name!;
@@ -605,7 +1239,11 @@ Future<void> _showAddCustomCourseSheet(
               if (count > 0) {
                 ScaffoldMessenger.of(sheetContext).showSnackBar(
                   SnackBar(
-                    content: Text('已自动识别填充 $count 项信息'),
+                    content: Text(
+                      recognizedCount > 1
+                          ? '已识别 $recognizedCount 条上课安排，当前展示第 1 条'
+                          : '已自动识别填充 $count 项信息',
+                    ),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -617,6 +1255,21 @@ Future<void> _showAddCustomCourseSheet(
                   ),
                 );
               }
+            }
+
+            void applyParsedEntries(List<ParsedCourseData> entries) {
+              recognizedEntries = entries;
+              if (entries.isEmpty) {
+                if (!sheetContext.mounted) return;
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('未识别到有效课程信息'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+              applyParsedData(entries.first, recognizedCount: entries.length);
             }
 
             return Padding(
@@ -638,12 +1291,14 @@ Future<void> _showAddCustomCourseSheet(
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
+                              color: const Color(
+                                0xFFBB6688,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.edit_calendar_outlined,
-                              color: Colors.blue,
+                              color: Color(0xFFBB6688),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -662,10 +1317,14 @@ Future<void> _showAddCustomCourseSheet(
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.05),
+                          color: const Color(
+                            0xFFBB6688,
+                          ).withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.blue.withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFBB6688,
+                            ).withValues(alpha: 0.2),
                           ),
                         ),
                         child: Column(
@@ -679,7 +1338,7 @@ Future<void> _showAddCustomCourseSheet(
                                     Icon(
                                       Icons.auto_awesome,
                                       size: 18,
-                                      color: Colors.blue,
+                                      color: Color(0xFFBB6688),
                                     ),
                                     SizedBox(width: 6),
                                     Text(
@@ -687,7 +1346,7 @@ Future<void> _showAddCustomCourseSheet(
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.blue,
+                                        color: Color(0xFFBB6688),
                                       ),
                                     ),
                                   ],
@@ -701,10 +1360,10 @@ Future<void> _showAddCustomCourseSheet(
                                     if (text != null &&
                                         text.trim().isNotEmpty) {
                                       autoTextController.text = text;
-                                      final parsed = CourseTextParser.parse(
+                                      final parsed = CourseTextParser.parseAll(
                                         text,
                                       );
-                                      applyParsedData(parsed);
+                                      applyParsedEntries(parsed);
                                     } else {
                                       if (!sheetContext.mounted) return;
                                       ScaffoldMessenger.of(
@@ -760,10 +1419,10 @@ Future<void> _showAddCustomCourseSheet(
                                   onPressed: () {
                                     final text = autoTextController.text;
                                     if (text.trim().isNotEmpty) {
-                                      final parsed = CourseTextParser.parse(
+                                      final parsed = CourseTextParser.parseAll(
                                         text,
                                       );
-                                      applyParsedData(parsed);
+                                      applyParsedEntries(parsed);
                                     }
                                   },
                                   style: FilledButton.styleFrom(
@@ -779,6 +1438,30 @@ Future<void> _showAddCustomCourseSheet(
                           ],
                         ),
                       ),
+                      if (recognizedEntries.length > 1) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.playlist_add_check_outlined,
+                              size: 18,
+                              color: Color(0xFF8D4E6B),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                '识别到 ${recognizedEntries.length} 条上课安排，保存时会一次性创建全部课程。',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF8D4E6B),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: nameController,
@@ -923,46 +1606,83 @@ Future<void> _showAddCustomCourseSheet(
                         height: 46,
                         child: FilledButton.icon(
                           icon: const Icon(Icons.check),
-                          label: const Text('保存课程'),
+                          label: Text(
+                            recognizedEntries.length > 1
+                                ? '保存 ${recognizedEntries.length} 条课程'
+                                : '保存课程',
+                          ),
                           onPressed: () async {
                             if (!formKey.currentState!.validate()) return;
-                            final weeks = [
-                              for (
-                                var week = startWeek;
-                                week <= endWeek;
-                                week++
-                              )
-                                week,
-                            ];
-                            final course = Course(
-                              name: nameController.text.trim(),
-                              teacher: teacherController.text.trim(),
-                              timeStr: _customCourseTimeText(
-                                weekday,
-                                startSlot,
-                                endSlot,
-                                startWeek,
-                                endWeek,
-                              ),
-                              classroom: classroomController.text.trim(),
-                              dayOfWeek: weekday,
-                              timeSlot: startSlot,
-                              endTimeSlot: endSlot,
-                              weekList: weeks,
-                              isCustom: true,
+                            final entries = recognizedEntries.length > 1
+                                ? recognizedEntries
+                                : const <ParsedCourseData>[];
+                            final courses = entries.isEmpty
+                                ? [
+                                    _buildCustomCourse(
+                                      name: nameController.text.trim(),
+                                      classroom: classroomController.text
+                                          .trim(),
+                                      teacher: teacherController.text.trim(),
+                                      weekday: weekday,
+                                      startSlot: startSlot,
+                                      endSlot: endSlot,
+                                      startWeek: startWeek,
+                                      endWeek: endWeek,
+                                    ),
+                                  ]
+                                : entries
+                                      .map(
+                                        (parsed) => _buildCustomCourse(
+                                          name:
+                                              parsed.name?.trim().isNotEmpty ==
+                                                  true
+                                              ? parsed.name!.trim()
+                                              : nameController.text.trim(),
+                                          classroom:
+                                              parsed.classroom
+                                                      ?.trim()
+                                                      .isNotEmpty ==
+                                                  true
+                                              ? parsed.classroom!.trim()
+                                              : classroomController.text.trim(),
+                                          teacher:
+                                              parsed.teacher
+                                                      ?.trim()
+                                                      .isNotEmpty ==
+                                                  true
+                                              ? parsed.teacher!.trim()
+                                              : teacherController.text.trim(),
+                                          weekday: parsed.weekday ?? weekday,
+                                          startSlot:
+                                              parsed.startSlot ?? startSlot,
+                                          endSlot: parsed.endSlot ?? endSlot,
+                                          startWeek:
+                                              (parsed.startWeek ?? startWeek)
+                                                  .clamp(1, safeTotalWeeks)
+                                                  .toInt(),
+                                          endWeek: (parsed.endWeek ?? endWeek)
+                                              .clamp(1, safeTotalWeeks)
+                                              .toInt(),
+                                        ),
+                                      )
+                                      .toList();
+                            final notifier = ref.read(
+                              customCoursesProvider(selectedSemester).notifier,
                             );
-                            await ref
-                                .read(
-                                  customCoursesProvider(
-                                    selectedSemester,
-                                  ).notifier,
-                                )
-                                .addCourse(course);
+                            for (final course in courses) {
+                              await notifier.addCourse(course);
+                            }
                             if (!sheetContext.mounted) return;
                             Navigator.pop(sheetContext);
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('已新增「${course.name}」')),
+                              SnackBar(
+                                content: Text(
+                                  courses.length == 1
+                                      ? '已新增「${courses.first.name}」'
+                                      : '已新增 ${courses.length} 条自定义课程',
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -1030,6 +1750,42 @@ String _customCourseTimeText(
       ? '第 $startSlot 节'
       : '第 $startSlot-$endSlot 节';
   return '$weekText · ${_weekdayName(weekday)} · $slotText';
+}
+
+Course _buildCustomCourse({
+  required String name,
+  required String classroom,
+  required String teacher,
+  required int weekday,
+  required int startSlot,
+  required int endSlot,
+  required int startWeek,
+  required int endWeek,
+}) {
+  final safeWeekday = weekday.clamp(DateTime.monday, DateTime.sunday).toInt();
+  final safeStartSlot = startSlot.clamp(1, _kTotalSlots).toInt();
+  final safeEndSlot = endSlot.clamp(safeStartSlot, _kTotalSlots).toInt();
+  final safeStartWeek = startWeek < 1 ? 1 : startWeek;
+  final safeEndWeek = endWeek < safeStartWeek ? safeStartWeek : endWeek;
+  return Course(
+    name: name,
+    teacher: teacher,
+    timeStr: _customCourseTimeText(
+      safeWeekday,
+      safeStartSlot,
+      safeEndSlot,
+      safeStartWeek,
+      safeEndWeek,
+    ),
+    classroom: classroom,
+    dayOfWeek: safeWeekday,
+    timeSlot: safeStartSlot,
+    endTimeSlot: safeEndSlot,
+    weekList: [
+      for (var week = safeStartWeek; week <= safeEndWeek; week++) week,
+    ],
+    isCustom: true,
+  );
 }
 
 class _WeekNavigator extends ConsumerWidget {
@@ -1232,6 +1988,8 @@ class _TimetableGrid extends ConsumerStatefulWidget {
   final int totalWeeks;
   final String? selectedSemester;
   final bool showInactiveCourses;
+  final ScheduleDensity density;
+  final String? backgroundImagePath;
 
   const _TimetableGrid({
     required this.courses,
@@ -1242,6 +2000,8 @@ class _TimetableGrid extends ConsumerStatefulWidget {
     required this.totalWeeks,
     required this.selectedSemester,
     required this.showInactiveCourses,
+    required this.density,
+    required this.backgroundImagePath,
   });
 
   @override
@@ -1302,161 +2062,178 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     final totalWidth = _kTimeW + _kDayW * 7;
     final dayLabels = _weekdayLabels(sundayFirst: widget.sundayFirst);
     final orderedWeekdays = _orderedWeekdays(sundayFirst: widget.sundayFirst);
+    final hasCustomBackground = widget.backgroundImagePath != null;
+    final palette = _ScheduleGridPalette.forBackground(hasCustomBackground);
 
-    return Column(
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Container(
-          height: 44,
-          color: Colors.blue.shade50,
-          child: ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.topLeft,
-              minWidth: totalWidth,
-              maxWidth: totalWidth,
-              minHeight: 44,
-              maxHeight: 44,
-              child: Transform.translate(
-                offset: Offset(-_headerScrollOffset, 0),
-                child: SizedBox(
-                  width: totalWidth,
-                  height: 44,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: _kTimeW, height: 44),
-                      for (int d = 0; d < 7; d++)
-                        _buildDayHeader(
-                          context,
-                          weekStart.add(Duration(days: d)),
-                          dayLabels[d],
-                          todayDay,
-                          isVacation,
-                        ),
-                    ],
+        if (hasCustomBackground)
+          Image.file(
+            File(widget.backgroundImagePath!),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        Column(
+          children: [
+            Container(
+              height: 44,
+              color: palette.header,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.topLeft,
+                  minWidth: totalWidth,
+                  maxWidth: totalWidth,
+                  minHeight: 44,
+                  maxHeight: 44,
+                  child: Transform.translate(
+                    offset: Offset(-_headerScrollOffset, 0),
+                    child: SizedBox(
+                      width: totalWidth,
+                      height: 44,
+                      child: Row(
+                        children: [
+                          SizedBox(width: _kTimeW, height: 44),
+                          for (int d = 0; d < 7; d++)
+                            _buildDayHeader(
+                              context,
+                              weekStart.add(Duration(days: d)),
+                              dayLabels[d],
+                              todayDay,
+                              isVacation,
+                              palette,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-        Container(height: 1, color: Colors.grey.shade300),
-        Expanded(
-          child: SingleChildScrollView(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final contentWidth = constraints.maxWidth > totalWidth
-                    ? constraints.maxWidth
-                    : totalWidth;
+            Container(height: 1, color: palette.divider),
+            Expanded(
+              child: SingleChildScrollView(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final contentWidth = constraints.maxWidth > totalWidth
+                        ? constraints.maxWidth
+                        : totalWidth;
 
-                return Stack(
-                  children: [
-                    SingleChildScrollView(
-                      controller: _horizontalController,
-                      scrollDirection: Axis.horizontal,
-                      child: SizedBox(
-                        width: contentWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: gridH,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(width: _kTimeW),
-                                  for (int day = 0; day < 7; day++)
-                                    _buildDayColumn(
-                                      context,
-                                      dayMap[orderedWeekdays[day]] ?? [],
-                                      weekStart.add(Duration(days: day)),
-                                      courseColorMap,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (widget.remark.isNotEmpty)
-                              Container(
-                                width: contentWidth,
-                                constraints: const BoxConstraints(
-                                  minHeight: _kRemarkH,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade50,
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: Colors.amber.shade200,
-                                      width: 1,
-                                    ),
+                    return Stack(
+                      children: [
+                        SingleChildScrollView(
+                          controller: _horizontalController,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: contentWidth,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  height: gridH,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(width: _kTimeW),
+                                      for (int day = 0; day < 7; day++)
+                                        _buildDayColumn(
+                                          context,
+                                          dayMap[orderedWeekdays[day]] ?? [],
+                                          weekStart.add(Duration(days: day)),
+                                          courseColorMap,
+                                          palette,
+                                        ),
+                                    ],
                                   ),
                                 ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      width: _kTimeW - 12,
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(height: 2),
-                                          Icon(
-                                            Icons.sticky_note_2_outlined,
-                                            size: 14,
-                                            color: Colors.amber.shade800,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '备注',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              color: Colors.amber.shade800,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                if (widget.remark.isNotEmpty)
+                                  Container(
+                                    width: contentWidth,
+                                    constraints: const BoxConstraints(
+                                      minHeight: _kRemarkH,
                                     ),
-                                    Expanded(
-                                      child: Text(
-                                        widget.remark,
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: Colors.brown.shade700,
-                                          height: 1.6,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade50,
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: Colors.amber.shade200,
+                                          width: 1,
                                         ),
                                       ),
                                     ),
-                                  ],
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        SizedBox(
+                                          width: _kTimeW - 12,
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.start,
+                                            children: [
+                                              const SizedBox(height: 2),
+                                              Icon(
+                                                Icons.sticky_note_2_outlined,
+                                                size: 14,
+                                                color: Colors.amber.shade800,
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '备注',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Colors.amber.shade800,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            widget.remark,
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              color: Colors.brown.shade700,
+                                              height: 1.6,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                SizedBox(
+                                  width: contentWidth,
+                                  height: _kTimetableBottomInset,
                                 ),
-                              ),
-                            SizedBox(
-                              width: contentWidth,
-                              height: _kTimetableBottomInset,
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    IgnorePointer(
-                      child: Container(
-                        width: _kTimeW,
-                        height: gridH,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            right: BorderSide(color: Colors.grey.shade300),
                           ),
                         ),
-                        child: _buildTimeColumn(gridH),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                        IgnorePointer(
+                          child: Container(
+                            width: _kTimeW,
+                            height: gridH,
+                            decoration: BoxDecoration(
+                              color: palette.timeColumn,
+                              border: Border(
+                                right: BorderSide(color: palette.divider),
+                              ),
+                            ),
+                            child: _buildTimeColumn(gridH, palette),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -1468,6 +2245,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     String dayLabel,
     DateTime todayDay,
     bool isVacation,
+    _ScheduleGridPalette palette,
   ) {
     final isToday = date == todayDay && !isVacation;
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -1487,7 +2265,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
               fontSize: 12,
               height: 1.1,
               fontWeight: FontWeight.bold,
-              color: isToday ? primaryColor : null,
+              color: isToday ? primaryColor : palette.timeText,
             ),
           ),
           const SizedBox(height: 1),
@@ -1523,7 +2301,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                       style: TextStyle(
                         fontSize: 11,
                         height: 1,
-                        color: Colors.grey.shade600,
+                        color: palette.timeText.withValues(alpha: 0.8),
                       ),
                     ),
             ),
@@ -1533,18 +2311,30 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     );
   }
 
+  double get _slotHeight => switch (widget.density) {
+    ScheduleDensity.compact => 52,
+    ScheduleDensity.standard => _kSlotH,
+    ScheduleDensity.spacious => 76,
+  };
+
+  double get _densityScale => switch (widget.density) {
+    ScheduleDensity.compact => 0.88,
+    ScheduleDensity.standard => 1,
+    ScheduleDensity.spacious => 1.08,
+  };
+
   double get _gridHeight => _slotBottom(_kTotalSlots);
 
   double _slotTop(int slot) {
     final normalized = slot.clamp(1, _kTotalSlots);
-    return (normalized - 1) * _kSlotH;
+    return (normalized - 1) * _slotHeight;
   }
 
-  double _slotBottom(int slot) => _slotTop(slot) + _kSlotH;
+  double _slotBottom(int slot) => _slotTop(slot) + _slotHeight;
 
   double _topForSlot(int slot) => _slotTop(slot);
 
-  double _heightForSlot(int slot) => _kSlotH;
+  double _heightForSlot(int slot) => _slotHeight;
 
   double _topForCourseMinute(int minutes) =>
       _visualOffsetForMinute(minutes) + _kCourseInset;
@@ -1563,7 +2353,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
       if (clamped >= range.start && clamped <= range.end) {
         final span = (range.end - range.start).clamp(1, 1440);
         final fraction = (clamped - range.start) / span;
-        return _slotTop(slot) + _kSlotH * fraction;
+        return _slotTop(slot) + _slotHeight * fraction;
       }
 
       if (slot == _kTotalSlots) break;
@@ -1582,23 +2372,23 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
         : _slotBottom(_kTotalSlots);
   }
 
-  Widget _buildTimeColumn(double gridH) {
+  Widget _buildTimeColumn(double gridH, _ScheduleGridPalette palette) {
     return SizedBox(
       width: _kTimeW,
       height: gridH,
       child: Stack(
         children: [
-          ..._sectionBg(),
+          ..._sectionBg(palette),
           for (int s = 1; s <= _kTotalSlots; s++)
             Positioned(
               top: _topForSlot(s),
               left: 0,
               right: 0,
               height: _heightForSlot(s),
-              child: _SlotCell(slot: s),
+              child: _SlotCell(slot: s, textColor: palette.timeText),
             ),
-          _hDivider(_slotBottom(5), Colors.blue.shade200),
-          _hDivider(_slotBottom(10), Colors.indigo.shade200),
+          _hDivider(_slotBottom(5), palette.divider),
+          _hDivider(_slotBottom(10), palette.divider),
         ],
       ),
     );
@@ -1657,6 +2447,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
               onDelete: course.isCustom
                   ? () => _deleteCustomCourse(context, course)
                   : null,
+              densityScale: _densityScale,
             ),
     );
   }
@@ -1666,6 +2457,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     List<Course> dayCourses,
     DateTime courseDate,
     Map<String, Color> courseColorMap,
+    _ScheduleGridPalette palette,
   ) {
     final gridH = _gridHeight;
     final placements = _buildCoursePlacements(dayCourses);
@@ -1673,15 +2465,21 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
       width: _kDayW,
       height: gridH,
       decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: Colors.grey.shade200)),
+        color: palette.surface,
+        border: Border(right: BorderSide(color: palette.divider)),
       ),
       child: Stack(
         children: [
-          ..._sectionBg(),
+          ..._sectionBg(palette),
           for (int s = 1; s <= _kTotalSlots; s++)
-            _hDivider(_slotBottom(s), Colors.grey.shade200),
-          _hDivider(_slotBottom(5), Colors.blue.shade100, thickness: 1.5),
-          _hDivider(_slotBottom(10), Colors.indigo.shade100, thickness: 1.5),
+            _hDivider(
+              _slotBottom(s),
+              palette.usesDirectImage
+                  ? palette.divider
+                  : palette.divider.withValues(alpha: 0.6),
+            ),
+          _hDivider(_slotBottom(5), palette.divider, thickness: 1.0),
+          _hDivider(_slotBottom(10), palette.divider, thickness: 1.0),
           for (final placement in placements)
             _buildCoursePositioned(placement, context, courseColorMap),
         ],
@@ -1796,27 +2594,27 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     ).showSnackBar(SnackBar(content: Text('已删除「${course.name}」')));
   }
 
-  List<Widget> _sectionBg() => [
+  List<Widget> _sectionBg(_ScheduleGridPalette palette) => [
     Positioned(
       top: 0,
       left: 0,
       right: 0,
       height: _slotBottom(5),
-      child: Container(color: Colors.white),
+      child: Container(color: palette.morning),
     ),
     Positioned(
       top: _topForSlot(6),
       left: 0,
       right: 0,
       height: _slotBottom(10) - _topForSlot(6),
-      child: Container(color: Colors.blue.shade50.withValues(alpha: 0.4)),
+      child: Container(color: palette.afternoon),
     ),
     Positioned(
       top: _topForSlot(11),
       left: 0,
       right: 0,
       height: _slotBottom(13) - _topForSlot(11),
-      child: Container(color: Colors.indigo.shade50.withValues(alpha: 0.4)),
+      child: Container(color: palette.evening),
     ),
   ];
 
@@ -1986,7 +2784,8 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
 
 class _SlotCell extends StatelessWidget {
   final int slot;
-  const _SlotCell({required this.slot});
+  final Color textColor;
+  const _SlotCell({required this.slot, required this.textColor});
 
   @override
   Widget build(BuildContext context) {
@@ -2003,17 +2802,23 @@ class _SlotCell extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade700,
+              color: textColor,
             ),
           ),
           if (times != null) ...[
             Text(
               times.$1,
-              style: TextStyle(fontSize: 9, color: Colors.grey.shade500),
+              style: TextStyle(
+                fontSize: 9,
+                color: textColor.withValues(alpha: 0.76),
+              ),
             ),
             Text(
               times.$2,
-              style: TextStyle(fontSize: 9, color: Colors.grey.shade500),
+              style: TextStyle(
+                fontSize: 9,
+                color: textColor.withValues(alpha: 0.76),
+              ),
             ),
           ],
         ],
