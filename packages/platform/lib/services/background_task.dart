@@ -125,7 +125,7 @@ void backgroundCallbackDispatcher() {
 
       final elecThreshold = prefs.getDouble('elec_threshold') ?? 10.0;
       final cardThreshold = prefs.getDouble('card_threshold') ?? 20.0;
-      final dormParams = _readDormParams(prefs);
+      final dormParams = _readDormParams(prefs, accountId: username);
       final runtimeMode = resolveBackgroundRuntimeMode(
         const String.fromEnvironment('ENV', defaultValue: 'localAndroid'),
       );
@@ -271,14 +271,24 @@ Future<void> _runLocalAndroidBalanceChecks({
   }
 }
 
-Map<String, String>? _readDormParams(SharedPreferences prefs) {
-  final map = {
-    'dorm_campus': prefs.getString('dorm_campus'),
-    'dorm_garden': prefs.getString('dorm_garden'),
-    'dorm_number': prefs.getString('dorm_number'),
-    'dorm_roomid': prefs.getString('dorm_roomid'),
+Map<String, String>? _readDormParams(
+  SharedPreferences prefs, {
+  required String accountId,
+}) {
+  final scopedPrefix = 'user_${accountId.trim()}_';
+  final scopedMap = {
+    for (final key in DormRoom.preferenceKeys)
+      key: prefs.getString('$scopedPrefix$key'),
   };
-  return DormRoom.fromPrefsMap(map)?.toQueryParams();
+  final scopedRoom = DormRoom.fromPrefsMap(scopedMap);
+  if (scopedRoom != null) return scopedRoom.toQueryParams();
+
+  // Keep background checks working for an installation that has not yet opened
+  // the settings page to migrate its legacy, installation-wide dorm selection.
+  final legacyMap = {
+    for (final key in DormRoom.preferenceKeys) key: prefs.getString(key),
+  };
+  return DormRoom.fromPrefsMap(legacyMap)?.toQueryParams();
 }
 
 Future<void> _checkSelfHostedElec(

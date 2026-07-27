@@ -1,99 +1,212 @@
-/// 园区类型（科学城校区）
+/// 园区类型（科学城校区）。
 enum DormGarden {
   deYuan('德园', '01'),
   liYuan('礼园', '05');
 
-  final String label; // 显示名，如 "德园"
-  final String suffix; // buildid 中间段，德园=01，礼园=05
+  final String label;
+  final String suffix;
 
   const DormGarden(this.label, this.suffix);
 }
 
-/// 根据园区 + 舍号生成 buildid
-/// 规律：{舍号两位补零}00_{suffix}_C_{园区名}{舍号}舍
-/// 示例：德园8舍 → "0800_01_C_德园8舍"
-///        礼园6舍 → "0600_05_C_礼园6舍"
+/// 南岸校区的楼栋。ID 来自一卡通电控接口，不能由显示名称推算。
+class SouthDormBuilding {
+  const SouthDormBuilding({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+/// 南岸校区仅开放给学生的宿舍园区。
+class SouthDormDistrict {
+  const SouthDormDistrict({
+    required this.id,
+    required this.label,
+    required this.buildings,
+  });
+
+  final String id;
+  final String label;
+  final List<SouthDormBuilding> buildings;
+}
+
+const southDormDistricts = [
+  SouthDormDistrict(
+    id: '02',
+    label: '菁园',
+    buildings: [
+      SouthDormBuilding(id: '0100_02_C_菁园1栋', label: '菁园1栋'),
+      SouthDormBuilding(id: '0200_02_C_菁园2栋', label: '菁园2栋'),
+      SouthDormBuilding(id: '0300_02_C_菁园3栋', label: '菁园3栋'),
+      SouthDormBuilding(id: '0400_02_C_菁园4栋', label: '菁园4栋'),
+      SouthDormBuilding(id: '0501_02_C_菁园5栋1单元', label: '菁园5栋1单元'),
+      SouthDormBuilding(id: '0502_02_C_菁园5栋2单元', label: '菁园5栋2单元'),
+      SouthDormBuilding(id: '0601_02_C_菁园6栋1单元', label: '菁园6栋1单元'),
+      SouthDormBuilding(id: '0602_02_C_菁园6栋2单元', label: '菁园6栋2单元'),
+      SouthDormBuilding(id: '0603_02_C_菁园6栋3单元', label: '菁园6栋3单元'),
+      SouthDormBuilding(id: '0701_02_C_菁园7栋1单元', label: '菁园7栋1单元'),
+      SouthDormBuilding(id: '0702_02_C_菁园7栋2单元', label: '菁园7栋2单元'),
+      SouthDormBuilding(id: '0703_02_C_菁园7栋3单元', label: '菁园7栋3单元'),
+      SouthDormBuilding(id: '0900_02_C_菁园9栋', label: '菁园9栋'),
+    ],
+  ),
+  SouthDormDistrict(
+    id: '03',
+    label: '雅园',
+    buildings: [
+      SouthDormBuilding(id: '0100_03_C_雅园A栋', label: '雅园A栋'),
+      SouthDormBuilding(id: '0200_03_C_雅园B栋', label: '雅园B栋'),
+      SouthDormBuilding(id: '0300_03_C_雅园C栋', label: '雅园C栋'),
+      SouthDormBuilding(id: '0400_03_C_雅园D栋', label: '雅园D栋'),
+      SouthDormBuilding(id: '0500_03_C_雅园E栋', label: '雅园E栋'),
+    ],
+  ),
+  SouthDormDistrict(
+    id: '04',
+    label: '慧园',
+    buildings: [
+      SouthDormBuilding(id: '0100_04_C_慧园A栋', label: '慧园A栋'),
+      SouthDormBuilding(id: '0200_04_C_慧园B栋', label: '慧园B栋'),
+    ],
+  ),
+];
+
+/// 根据园区 + 舍号生成科学城校区的 buildid。
 String buildDormId(DormGarden garden, int number) {
   final numStr = number.toString().padLeft(2, '0');
   return '${numStr}00_${garden.suffix}_C_${garden.label}${number}舍';
 }
 
-/// 楼栋名称，如 "德园8舍"
 String buildingName(DormGarden garden, int number) =>
     '${garden.label}${number}舍';
 
-// ── 可选舍号范围 ──────────────────────────────────────────────
 const int kDormNumberMin = 1;
 const int kDormNumberMax = 15;
 
-/// 用户当前选中的宿舍（园区 + 舍号 + 房间号）
+/// 用户当前选中的宿舍。
+///
+/// 默认构造函数保留科学城校区的旧数据结构；南岸校区使用
+/// [DormRoom.southCampus]，由已验证的电控园区和楼栋 ID 组成。
 class DormRoom {
-  final String campusName; // 如 "科学城校区"
-  final DormGarden garden; // 德园 / 礼园
-  final int buildingNumber; // 1-15
-  final String roomNumber; // 4 位补零格式，如 "0305"
+  static const preferenceKeys = [
+    'dorm_campus',
+    'dorm_garden',
+    'dorm_number',
+    'dorm_roomid',
+    'dorm_areaid',
+    'dorm_districtid',
+    'dorm_buildid',
+  ];
+
+  final String campusName;
+  final DormGarden garden;
+  final int buildingNumber;
+  final String roomNumber;
+  final SouthDormDistrict? southDistrict;
+  final SouthDormBuilding? southBuilding;
 
   const DormRoom({
     required this.campusName,
     required this.garden,
     required this.buildingNumber,
     required this.roomNumber,
-  });
+  })  : southDistrict = null,
+        southBuilding = null;
 
-  /// 楼栋全名，如 "德园8舍"
-  String get buildingFullName => buildingName(garden, buildingNumber);
+  const DormRoom.southCampus({
+    required SouthDormDistrict district,
+    required SouthDormBuilding building,
+    required this.roomNumber,
+  })  : campusName = '南岸校区',
+        garden = DormGarden.deYuan,
+        buildingNumber = 0,
+        southDistrict = district,
+        southBuilding = building;
 
-  /// API 所需的 buildid
-  String get buildid => buildDormId(garden, buildingNumber);
+  bool get isSouthCampus => southDistrict != null && southBuilding != null;
 
-  /// 界面展示文字，如 "德园8舍 305室"
-  String get displayName =>
-      '$buildingFullName ${roomNumber.replaceFirst(RegExp(r'^0+'), '')}室';
+  String get buildingFullName => isSouthCampus
+      ? southBuilding!.label
+      : buildingName(garden, buildingNumber);
 
-  /// 拼接给 API 的查询参数
+  String get buildid =>
+      isSouthCampus ? southBuilding!.id : buildDormId(garden, buildingNumber);
+
+  String get displayName {
+    final room = roomNumber.replaceFirst(RegExp(r'^0+'), '');
+    final district = isSouthCampus ? '${southDistrict!.label} ' : '';
+    return '$district$buildingFullName ${room.isEmpty ? roomNumber : room}室';
+  }
+
+  /// 电控余额查询参数。南岸网页明确要求园区和固定的“无”楼层。
   Map<String, String> toQueryParams() => {
         'sysid': '1',
-        'areaid': '1',
+        'areaid': isSouthCampus ? '2' : '1',
+        if (isSouthCampus) 'districtid': southDistrict!.id,
         'buildid': buildid,
+        if (isSouthCampus) 'floorid': '0',
         'roomid': roomNumber,
       };
 
-  /// 序列化到 SharedPreferences
   Map<String, String> toPrefsMap() => {
         'dorm_campus': campusName,
-        'dorm_garden': garden.name, // enum name，如 "deYuan"
-        'dorm_number': buildingNumber.toString(),
         'dorm_roomid': roomNumber,
+        if (isSouthCampus) ...{
+          'dorm_areaid': '2',
+          'dorm_districtid': southDistrict!.id,
+          'dorm_buildid': southBuilding!.id,
+        } else ...{
+          'dorm_garden': garden.name,
+          'dorm_number': buildingNumber.toString(),
+        },
       };
 
-  /// 从 SharedPreferences 反序列化，任意字段缺失或格式错误则返回 null
   static DormRoom? fromPrefsMap(Map<String, String?> map) {
-    final campus = map['dorm_campus'];
-    final gName = map['dorm_garden'];
-    final numStr = map['dorm_number'];
     final roomid = map['dorm_roomid'];
+    if (roomid == null || roomid.trim().isEmpty) return null;
 
-    if (campus == null || gName == null || numStr == null || roomid == null) {
-      return null;
+    if (map['dorm_areaid'] == '2') {
+      final districtId = map['dorm_districtid'];
+      final buildingId = map['dorm_buildid'];
+      SouthDormDistrict? district;
+      for (final item in southDormDistricts) {
+        if (item.id == districtId) {
+          district = item;
+          break;
+        }
+      }
+      if (district == null || buildingId == null) return null;
+      SouthDormBuilding? building;
+      for (final item in district.buildings) {
+        if (item.id == buildingId) {
+          building = item;
+          break;
+        }
+      }
+      if (building == null) return null;
+      return DormRoom.southCampus(
+        district: district,
+        building: building,
+        roomNumber: roomid,
+      );
     }
 
-    DormGarden? garden;
+    final campus = map['dorm_campus'];
+    final gardenName = map['dorm_garden'];
+    final number = int.tryParse(map['dorm_number'] ?? '');
+    if (campus == null || gardenName == null || number == null) return null;
+
     try {
-      garden = DormGarden.values.byName(gName);
+      final garden = DormGarden.values.byName(gardenName);
+      if (number < kDormNumberMin || number > kDormNumberMax) return null;
+      return DormRoom(
+        campusName: campus,
+        garden: garden,
+        buildingNumber: number,
+        roomNumber: roomid,
+      );
     } catch (_) {
       return null;
     }
-
-    final number = int.tryParse(numStr);
-    if (number == null || number < kDormNumberMin || number > kDormNumberMax) {
-      return null;
-    }
-
-    return DormRoom(
-      campusName: campus,
-      garden: garden,
-      buildingNumber: number,
-      roomNumber: roomid,
-    );
   }
 }

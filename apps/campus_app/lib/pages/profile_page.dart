@@ -16,11 +16,6 @@ class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   void _logout(BuildContext context, WidgetRef ref) async {
-    final currentUsername =
-        ref.read(credentialsProvider)?.username.trim() ?? '';
-    if (currentUsername.isNotEmpty) {
-      await clearCurrentAccountCache(ref, currentUsername);
-    }
     await WebViewSessionScope.clearOnLogout();
 
     ref.invalidate(sessionManagerProvider);
@@ -28,7 +23,7 @@ class ProfilePage extends ConsumerWidget {
     await ref.read(credentialServiceProvider).clear();
     ref.read(credentialsProvider.notifier).clear();
     ref.read(payCodeProvider.notifier).clear();
-    await ref.read(dormRoomProvider.notifier).clear();
+    resetAccountBoundProviders(ref);
 
     await NotificationService.cancelAllClassReminders();
     await ScheduleWidgetService.clearScheduleWidgets();
@@ -96,40 +91,58 @@ class ProfilePage extends ConsumerWidget {
   );
 
   Widget _buildUserInfoCard(String username) {
-    return Row(
-      children: [
-        const CircleAvatar(
-          radius: 36,
-          backgroundColor: Colors.blueAccent,
-          child: Icon(Icons.person, size: 40, color: Colors.white),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFBB6688), Color(0xFF8888CC)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              username,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFBB6688).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 36,
+            backgroundColor: Color(0xFF8888CC),
+            child: Icon(Icons.person, size: 40, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                username,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  '重庆交通大学',
+                  style: TextStyle(fontSize: 12, color: Colors.white),
+                ),
               ),
-              child: const Text(
-                '重庆交通大学',
-                style: TextStyle(fontSize: 12, color: Colors.blueAccent),
-              ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -434,7 +447,7 @@ class _DormSettingsCard extends ConsumerWidget {
             style: TextStyle(fontSize: 12, color: Colors.red),
           ),
           data: (dorm) => Text(
-            dorm == null ? '未设置，电费查询使用账号默认宿舍' : dorm.displayName,
+            dorm == null ? '未设置，请先选择后使用电费服务' : dorm.displayName,
             style: TextStyle(
               fontSize: 12,
               color: dorm == null ? Colors.orange : Colors.grey,
@@ -491,11 +504,16 @@ class _DormPickerSheet extends StatefulWidget {
 class _DormPickerSheetState extends State<_DormPickerSheet> {
   late FixedExtentScrollController _gardenCtrl;
   late FixedExtentScrollController _numberCtrl;
+  late FixedExtentScrollController _southDistrictCtrl;
+  late FixedExtentScrollController _southBuildingCtrl;
   final _roomCtrl = TextEditingController();
 
   // 当前滚轮选中值（随滚动实时更新，用于预览）
   late DormGarden _selectedGarden;
   late int _selectedNumber;
+  late SouthDormDistrict _selectedSouthDistrict;
+  late SouthDormBuilding _selectedSouthBuilding;
+  var _isSouthCampus = false;
 
   bool _saving = false;
   String? _roomError;
@@ -506,14 +524,30 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
   void initState() {
     super.initState();
     final dorm = widget.currentDorm;
-    _selectedGarden = dorm?.garden ?? DormGarden.deYuan;
-    _selectedNumber = dorm?.buildingNumber ?? 1;
+    _isSouthCampus = dorm?.isSouthCampus ?? false;
+    _selectedGarden = dorm != null && !dorm.isSouthCampus
+        ? dorm.garden
+        : DormGarden.deYuan;
+    _selectedNumber = dorm != null && !dorm.isSouthCampus
+        ? dorm.buildingNumber
+        : 1;
+    _selectedSouthDistrict = dorm?.southDistrict ?? southDormDistricts.first;
+    _selectedSouthBuilding =
+        dorm?.southBuilding ?? _selectedSouthDistrict.buildings.first;
 
     _gardenCtrl = FixedExtentScrollController(
       initialItem: _gardens.indexOf(_selectedGarden),
     );
     _numberCtrl = FixedExtentScrollController(
       initialItem: _selectedNumber - kDormNumberMin,
+    );
+    _southDistrictCtrl = FixedExtentScrollController(
+      initialItem: southDormDistricts.indexOf(_selectedSouthDistrict),
+    );
+    _southBuildingCtrl = FixedExtentScrollController(
+      initialItem: _selectedSouthDistrict.buildings.indexOf(
+        _selectedSouthBuilding,
+      ),
     );
 
     if (dorm != null) {
@@ -526,6 +560,8 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
   void dispose() {
     _gardenCtrl.dispose();
     _numberCtrl.dispose();
+    _southDistrictCtrl.dispose();
+    _southBuildingCtrl.dispose();
     _roomCtrl.dispose();
     super.dispose();
   }
@@ -541,6 +577,16 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
     return t.padLeft(4, '0');
   }
 
+  void _selectSouthDistrict(int index) {
+    final district = southDormDistricts[index];
+    if (district == _selectedSouthDistrict) return;
+    setState(() {
+      _selectedSouthDistrict = district;
+      _selectedSouthBuilding = district.buildings.first;
+    });
+    _southBuildingCtrl.jumpToItem(0);
+  }
+
   Future<void> _save() async {
     final roomId = _formatRoom(_roomCtrl.text);
     if (roomId == null) {
@@ -552,12 +598,18 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
       _saving = true;
     });
 
-    final room = DormRoom(
-      campusName: '科学城校区',
-      garden: _selectedGarden,
-      buildingNumber: _selectedNumber,
-      roomNumber: roomId,
-    );
+    final room = _isSouthCampus
+        ? DormRoom.southCampus(
+            district: _selectedSouthDistrict,
+            building: _selectedSouthBuilding,
+            roomNumber: roomId,
+          )
+        : DormRoom(
+            campusName: '科学城校区',
+            garden: _selectedGarden,
+            buildingNumber: _selectedNumber,
+            roomNumber: roomId,
+          );
     await widget.onSaved(room);
     if (mounted) {
       setState(() => _saving = false);
@@ -621,8 +673,8 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                           ),
                         ),
                         Text(
-                          '目前仅支持科学城校区，南岸校区适配中',
-                          style: TextStyle(fontSize: 12, color: Colors.orange),
+                          '支持科学城校区与南岸校区学生宿舍',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
                     ),
@@ -653,126 +705,116 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                     color: Colors.amber.shade700,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '已选：${_selectedGarden.label}$_selectedNumber舍',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber.shade800,
-                      fontSize: 15,
+                  Expanded(
+                    child: Text(
+                      _isSouthCampus
+                          ? '已选：${_selectedSouthBuilding.label}'
+                          : '已选：${_selectedGarden.label}$_selectedNumber舍',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade800,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // ── 双滚轮：园区 + 舍号 ─────────────────────────
-            SizedBox(
-              height: 200,
-              child: Row(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
                 children: [
-                  // 园区滚轮（德园 / 礼园）
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        // 选中项高亮背景
-                        Center(
-                          child: Container(
-                            height: 44,
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                        ListWheelScrollView.useDelegate(
-                          controller: _gardenCtrl,
-                          itemExtent: 44,
-                          physics: const FixedExtentScrollPhysics(),
-                          diameterRatio: 1.8,
-                          perspective: 0.004,
-                          onSelectedItemChanged: (i) {
-                            setState(() => _selectedGarden = _gardens[i]);
-                          },
-                          childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: _gardens.length,
-                            builder: (context, i) {
-                              final selected = _gardens[i] == _selectedGarden;
-                              return Center(
-                                child: Text(
-                                  _gardens[i].label,
-                                  style: TextStyle(
-                                    fontSize: selected ? 20 : 16,
-                                    fontWeight: selected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: selected
-                                        ? Colors.amber.shade800
-                                        : Colors.grey,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('科学城校区')),
+                      ButtonSegment(value: true, label: Text('南岸校区')),
+                    ],
+                    selected: {_isSouthCampus},
+                    onSelectionChanged: (selection) {
+                      setState(() => _isSouthCampus = selection.first);
+                    },
                   ),
-
-                  // 中间分隔符
-                  Text(
-                    '·',
-                    style: TextStyle(fontSize: 24, color: Colors.grey.shade400),
-                  ),
-
-                  // 舍号滚轮（1-15）
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        Center(
-                          child: Container(
-                            height: 44,
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                        ListWheelScrollView.useDelegate(
-                          controller: _numberCtrl,
-                          itemExtent: 44,
-                          physics: const FixedExtentScrollPhysics(),
-                          diameterRatio: 1.8,
-                          perspective: 0.004,
-                          onSelectedItemChanged: (i) {
-                            setState(
-                              () => _selectedNumber = kDormNumberMin + i,
-                            );
-                          },
-                          childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: kDormNumberMax - kDormNumberMin + 1,
-                            builder: (context, i) {
-                              final num = kDormNumberMin + i;
-                              final selected = num == _selectedNumber;
-                              return Center(
-                                child: Text(
-                                  '$num舍',
-                                  style: TextStyle(
-                                    fontSize: selected ? 20 : 16,
-                                    fontWeight: selected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: selected
-                                        ? Colors.amber.shade800
-                                        : Colors.grey,
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 200,
+                    child: Row(
+                      children: _isSouthCampus
+                          ? [
+                              Expanded(
+                                child: _DormPickerWheel(
+                                  controller: _southDistrictCtrl,
+                                  labels: [
+                                    for (final district in southDormDistricts)
+                                      district.label,
+                                  ],
+                                  selectedIndex: southDormDistricts.indexOf(
+                                    _selectedSouthDistrict,
                                   ),
+                                  onSelected: _selectSouthDistrict,
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                              ),
+                              Expanded(
+                                child: _DormPickerWheel(
+                                  controller: _southBuildingCtrl,
+                                  labels: [
+                                    for (final building
+                                        in _selectedSouthDistrict.buildings)
+                                      building.label,
+                                  ],
+                                  selectedIndex: _selectedSouthDistrict
+                                      .buildings
+                                      .indexOf(_selectedSouthBuilding),
+                                  onSelected: (index) {
+                                    setState(
+                                      () => _selectedSouthBuilding =
+                                          _selectedSouthDistrict
+                                              .buildings[index],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ]
+                          : [
+                              Expanded(
+                                child: _DormPickerWheel(
+                                  controller: _gardenCtrl,
+                                  labels: [
+                                    for (final garden in _gardens) garden.label,
+                                  ],
+                                  selectedIndex: _gardens.indexOf(
+                                    _selectedGarden,
+                                  ),
+                                  onSelected: (index) {
+                                    setState(
+                                      () => _selectedGarden = _gardens[index],
+                                    );
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: _DormPickerWheel(
+                                  controller: _numberCtrl,
+                                  labels: [
+                                    for (
+                                      var number = kDormNumberMin;
+                                      number <= kDormNumberMax;
+                                      number++
+                                    )
+                                      '$number舍',
+                                  ],
+                                  selectedIndex:
+                                      _selectedNumber - kDormNumberMin,
+                                  onSelected: (index) {
+                                    setState(
+                                      () => _selectedNumber =
+                                          kDormNumberMin + index,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                     ),
                   ),
                 ],
@@ -846,6 +888,63 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DormPickerWheel extends StatelessWidget {
+  const _DormPickerWheel({
+    required this.controller,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final FixedExtentScrollController controller;
+  final List<String> labels;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Center(
+          child: Container(
+            height: 44,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        ListWheelScrollView.useDelegate(
+          controller: controller,
+          itemExtent: 44,
+          physics: const FixedExtentScrollPhysics(),
+          diameterRatio: 1.8,
+          perspective: 0.004,
+          onSelectedItemChanged: onSelected,
+          childDelegate: ListWheelChildBuilderDelegate(
+            childCount: labels.length,
+            builder: (context, index) {
+              final selected = index == selectedIndex;
+              return Center(
+                child: Text(
+                  labels[index],
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: selected ? 20 : 16,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    color: selected ? Colors.amber.shade800 : Colors.grey,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1013,12 +1112,17 @@ class _BackgroundSettingsCardState
   }
 
   Future<void> _refreshStatus() async {
+    final accountId = ref.read(credentialsProvider)?.username;
     final ignoring =
         await BatteryOptimizationService.isIgnoringBatteryOptimizations();
     final autostart = await BatteryOptimizationService.checkMiuiAutostart();
-    final courseReminder = await NotificationService.getCourseReminderEnabled();
+    final courseReminder = await NotificationService.getCourseReminderEnabled(
+      accountId: accountId,
+    );
     final courseReminderMinutes =
-        await NotificationService.getCourseReminderMinutes();
+        await NotificationService.getCourseReminderMinutes(
+          accountId: accountId,
+        );
     if (mounted) {
       setState(() {
         _isIgnoring = ignoring;
@@ -1074,6 +1178,7 @@ class _BackgroundSettingsCardState
   }
 
   Future<bool> _rescheduleCourseReminders({String? successMessage}) async {
+    final accountId = ref.read(credentialsProvider)?.username;
     final semesterStart = ref.read(activeSemesterStartProvider).valueOrNull;
     final selectedSemester = ref
         .read(selectedScheduleSemesterProvider)
@@ -1098,10 +1203,15 @@ class _BackgroundSettingsCardState
                   .read(scheduleProvider(selectedSemester).notifier)
                   .refresh(forceRefresh: true, throwOnError: true))
               .data;
+      final calendarRules = await ref.read(
+        scheduleCalendarRulesProvider.future,
+      );
       await NotificationService.scheduleClassReminders(
         scheduleResult.courses,
         semesterStart,
         totalWeeks: totalWeeks,
+        calendarRules: calendarRules,
+        accountId: accountId,
       );
       await ScheduleWidgetService.updateScheduleWidgets(
         courses: scheduleResult.courses,
@@ -1109,6 +1219,7 @@ class _BackgroundSettingsCardState
         selectedSemester: selectedSemester,
         remark: scheduleResult.remark,
         totalWeeks: totalWeeks,
+        calendarRules: calendarRules,
       );
 
       if (successMessage != null && mounted) {
@@ -1131,7 +1242,10 @@ class _BackgroundSettingsCardState
   Future<void> _onReminderMinutesSelected(int minutes) async {
     if (_courseReminderMinutes == minutes) return;
 
-    await NotificationService.setCourseReminderMinutes(minutes);
+    await NotificationService.setCourseReminderMinutes(
+      minutes,
+      accountId: ref.read(credentialsProvider)?.username,
+    );
     if (mounted) {
       setState(() => _courseReminderMinutes = minutes);
     }
@@ -1228,7 +1342,10 @@ class _BackgroundSettingsCardState
                     value: _courseReminderEnabled!,
                     activeThumbColor: Colors.deepOrange,
                     onChanged: (val) async {
-                      await NotificationService.setCourseReminderEnabled(val);
+                      await NotificationService.setCourseReminderEnabled(
+                        val,
+                        accountId: ref.read(credentialsProvider)?.username,
+                      );
                       setState(() => _courseReminderEnabled = val);
 
                       if (!val) {
@@ -1538,10 +1655,7 @@ class _ElectricityCardWidget extends ConsumerWidget {
     final balanceAsync = ref.watch(electricityProvider);
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ElectricityPage()),
-      ),
+      onTap: () => ElectricityPage.open(context, ref),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
