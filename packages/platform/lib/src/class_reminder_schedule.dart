@@ -1,4 +1,5 @@
 import 'package:core/models/course.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 
 class ClassReminder {
   const ClassReminder({
@@ -64,84 +65,73 @@ List<ClassReminder> buildClassReminders({
   required DateTime now,
   required int reminderMinutes,
   int totalWeeks = 20,
+  ScheduleCalendarRules calendarRules = ScheduleCalendarRules.empty,
   bool includeActiveReminders = false,
 }) {
   final today = DateTime(now.year, now.month, now.day);
-  final semesterMonday =
-      semesterStart.subtract(Duration(days: semesterStart.weekday - 1));
-  final currentWeek = (now.difference(semesterMonday).inDays ~/ 7) + 1;
   final reminders = <ClassReminder>[];
   final idCollisions = <int, int>{};
 
-  for (var week = currentWeek; week <= currentWeek + 1; week++) {
-    if (week < 1 || week > totalWeeks) continue;
+  for (final occurrence in calendarRules.resolveOccurrences(
+    courses: courses,
+    semesterStart: semesterStart,
+    totalWeeks: totalWeeks,
+  )) {
+    final course = occurrence.course;
+    final classDate = occurrence.scheduledDate;
+    final daysFromToday = classDate.difference(today).inDays;
+    if (daysFromToday < 0 || daysFromToday > 7) continue;
 
-    final mondayOfWeek = semesterMonday.add(Duration(days: (week - 1) * 7));
-    for (final course in courses) {
-      if (!course.isActiveInWeek(week)) continue;
+    final timeText = _startTimeTextForCourse(course);
+    if (timeText == null) continue;
 
-      final classDate = mondayOfWeek.add(Duration(days: course.dayOfWeek - 1));
-      final daysFromToday = classDate.difference(today).inDays;
-      if (daysFromToday > 7) continue;
+    final timeParts = timeText.split(':');
+    final classStartAt = DateTime(
+      classDate.year,
+      classDate.month,
+      classDate.day,
+      int.parse(timeParts[0]),
+      int.parse(timeParts[1]),
+    );
+    final remindAt = classStartAt.subtract(Duration(minutes: reminderMinutes));
 
-      final timeText = _startTimeTextForCourse(course);
-      if (timeText == null) continue;
+    final isPendingReminder = remindAt.isAfter(now);
+    final isActiveReminder =
+        includeActiveReminders && classStartAt.isAfter(now);
+    if (!isPendingReminder && !isActiveReminder) continue;
 
-      final timeParts = timeText.split(':');
-      final classStartAt = DateTime(
-        classDate.year,
-        classDate.month,
-        classDate.day,
-        int.parse(timeParts[0]),
-        int.parse(timeParts[1]),
-      );
-      final remindAt = classStartAt.subtract(
-        Duration(minutes: reminderMinutes),
-      );
+    final idBase = _classReminderIdBase(
+      date: classDate,
+      timeSlot: course.timeSlot,
+    );
+    final collisionIndex = idCollisions.update(
+      idBase,
+      (value) => value + 1,
+      ifAbsent: () => 0,
+    );
 
-      final isPendingReminder = remindAt.isAfter(now);
-      final isActiveReminder =
-          includeActiveReminders && classStartAt.isAfter(now);
-      if (!isPendingReminder && !isActiveReminder) continue;
-
-      final idBase = _classReminderIdBase(
-        week: week,
-        weekday: course.dayOfWeek,
-        timeSlot: course.timeSlot,
-      );
-      final collisionIndex = idCollisions.update(
-        idBase,
-        (value) => value + 1,
-        ifAbsent: () => 0,
-      );
-
-      reminders.add(
-        ClassReminder(
-          id: idBase + collisionIndex,
-          courseName: course.name,
-          classroom: course.classroom,
-          teacher: course.teacher,
-          timeText: timeText,
-          week: week,
-          weekday: course.dayOfWeek,
-          remindAt: remindAt,
-          classStartAt: classStartAt,
-          isExam: course.isExam,
-          seatNumber: course.seatNumber,
-        ),
-      );
-    }
+    reminders.add(
+      ClassReminder(
+        id: idBase + collisionIndex,
+        courseName: course.name,
+        classroom: course.classroom,
+        teacher: course.teacher,
+        timeText: timeText,
+        week: calendarRules.weekOf(classDate, semesterStart),
+        weekday: classDate.weekday,
+        remindAt: remindAt,
+        classStartAt: classStartAt,
+        isExam: course.isExam,
+        seatNumber: course.seatNumber,
+      ),
+    );
   }
 
   return reminders;
 }
 
-int _classReminderIdBase({
-  required int week,
-  required int weekday,
-  required int timeSlot,
-}) =>
-    100000000 + week * 1000000 + weekday * 100000 + timeSlot * 1000;
+int _classReminderIdBase({required DateTime date, required int timeSlot}) =>
+    date.year * 1000000 + date.month * 10000 + date.day * 100 + timeSlot;
 
 String? _startTimeTextForCourse(Course course) {
   final exactStartMinutes = course.exactStartMinutes;

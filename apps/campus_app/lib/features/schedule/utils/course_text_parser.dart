@@ -71,8 +71,84 @@ class ParsedCourseData {
 class CourseTextParser {
   CourseTextParser._();
 
-  /// Parses raw text (single-line or multi-line) into a [ParsedCourseData].
+  /// Parses all course arrangements found in announcement-style clipboard text.
+  ///
+  /// Regular single-course text still produces a list containing one entry.
+  static List<ParsedCourseData> parseAll(String rawText) {
+    final announcements = _parseAnnouncementEntries(rawText);
+    if (announcements.isNotEmpty) return announcements;
+
+    final parsed = _parseSingle(rawText);
+    return parsed.hasAnyField ? [parsed] : const [];
+  }
+
+  /// Parses the first course arrangement for callers that expect one entry.
   static ParsedCourseData parse(String rawText) {
+    final all = parseAll(rawText);
+    return all.isEmpty ? const ParsedCourseData() : all.first;
+  }
+
+  static List<ParsedCourseData> _parseAnnouncementEntries(String rawText) {
+    final titleMatch = RegExp(r'《\s*([^》]+?)\s*》').firstMatch(rawText);
+    final courseName = titleMatch?.group(1)?.trim();
+    if (courseName == null || courseName.isEmpty) return const [];
+
+    final arrangementPattern = RegExp(
+      r'(?:^|[\n\r])\s*(?:\d+\s*[、.．]\s*)?'
+      r'(\d{1,2})(?:\s*(?:-|~|至|到)\s*(\d{1,2}))?\s*周\s*[；;，,、]*\s*'
+      r'(?:星期|周|礼拜)\s*([一二三四五六日天1-7])\s*'
+      r'(\d{1,2})\s*(?:-|~|至|到)\s*(\d{1,2})\s*节\s*'
+      r'(?:[（(]\s*([^）)]+?)\s*[）)])?\s*[；;，,、]*\s*'
+      r'([^；;。\n\r]+?)(?:[；;。]|$)',
+      multiLine: true,
+    );
+
+    final entries = <ParsedCourseData>[];
+    for (final match in arrangementPattern.allMatches(rawText)) {
+      final startWeek = int.tryParse(match.group(1) ?? '');
+      final endWeek = int.tryParse(match.group(2) ?? '') ?? startWeek;
+      final weekday = _parseWeekdayChar(match.group(3));
+      final startSlot = int.tryParse(match.group(4) ?? '');
+      final endSlot = int.tryParse(match.group(5) ?? '');
+      final note = match.group(6)?.trim();
+      final classroom = _normalizeClassroom(match.group(7));
+
+      if (startWeek == null ||
+          endWeek == null ||
+          weekday == null ||
+          startSlot == null ||
+          endSlot == null ||
+          classroom == null) {
+        continue;
+      }
+
+      entries.add(
+        ParsedCourseData(
+          name: note == null || note.isEmpty
+              ? courseName
+              : '$courseName（$note）',
+          classroom: classroom,
+          weekday: weekday,
+          startSlot: startSlot.clamp(1, 13),
+          endSlot: endSlot.clamp(startSlot, 13),
+          startWeek: startWeek < 1 ? 1 : startWeek,
+          endWeek: endWeek < startWeek ? startWeek : endWeek,
+        ),
+      );
+    }
+    return entries;
+  }
+
+  static String? _normalizeClassroom(String? value) {
+    if (value == null) return null;
+    final normalized = value
+        .replaceAll(RegExp(r'^(?:地点|教室|上课地点)\s*[:：]?\s*'), '')
+        .trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  /// Parses raw text (single-line or multi-line) into a [ParsedCourseData].
+  static ParsedCourseData _parseSingle(String rawText) {
     final trimmedText = rawText.trim();
     if (trimmedText.isEmpty) {
       return const ParsedCourseData();

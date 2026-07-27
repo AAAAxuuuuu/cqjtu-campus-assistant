@@ -1,4 +1,5 @@
 import 'package:core/models/course.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -97,15 +98,22 @@ class NotificationService {
     List<Course> courses,
     DateTime semesterStart, {
     int totalWeeks = 20,
+    ScheduleCalendarRules calendarRules = ScheduleCalendarRules.empty,
+    String? accountId,
   }) async {
-    final isReminderEnabled = await getCourseReminderEnabled();
-    final reminderMinutes = await getCourseReminderMinutes();
+    final isReminderEnabled = await getCourseReminderEnabled(
+      accountId: accountId,
+    );
+    final reminderMinutes = await getCourseReminderMinutes(
+      accountId: accountId,
+    );
     final reminders = buildClassReminders(
       courses: courses,
       semesterStart: semesterStart,
       now: DateTime.now(),
       reminderMinutes: reminderMinutes,
       totalWeeks: totalWeeks,
+      calendarRules: calendarRules,
       includeActiveReminders: _usesNativeAndroidClassReminders,
     );
 
@@ -278,20 +286,57 @@ class NotificationService {
     await prefs.setDouble(_cardThresholdKey, value);
   }
 
-  static Future<bool> getCourseReminderEnabled() async {
+  static String? _scopedPreferenceKey(String key, String? accountId) {
+    final account = accountId?.trim();
+    if (account == null || account.isEmpty) return null;
+    return 'user_${account}_$key';
+  }
+
+  static Future<bool> getCourseReminderEnabled({String? accountId}) async {
     final prefs = await SharedPreferences.getInstance();
+    final scopedKey = _scopedPreferenceKey(_courseReminderKey, accountId);
+    if (scopedKey != null && prefs.containsKey(scopedKey)) {
+      return prefs.getBool(scopedKey) ?? defaultCourseReminder;
+    }
+    if (scopedKey != null && prefs.containsKey(_courseReminderKey)) {
+      final legacy = prefs.getBool(_courseReminderKey) ?? defaultCourseReminder;
+      await prefs.setBool(scopedKey, legacy);
+      await prefs.remove(_courseReminderKey);
+      return legacy;
+    }
     return prefs.getBool(_courseReminderKey) ?? defaultCourseReminder;
   }
 
-  static Future<void> setCourseReminderEnabled(bool value) async {
+  static Future<void> setCourseReminderEnabled(
+    bool value, {
+    String? accountId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_courseReminderKey, value);
+    await prefs.setBool(
+      _scopedPreferenceKey(_courseReminderKey, accountId) ?? _courseReminderKey,
+      value,
+    );
   }
 
-  static Future<int> getCourseReminderMinutes() async {
+  static Future<int> getCourseReminderMinutes({String? accountId}) async {
     final prefs = await SharedPreferences.getInstance();
-    final value =
-        prefs.getInt(_courseReminderMinutesKey) ?? defaultCourseReminderMinutes;
+    final scopedKey = _scopedPreferenceKey(
+      _courseReminderMinutesKey,
+      accountId,
+    );
+    int value;
+    if (scopedKey != null && prefs.containsKey(scopedKey)) {
+      value = prefs.getInt(scopedKey) ?? defaultCourseReminderMinutes;
+    } else if (scopedKey != null &&
+        prefs.containsKey(_courseReminderMinutesKey)) {
+      value = prefs.getInt(_courseReminderMinutesKey) ??
+          defaultCourseReminderMinutes;
+      await prefs.setInt(scopedKey, value);
+      await prefs.remove(_courseReminderMinutesKey);
+    } else {
+      value = prefs.getInt(_courseReminderMinutesKey) ??
+          defaultCourseReminderMinutes;
+    }
     return value
         .clamp(
           minCourseReminderMinutes,
@@ -300,7 +345,10 @@ class NotificationService {
         .toInt();
   }
 
-  static Future<void> setCourseReminderMinutes(int value) async {
+  static Future<void> setCourseReminderMinutes(
+    int value, {
+    String? accountId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final safeValue = value
         .clamp(
@@ -308,7 +356,11 @@ class NotificationService {
           maxCourseReminderMinutes,
         )
         .toInt();
-    await prefs.setInt(_courseReminderMinutesKey, safeValue);
+    await prefs.setInt(
+      _scopedPreferenceKey(_courseReminderMinutesKey, accountId) ??
+          _courseReminderMinutesKey,
+      safeValue,
+    );
   }
 
   static Future<void> cancelAllClassReminders() async {
