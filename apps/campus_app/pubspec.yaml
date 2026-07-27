@@ -1,7 +1,7 @@
 name: campus_app
 description: "重交校园助手 - 课程表、校园卡、电费一体化管理"
 publish_to: 'none'
-version: 1.0.0+16
+version: 1.0.1+17
 
 environment:
   sdk: ^3.11.0
@@ -48,6 +48,9 @@ dependencies:
   # ── 时间处理（上课提醒必备） ──────────────────────────────────
   timezone: ^0.9.4
   flutter_timezone: ^5.0.1
+  pdf: ^3.11.3
+  share_plus: ^10.1.4
+  image_picker: ^1.1.2
 
   core:
     path: ../../packages/core
@@ -63,3 +66,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/campus_app_mark.png
+    - assets/fonts/NotoSansSC-VF.ttf
