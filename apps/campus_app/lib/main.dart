@@ -45,14 +45,19 @@ void main() async {
 
   final signedInUsernameHint = await CredentialService()
       .loadSignedInUsernameHint();
-  final semesterSnapshot = await SemesterService.restoreSnapshot();
+  final semesterSnapshot = await SemesterService.restoreSnapshot(
+    accountId: signedInUsernameHint,
+  );
 
   runApp(
     ProviderScope(
       overrides: [
         signedInUsernameHintProvider.overrideWithValue(signedInUsernameHint),
         semesterServiceProvider.overrideWithValue(
-          SemesterService(initialCache: semesterSnapshot),
+          SemesterService(
+            initialCache: semesterSnapshot,
+            initialAccountId: signedInUsernameHint,
+          ),
         ),
       ],
       child: const CampusApp(),
@@ -140,7 +145,7 @@ class _MainShellState extends ConsumerState<_MainShell>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final target = await WidgetNavigationService.consumePendingTarget();
       if (target != null && mounted) _handleWidgetTarget(target);
-      _trySchedule();
+      unawaited(_trySchedule());
       await _showBatteryGuideIfNeeded();
       if (!mounted) return;
       await AppUpdateCoordinator.checkAndPrompt(context);
@@ -158,7 +163,7 @@ class _MainShellState extends ConsumerState<_MainShell>
     debugPrint('[生命周期] 状态改变: $state');
     if (state == AppLifecycleState.resumed) {
       _triggerForegroundRefresh();
-      _trySchedule();
+      unawaited(_trySchedule());
     }
   }
 
@@ -177,7 +182,8 @@ class _MainShellState extends ConsumerState<_MainShell>
     ref.read(sessionUpdateProvider.notifier).triggerRefresh();
   }
 
-  void _trySchedule() {
+  Future<void> _trySchedule() async {
+    final accountId = ref.read(credentialsProvider)?.username;
     // ✅ 核心修复 1：读取当前真正选中的学期，而不是写死 null
     final selectedSemester = ref
         .read(selectedScheduleSemesterProvider)
@@ -189,6 +195,7 @@ class _MainShellState extends ConsumerState<_MainShell>
     // ✅ 核心修复 2：使用统一的 Provider 实例
     final scheduleState = ref.read(scheduleProvider(selectedSemester));
     final semesterState = ref.read(activeSemesterStartProvider);
+    final calendarRules = await ref.read(scheduleCalendarRulesProvider.future);
 
     final result = scheduleState.valueOrNull;
     final semesterStart = semesterState.valueOrNull;
@@ -214,6 +221,8 @@ class _MainShellState extends ConsumerState<_MainShell>
           result.courses,
           semesterStart,
           totalWeeks: totalWeeks,
+          calendarRules: calendarRules,
+          accountId: accountId,
         ),
       );
       unawaited(
@@ -223,6 +232,7 @@ class _MainShellState extends ConsumerState<_MainShell>
           selectedSemester: selectedSemester,
           remark: result.remark,
           totalWeeks: totalWeeks,
+          calendarRules: calendarRules,
         ),
       );
     } else {
@@ -247,9 +257,7 @@ class _MainShellState extends ConsumerState<_MainShell>
         setState(() => _index = 1);
         break;
       case 'electricity':
-        navigator.push(
-          MaterialPageRoute(builder: (_) => const ElectricityPage()),
-        );
+        ElectricityPage.open(context, ref);
         break;
       case 'schedule':
       default:
@@ -328,15 +336,15 @@ class _MainShellState extends ConsumerState<_MainShell>
     ref.watch(semesterTotalWeeksProvider(selectedSemester));
 
     ref.listen(scheduleProvider(selectedSemester), (prev, next) {
-      if (next.hasValue) _trySchedule();
+      if (next.hasValue) unawaited(_trySchedule());
     });
 
     ref.listen(activeSemesterStartProvider, (prev, next) {
-      if (next.hasValue) _trySchedule();
+      if (next.hasValue) unawaited(_trySchedule());
     });
 
     ref.listen(semesterTotalWeeksProvider(selectedSemester), (prev, next) {
-      if (next.hasValue) _trySchedule();
+      if (next.hasValue) unawaited(_trySchedule());
     });
 
     return Stack(
