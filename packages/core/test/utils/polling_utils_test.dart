@@ -31,43 +31,49 @@ void main() {
       expect(interval(23), const Duration(hours: 3));
     });
 
-    test('shouldRunPolling skips until the current window interval has elapsed',
-        () {
-      final now = DateTime(2025, 9, 1, 12, 0);
-      expect(shouldRunPolling(now: now, lastRunAtMs: null), isTrue);
-      expect(
-        shouldRunPolling(
-          now: now,
-          lastRunAtMs:
-              now.subtract(const Duration(minutes: 14)).millisecondsSinceEpoch,
-        ),
-        isFalse,
-      );
-      expect(
-        shouldRunPolling(
-          now: now,
-          lastRunAtMs:
-              now.subtract(const Duration(minutes: 15)).millisecondsSinceEpoch,
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'shouldRunPolling skips until the current window interval has elapsed',
+      () {
+        final now = DateTime(2025, 9, 1, 12, 0);
+        expect(shouldRunPolling(now: now, lastRunAtMs: null), isTrue);
+        expect(
+          shouldRunPolling(
+            now: now,
+            lastRunAtMs: now
+                .subtract(const Duration(minutes: 14))
+                .millisecondsSinceEpoch,
+          ),
+          isFalse,
+        );
+        expect(
+          shouldRunPolling(
+            now: now,
+            lastRunAtMs: now
+                .subtract(const Duration(minutes: 15))
+                .millisecondsSinceEpoch,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('shouldRunPolling uses the longer night interval', () {
       final now = DateTime(2025, 9, 1, 23, 30);
       expect(
         shouldRunPolling(
           now: now,
-          lastRunAtMs:
-              now.subtract(const Duration(hours: 2)).millisecondsSinceEpoch,
+          lastRunAtMs: now
+              .subtract(const Duration(hours: 2))
+              .millisecondsSinceEpoch,
         ),
         isFalse,
       );
       expect(
         shouldRunPolling(
           now: now,
-          lastRunAtMs:
-              now.subtract(const Duration(hours: 3)).millisecondsSinceEpoch,
+          lastRunAtMs: now
+              .subtract(const Duration(hours: 3))
+              .millisecondsSinceEpoch,
         ),
         isTrue,
       );

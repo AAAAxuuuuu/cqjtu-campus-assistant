@@ -14,16 +14,17 @@ String _redactIdentifier(String value) {
 }
 
 class ApiService {
-  ApiService({
-    required String baseUrl,
-    Dio? dio,
-  }) : _dio = dio ??
-            Dio(BaseOptions(
+  ApiService({required String baseUrl, Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: baseUrl,
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 30),
               validateStatus: (status) => status != null && status < 600,
-            ));
+            ),
+          );
 
   final Dio _dio;
 
@@ -47,13 +48,16 @@ class ApiService {
     String? semester,
     bool forceRefresh = false,
   }) async {
-    final res = await _dio.get('/api/getSchedule', queryParameters: {
-      'username': username,
-      'password': password,
-      'sessionId': sessionId,
-      if (semester != null && semester.isNotEmpty) 'semester': semester,
-      'forceRefresh': forceRefresh,
-    });
+    final res = await _dio.get(
+      '/api/getSchedule',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        'sessionId': sessionId,
+        if (semester != null && semester.isNotEmpty) 'semester': semester,
+        'forceRefresh': forceRefresh,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     final data = res.data['data'];
     final courses = (data as List)
@@ -71,13 +75,16 @@ class ApiService {
     String semester = '',
     bool forceRefresh = false,
   }) async {
-    final res = await _dio.get('/api/getGrades', queryParameters: {
-      'username': username,
-      'password': password,
-      'sessionId': sessionId,
-      'semester': semester,
-      'forceRefresh': forceRefresh,
-    });
+    final res = await _dio.get(
+      '/api/getGrades',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        'sessionId': sessionId,
+        'semester': semester,
+        'forceRefresh': forceRefresh,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     final data = res.data['data'] as Map<String, dynamic>;
     final summary = Map<String, String>.from(
@@ -99,13 +106,16 @@ class ApiService {
     final params = grade.detailQueryParameters;
     if (params == null) return const GradeDetail(items: [], totalScore: '');
 
-    final res = await _dio.get('/api/getGradeDetail', queryParameters: {
-      'username': username,
-      'password': password,
-      'sessionId': sessionId,
-      'forceRefresh': forceRefresh,
-      ...params,
-    });
+    final res = await _dio.get(
+      '/api/getGradeDetail',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        'sessionId': sessionId,
+        'forceRefresh': forceRefresh,
+        ...params,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     final data = res.data['data'];
     if (data is Map<String, dynamic>) return GradeDetail.fromJson(data);
@@ -121,7 +131,8 @@ class ApiService {
     bool forceRefresh = false,
   }) async {
     throw UnsupportedError(
-        'self-hosted backend does not support study progress yet');
+      'self-hosted backend does not support study progress yet',
+    );
   }
 
   Future<List<Exam>> getExams(
@@ -131,13 +142,16 @@ class ApiService {
     String? semester,
     bool forceRefresh = false,
   }) async {
-    final res = await _dio.get('/api/getExams', queryParameters: {
-      'username': username,
-      'password': password,
-      'sessionId': sessionId,
-      if (semester != null) 'semester': semester,
-      'forceRefresh': forceRefresh,
-    });
+    final res = await _dio.get(
+      '/api/getExams',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        'sessionId': sessionId,
+        if (semester != null) 'semester': semester,
+        'forceRefresh': forceRefresh,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     return (res.data['data'] as List)
         .map((e) => Exam.fromJson(e as Map<String, dynamic>))
@@ -155,13 +169,16 @@ class ApiService {
       '[ApiService] getElecBalance username=${_redactIdentifier(username)} passwordLen=${password.length} forceRefresh=$forceRefresh',
       name: 'ApiService',
     );
-    final res = await _dio.get('/api/elec/balance', queryParameters: {
-      'username': username,
-      'password': password,
-      if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-      'forceRefresh': forceRefresh,
-      if (dormParams != null) ...dormParams,
-    });
+    final res = await _dio.get(
+      '/api/elec/balance',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        'forceRefresh': forceRefresh,
+        if (dormParams != null) ...dormParams,
+      },
+    );
     dev.log(
       '[ApiService] getElecBalance response code=${res.data['code']} msg=${res.data['msg']}',
       name: 'ApiService',
@@ -180,12 +197,15 @@ class ApiService {
       '[ApiService] getCampusCardBalance username=${_redactIdentifier(username)} passwordLen=${password.length} forceRefresh=$forceRefresh',
       name: 'ApiService',
     );
-    final res = await _dio.get('/api/elec/cardBalance', queryParameters: {
-      'username': username,
-      'password': password,
-      if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-      'forceRefresh': forceRefresh,
-    });
+    final res = await _dio.get(
+      '/api/elec/cardBalance',
+      queryParameters: {
+        'username': username,
+        'password': password,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        'forceRefresh': forceRefresh,
+      },
+    );
     dev.log(
       '[ApiService] getCampusCardBalance response code=${res.data['code']} msg=${res.data['msg']}',
       name: 'ApiService',
@@ -200,24 +220,27 @@ class ApiService {
     String? sessionId,
     Map<String, String>? dormParams,
   }) async {
-    final res = await _dio.get('/api/elec/recharge', queryParameters: {
-      'username': username,
-      if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-      'amount': amount,
-      if (dormParams != null) ...dormParams,
-    });
+    final res = await _dio.get(
+      '/api/elec/recharge',
+      queryParameters: {
+        'username': username,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        'amount': amount,
+        if (dormParams != null) ...dormParams,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     return res.data['msg'] as String;
   }
 
-  Future<String> getPayCodeToken(
-    String username, {
-    String? sessionId,
-  }) async {
-    final res = await _dio.get('/api/elec/paycode', queryParameters: {
-      'username': username,
-      if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-    });
+  Future<String> getPayCodeToken(String username, {String? sessionId}) async {
+    final res = await _dio.get(
+      '/api/elec/paycode',
+      queryParameters: {
+        'username': username,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     return res.data['data'] as String;
   }
@@ -227,11 +250,14 @@ class ApiService {
     double amount, {
     String? sessionId,
   }) async {
-    final res = await _dio.get('/api/elec/chargeCard', queryParameters: {
-      'username': username,
-      if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-      'amount': amount,
-    });
+    final res = await _dio.get(
+      '/api/elec/chargeCard',
+      queryParameters: {
+        'username': username,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        'amount': amount,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
     return res.data['data'] as String;
   }
@@ -319,12 +345,15 @@ class ApiService {
     String cookies, {
     required String sessionId,
   }) async {
-    final res = await _dio.post('/api/auth/injectCookies', queryParameters: {
-      'username': username,
-      'sessionId': sessionId,
-      'domain': domain,
-      'cookies': cookies,
-    });
+    final res = await _dio.post(
+      '/api/auth/injectCookies',
+      queryParameters: {
+        'username': username,
+        'sessionId': sessionId,
+        'domain': domain,
+        'cookies': cookies,
+      },
+    );
     _checkCode(res.data, statusCode: res.statusCode);
   }
 

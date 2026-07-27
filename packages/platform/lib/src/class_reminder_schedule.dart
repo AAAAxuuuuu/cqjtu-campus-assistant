@@ -29,18 +29,18 @@ class ClassReminder {
   final String seatNumber;
 
   Map<String, Object?> toPlatformMap() => {
-        'id': id,
-        'courseName': courseName,
-        'classroom': classroom,
-        'teacher': teacher,
-        'timeText': timeText,
-        'week': week,
-        'weekday': weekday,
-        'remindAtMillis': remindAt.millisecondsSinceEpoch,
-        'classStartAtMillis': classStartAt.millisecondsSinceEpoch,
-        'isExam': isExam,
-        'seatNumber': seatNumber,
-      };
+    'id': id,
+    'courseName': courseName,
+    'classroom': classroom,
+    'teacher': teacher,
+    'timeText': timeText,
+    'week': week,
+    'weekday': weekday,
+    'remindAtMillis': remindAt.millisecondsSinceEpoch,
+    'classStartAtMillis': classStartAt.millisecondsSinceEpoch,
+    'isExam': isExam,
+    'seatNumber': seatNumber,
+  };
 }
 
 const Map<int, String> classSlotStartTimes = {
@@ -138,8 +138,9 @@ String? _startTimeTextForCourse(Course course) {
   if (exactStartMinutes != null) return _timeTextFromMinutes(exactStartMinutes);
 
   if (course.isExam) {
-    final match = RegExp(r'(\d{1,2}):(\d{2})')
-        .firstMatch(course.timeStr.replaceAll('：', ':'));
+    final match = RegExp(
+      r'(\d{1,2}):(\d{2})',
+    ).firstMatch(course.timeStr.replaceAll('：', ':'));
     if (match != null) {
       final hour = match.group(1)!.padLeft(2, '0');
       return '$hour:${match.group(2)!}';

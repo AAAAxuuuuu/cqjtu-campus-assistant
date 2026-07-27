@@ -88,18 +88,18 @@ class ScheduleWidgetService {
   }
 
   static Map<String, Object?> _courseToMap(Course course) => {
-        'name': course.name,
-        'teacher': course.teacher,
-        'timeStr': course.timeStr,
-        'classroom': course.classroom,
-        'dayOfWeek': course.dayOfWeek,
-        'timeSlot': course.timeSlot,
-        'endTimeSlot': course.endTimeSlot,
-        'weekList': course.weekList,
-        'isExam': course.isExam,
-        'isCustom': course.isCustom,
-        'seatNumber': course.seatNumber,
-        'exactStartMinutes': course.exactStartMinutes,
-        'exactEndMinutes': course.exactEndMinutes,
-      };
+    'name': course.name,
+    'teacher': course.teacher,
+    'timeStr': course.timeStr,
+    'classroom': course.classroom,
+    'dayOfWeek': course.dayOfWeek,
+    'timeSlot': course.timeSlot,
+    'endTimeSlot': course.endTimeSlot,
+    'weekList': course.weekList,
+    'isExam': course.isExam,
+    'isCustom': course.isCustom,
+    'seatNumber': course.seatNumber,
+    'exactStartMinutes': course.exactStartMinutes,
+    'exactEndMinutes': course.exactEndMinutes,
+  };
 }

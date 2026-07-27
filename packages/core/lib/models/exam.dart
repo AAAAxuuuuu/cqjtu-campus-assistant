@@ -18,22 +18,22 @@ class Exam {
   });
 
   factory Exam.fromJson(Map<String, dynamic> json) => Exam(
-        courseName: json['courseName'] as String? ?? '',
-        teacher: json['teacher'] as String? ?? '',
-        examTime: json['examTime'] as String? ?? '',
-        examRoom: json['examRoom'] as String? ?? '',
-        seatNumber: json['seatNumber'] as String? ?? '-',
-        campus: json['campus'] as String? ?? '',
-        ticketNumber: json['ticketNumber'] as String? ?? '-',
-      );
+    courseName: json['courseName'] as String? ?? '',
+    teacher: json['teacher'] as String? ?? '',
+    examTime: json['examTime'] as String? ?? '',
+    examRoom: json['examRoom'] as String? ?? '',
+    seatNumber: json['seatNumber'] as String? ?? '-',
+    campus: json['campus'] as String? ?? '',
+    ticketNumber: json['ticketNumber'] as String? ?? '-',
+  );
 
   Map<String, dynamic> toJson() => {
-        'courseName': courseName,
-        'teacher': teacher,
-        'examTime': examTime,
-        'examRoom': examRoom,
-        'seatNumber': seatNumber,
-        'campus': campus,
-        'ticketNumber': ticketNumber,
-      };
+    'courseName': courseName,
+    'teacher': teacher,
+    'examTime': examTime,
+    'examRoom': examRoom,
+    'seatNumber': seatNumber,
+    'campus': campus,
+    'ticketNumber': ticketNumber,
+  };
 }

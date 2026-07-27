@@ -40,59 +40,56 @@ class Grade {
   }
 
   factory Grade.fromJson(Map<String, dynamic> json) => Grade(
-        semester: json['semester'] as String? ?? '',
-        courseCode: json['courseCode'] as String? ?? '',
-        courseName: json['courseName'] as String? ?? '',
-        score: json['score'] as String? ?? '-',
-        credits: json['credits'] as String? ?? '-',
-        gradePoint: json['gradePoint'] as String? ?? '-',
-        courseAttribute: json['courseAttribute'] as String? ?? '',
-        courseNature: json['courseNature'] as String? ?? '',
-        studentId: json['studentId'] as String? ?? '',
-        teachingClassId: json['teachingClassId'] as String? ?? '',
-        gradeRecordId: json['gradeRecordId'] as String? ?? '',
-      );
+    semester: json['semester'] as String? ?? '',
+    courseCode: json['courseCode'] as String? ?? '',
+    courseName: json['courseName'] as String? ?? '',
+    score: json['score'] as String? ?? '-',
+    credits: json['credits'] as String? ?? '-',
+    gradePoint: json['gradePoint'] as String? ?? '-',
+    courseAttribute: json['courseAttribute'] as String? ?? '',
+    courseNature: json['courseNature'] as String? ?? '',
+    studentId: json['studentId'] as String? ?? '',
+    teachingClassId: json['teachingClassId'] as String? ?? '',
+    gradeRecordId: json['gradeRecordId'] as String? ?? '',
+  );
 
   Map<String, dynamic> toJson() => {
-        'semester': semester,
-        'courseCode': courseCode,
-        'courseName': courseName,
-        'score': score,
-        'credits': credits,
-        'gradePoint': gradePoint,
-        'courseAttribute': courseAttribute,
-        'courseNature': courseNature,
-        'studentId': studentId,
-        'teachingClassId': teachingClassId,
-        'gradeRecordId': gradeRecordId,
-      };
+    'semester': semester,
+    'courseCode': courseCode,
+    'courseName': courseName,
+    'score': score,
+    'credits': credits,
+    'gradePoint': gradePoint,
+    'courseAttribute': courseAttribute,
+    'courseNature': courseNature,
+    'studentId': studentId,
+    'teachingClassId': teachingClassId,
+    'gradeRecordId': gradeRecordId,
+  };
 }
 
 class GradeDetail {
   final List<GradeDetailItem> items;
   final String totalScore;
 
-  const GradeDetail({
-    required this.items,
-    required this.totalScore,
-  });
+  const GradeDetail({required this.items, required this.totalScore});
 
   bool get isEmpty => items.isEmpty;
 
   factory GradeDetail.fromJson(Map<String, dynamic> json) => GradeDetail(
-        items: (json['items'] as List? ?? [])
-            .whereType<Map>()
-            .map((item) => GradeDetailItem.fromJson(
-                  Map<String, dynamic>.from(item),
-                ))
-            .toList(),
-        totalScore: json['totalScore'] as String? ?? '',
-      );
+    items: (json['items'] as List? ?? [])
+        .whereType<Map>()
+        .map(
+          (item) => GradeDetailItem.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(),
+    totalScore: json['totalScore'] as String? ?? '',
+  );
 
   Map<String, dynamic> toJson() => {
-        'items': items.map((item) => item.toJson()).toList(),
-        'totalScore': totalScore,
-      };
+    'items': items.map((item) => item.toJson()).toList(),
+    'totalScore': totalScore,
+  };
 }
 
 class GradeDetailItem {
@@ -114,8 +111,8 @@ class GradeDetailItem {
       );
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'score': score,
-        'ratio': ratio,
-      };
+    'name': name,
+    'score': score,
+    'ratio': ratio,
+  };
 }

@@ -22,15 +22,19 @@ void main() {
       CBCBlockCipher(AESEngine()),
     );
     cipher.init(
-        true,
-        PaddedBlockCipherParameters(
-          ParametersWithIV(
-              KeyParameter(Uint8List.fromList(key)), Uint8List.fromList(iv)),
-          null,
-        ));
+      true,
+      PaddedBlockCipherParameters(
+        ParametersWithIV(
+          KeyParameter(Uint8List.fromList(key)),
+          Uint8List.fromList(iv),
+        ),
+        null,
+      ),
+    );
 
-    final encrypted =
-        cipher.process(Uint8List.fromList(utf8.encode(plaintext)));
+    final encrypted = cipher.process(
+      Uint8List.fromList(utf8.encode(plaintext)),
+    );
     final result = base64.encode(encrypted);
 
     final expected =

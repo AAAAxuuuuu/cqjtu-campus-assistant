@@ -23,24 +23,26 @@ void main() {
     expect(await service.loadTicketUpdatedAt('student-a'), isNull);
   });
 
-  test('clearing login artifacts keeps no session data for that account',
-      () async {
-    final service = SessionService();
+  test(
+    'clearing login artifacts keeps no session data for that account',
+    () async {
+      final service = SessionService();
 
-    await service.saveSessionId('student-a', 'session-a');
-    await service.saveTicket('student-a', 'ticket-a');
-    await service.saveCasCookies('student-a', 'cas=a');
-    await service.saveJwgCookies('student-a', 'jwg=a');
-    await service.saveEcardCookies('student-a', 'ecard=a');
-    await service.saveZoveToken('student-a', 'token-a');
+      await service.saveSessionId('student-a', 'session-a');
+      await service.saveTicket('student-a', 'ticket-a');
+      await service.saveCasCookies('student-a', 'cas=a');
+      await service.saveJwgCookies('student-a', 'jwg=a');
+      await service.saveEcardCookies('student-a', 'ecard=a');
+      await service.saveZoveToken('student-a', 'token-a');
 
-    await service.clearLoginArtifacts('student-a');
+      await service.clearLoginArtifacts('student-a');
 
-    expect(await service.loadSessionId('student-a'), isNull);
-    expect(await service.loadTicket('student-a'), isNull);
-    expect(await service.loadCasCookies('student-a'), isNull);
-    expect(await service.loadJwgCookies('student-a'), isNull);
-    expect(await service.loadEcardCookies('student-a'), isNull);
-    expect(await service.loadZoveToken('student-a'), isNull);
-  });
+      expect(await service.loadSessionId('student-a'), isNull);
+      expect(await service.loadTicket('student-a'), isNull);
+      expect(await service.loadCasCookies('student-a'), isNull);
+      expect(await service.loadJwgCookies('student-a'), isNull);
+      expect(await service.loadEcardCookies('student-a'), isNull);
+      expect(await service.loadZoveToken('student-a'), isNull);
+    },
+  );
 }

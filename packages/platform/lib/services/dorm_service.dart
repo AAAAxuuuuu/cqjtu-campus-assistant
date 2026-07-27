@@ -31,7 +31,7 @@ class DormService {
     final hasAccountId = accountId != null && accountId.trim().isNotEmpty;
 
     final scopedMap = {
-      for (final k in _keys) k: prefs.getString(_key(k, accountId))
+      for (final k in _keys) k: prefs.getString(_key(k, accountId)),
     };
     final scopedRoom = DormRoom.fromPrefsMap(scopedMap);
     if (scopedRoom != null) {

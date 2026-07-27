@@ -11,14 +11,11 @@ void main() {
       </section>
     ''';
 
-    expect(
-      StudyProgressDashboardParser.parseRequiredCredits(html),
-      const {
-        'compulsory': 157.5,
-        'elective': 15.5,
-        'schoolElective': 3.0,
-      },
-    );
+    expect(StudyProgressDashboardParser.parseRequiredCredits(html), const {
+      'compulsory': 157.5,
+      'elective': 15.5,
+      'schoolElective': 3.0,
+    });
   });
 
   test('returns no override when the academic-home ledger is absent', () {

@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final credentialServiceProvider =
-    Provider<CredentialService>((ref) => CredentialService());
+final credentialServiceProvider = Provider<CredentialService>(
+  (ref) => CredentialService(),
+);
 
 String _redactIdentifier(String value) {
   final trimmed = value.trim();

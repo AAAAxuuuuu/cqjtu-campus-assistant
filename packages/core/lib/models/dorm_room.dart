@@ -110,18 +110,18 @@ class DormRoom {
     required this.garden,
     required this.buildingNumber,
     required this.roomNumber,
-  })  : southDistrict = null,
-        southBuilding = null;
+  }) : southDistrict = null,
+       southBuilding = null;
 
   const DormRoom.southCampus({
     required SouthDormDistrict district,
     required SouthDormBuilding building,
     required this.roomNumber,
-  })  : campusName = '南岸校区',
-        garden = DormGarden.deYuan,
-        buildingNumber = 0,
-        southDistrict = district,
-        southBuilding = building;
+  }) : campusName = '南岸校区',
+       garden = DormGarden.deYuan,
+       buildingNumber = 0,
+       southDistrict = district,
+       southBuilding = building;
 
   bool get isSouthCampus => southDistrict != null && southBuilding != null;
 
@@ -140,26 +140,26 @@ class DormRoom {
 
   /// 电控余额查询参数。南岸网页明确要求园区和固定的“无”楼层。
   Map<String, String> toQueryParams() => {
-        'sysid': '1',
-        'areaid': isSouthCampus ? '2' : '1',
-        if (isSouthCampus) 'districtid': southDistrict!.id,
-        'buildid': buildid,
-        if (isSouthCampus) 'floorid': '0',
-        'roomid': roomNumber,
-      };
+    'sysid': '1',
+    'areaid': isSouthCampus ? '2' : '1',
+    if (isSouthCampus) 'districtid': southDistrict!.id,
+    'buildid': buildid,
+    if (isSouthCampus) 'floorid': '0',
+    'roomid': roomNumber,
+  };
 
   Map<String, String> toPrefsMap() => {
-        'dorm_campus': campusName,
-        'dorm_roomid': roomNumber,
-        if (isSouthCampus) ...{
-          'dorm_areaid': '2',
-          'dorm_districtid': southDistrict!.id,
-          'dorm_buildid': southBuilding!.id,
-        } else ...{
-          'dorm_garden': garden.name,
-          'dorm_number': buildingNumber.toString(),
-        },
-      };
+    'dorm_campus': campusName,
+    'dorm_roomid': roomNumber,
+    if (isSouthCampus) ...{
+      'dorm_areaid': '2',
+      'dorm_districtid': southDistrict!.id,
+      'dorm_buildid': southBuilding!.id,
+    } else ...{
+      'dorm_garden': garden.name,
+      'dorm_number': buildingNumber.toString(),
+    },
+  };
 
   static DormRoom? fromPrefsMap(Map<String, String?> map) {
     final roomid = map['dorm_roomid'];

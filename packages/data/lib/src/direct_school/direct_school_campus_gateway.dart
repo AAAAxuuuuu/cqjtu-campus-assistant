@@ -139,8 +139,9 @@ class ManualCookieJar {
       final domain = (hostOnly ? uri.host : rawDomain)
           .replaceFirst(RegExp(r'^\.'), '')
           .toLowerCase();
-      final path =
-          (cookie.path == null || cookie.path!.isEmpty) ? '/' : cookie.path!;
+      final path = (cookie.path == null || cookie.path!.isEmpty)
+          ? '/'
+          : cookie.path!;
       final key = '$domain|$path|${cookie.name}';
 
       if (cookie.expires != null && cookie.expires!.isBefore(DateTime.now())) {
@@ -194,16 +195,18 @@ class ManualCookieJar {
   }
 
   String cookieHeaderFor(Uri uri) {
-    return loadForRequest(uri)
-        .map((cookie) => '${cookie.name}=${cookie.value}')
-        .join('; ');
+    return loadForRequest(
+      uri,
+    ).map((cookie) => '${cookie.name}=${cookie.value}').join('; ');
   }
 
   bool hasCookieForHost(String host, String name) {
     host = host.toLowerCase();
-    return _store.values.any((entry) =>
-        entry.cookie.name == name &&
-        (host == entry.domain || host.endsWith('.${entry.domain}')));
+    return _store.values.any(
+      (entry) =>
+          entry.cookie.name == name &&
+          (host == entry.domain || host.endsWith('.${entry.domain}')),
+    );
   }
 
   void clear() => _store.clear();
@@ -235,13 +238,14 @@ class ManualCookieJar {
 /// we disable it and manage cookies + redirects ourselves.
 class _SchoolHttpClient {
   _SchoolHttpClient({Duration? readTimeout})
-      : _readTimeout = readTimeout ?? const Duration(seconds: 20);
+    : _readTimeout = readTimeout ?? const Duration(seconds: 20);
 
   final Duration _readTimeout;
   final HttpClient _client = HttpClient();
   final ManualCookieJar _jar = ManualCookieJar();
 
-  static const String _ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+  static const String _ua =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
       'Chrome/120.0.0.0 Safari/537.36';
 
@@ -263,8 +267,9 @@ class _SchoolHttpClient {
 
     final redacted = <String, String>{};
     uri.queryParameters.forEach((key, value) {
-      redacted[key] =
-          sensitiveKeys.contains(key.toLowerCase()) ? '<redacted>' : value;
+      redacted[key] = sensitiveKeys.contains(key.toLowerCase())
+          ? '<redacted>'
+          : value;
     });
     return uri.replace(queryParameters: redacted).toString();
   }
@@ -289,8 +294,10 @@ class _SchoolHttpClient {
     req.followRedirects = false;
 
     req.headers.set(HttpHeaders.userAgentHeader, _ua);
-    req.headers.set(HttpHeaders.acceptHeader,
-        'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+    req.headers.set(
+      HttpHeaders.acceptHeader,
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    );
     req.headers.set(HttpHeaders.acceptLanguageHeader, 'zh-CN,zh;q=0.9');
 
     headers?.forEach(req.headers.set);
@@ -308,8 +315,11 @@ class _SchoolHttpClient {
   }
 
   /// GET with manual redirect following.
-  Future<_HttpResponse> get(String url,
-      {Map<String, String>? queryParams, int maxRedirects = 10}) async {
+  Future<_HttpResponse> get(
+    String url, {
+    Map<String, String>? queryParams,
+    int maxRedirects = 10,
+  }) async {
     final uri = _buildUri(url, queryParams);
     final res = await _followRedirects('GET', uri, maxRedirects: maxRedirects);
     final body = await res.transform(utf8.decoder).join();
@@ -317,15 +327,19 @@ class _SchoolHttpClient {
   }
 
   /// POST with manual redirect following.
-  Future<_HttpResponse> post(String url,
-      {Map<String, String>? formBody,
-      Map<String, String>? queryParams,
-      Map<String, String>? extraHeaders,
-      int maxRedirects = 10}) async {
+  Future<_HttpResponse> post(
+    String url, {
+    Map<String, String>? formBody,
+    Map<String, String>? queryParams,
+    Map<String, String>? extraHeaders,
+    int maxRedirects = 10,
+  }) async {
     final uri = _buildUri(url, queryParams);
     final encoded = formBody?.entries
-        .map((e) =>
-            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
         .join('&');
     final bodyBytes = encoded != null ? utf8.encode(encoded) : null;
 
@@ -337,8 +351,13 @@ class _SchoolHttpClient {
       ...?extraHeaders,
     };
 
-    final res = await _followRedirects('POST', uri,
-        headers: headers, body: bodyBytes, maxRedirects: maxRedirects);
+    final res = await _followRedirects(
+      'POST',
+      uri,
+      headers: headers,
+      body: bodyBytes,
+      maxRedirects: maxRedirects,
+    );
     final body = await res.transform(utf8.decoder).join();
     return _HttpResponse(statusCode: res.statusCode, body: body);
   }
@@ -357,12 +376,17 @@ class _SchoolHttpClient {
     var currentHeaders = headers;
 
     for (var i = 0; i < maxRedirects; i++) {
-      final res = await _send(currentMethod, currentUri,
-          headers: currentHeaders, body: currentBody);
+      final res = await _send(
+        currentMethod,
+        currentUri,
+        headers: currentHeaders,
+        body: currentBody,
+      );
 
       final status = res.statusCode;
       final location = res.headers.value(HttpHeaders.locationHeader);
-      final isRedirect = status == 301 ||
+      final isRedirect =
+          status == 301 ||
           status == 302 ||
           status == 303 ||
           status == 307 ||
@@ -431,10 +455,7 @@ class _HttpResponse {
   final int statusCode;
   final String body;
 
-  const _HttpResponse({
-    required this.statusCode,
-    required this.body,
-  });
+  const _HttpResponse({required this.statusCode, required this.body});
 }
 
 // ---------------------------------------------------------------------------
@@ -455,20 +476,25 @@ class _CasPasswordEncryptor {
   /// Encrypt the plaintext password using the salt as AES key.
   static String encrypt(String password, String salt) {
     // 1. Prefix with 64 random chars
-    final prefix =
-        List.generate(64, (_) => _chars[_rng.nextInt(_chars.length)]).join();
+    final prefix = List.generate(
+      64,
+      (_) => _chars[_rng.nextInt(_chars.length)],
+    ).join();
     final plaintext = prefix + password;
 
     // 2. Generate random 16-char IV (same charset as Java's PasswordEncryptor)
-    final ivString =
-        List.generate(16, (_) => _chars[_rng.nextInt(_chars.length)]).join();
+    final ivString = List.generate(
+      16,
+      (_) => _chars[_rng.nextInt(_chars.length)],
+    ).join();
     final iv = utf8.encode(ivString);
 
     // 3. Convert salt to key bytes (must be exactly 16 bytes)
     final key = utf8.encode(salt);
     if (key.length != 16) {
       throw ArgumentError(
-          'Salt must be exactly 16 characters, got ${key.length}');
+        'Salt must be exactly 16 characters, got ${key.length}',
+      );
     }
 
     // 4. Encrypt with AES/CBC/PKCS7 using PaddedBlockCipherImpl
@@ -516,8 +542,10 @@ class _CasAuthenticator {
 
   /// Perform full CAS login. Returns the username on success.
   Future<String> login(String username, String password) async {
-    dev.log('[_CasAuth] Starting CAS login for ${_redactIdentifier(username)}',
-        name: 'DirectSchool');
+    dev.log(
+      '[_CasAuth] Starting CAS login for ${_redactIdentifier(username)}',
+      name: 'DirectSchool',
+    );
 
     // Step 1: GET the CAS login page
     final loginPage = await _httpClient.get(_config.casLoginUrl);
@@ -531,15 +559,19 @@ class _CasAuthenticator {
     // Step 3: Extract execution token and encryption salt
     final execution = _extractInputValue(html, 'execution');
     if (execution == null || execution.isEmpty) {
-      dev.log('[_CasAuth] No execution token found in login page',
-          name: 'DirectSchool');
+      dev.log(
+        '[_CasAuth] No execution token found in login page',
+        name: 'DirectSchool',
+      );
       throw const SchoolSystemChangedFailure('登录页面缺少 execution 参数');
     }
 
     final salt = _extractPwdEncryptSalt(html);
     if (salt == null || salt.isEmpty) {
-      dev.log('[_CasAuth] No pwdEncryptSalt found in login page',
-          name: 'DirectSchool');
+      dev.log(
+        '[_CasAuth] No pwdEncryptSalt found in login page',
+        name: 'DirectSchool',
+      );
       throw const SchoolSystemChangedFailure('登录页面缺少加密盐值');
     }
 
@@ -566,8 +598,10 @@ class _CasAuthenticator {
     // Step 6: Evaluate result — check for login error / password invalid
     final extractedError = _extractLoginErrorMessage(resultBody);
     if (extractedError != null && extractedError.isNotEmpty) {
-      dev.log('[_CasAuth] Extracted login error: $extractedError',
-          name: 'DirectSchool');
+      dev.log(
+        '[_CasAuth] Extracted login error: $extractedError',
+        name: 'DirectSchool',
+      );
       throw AuthInvalidFailure(extractedError);
     }
 
@@ -619,8 +653,9 @@ class _CasAuthenticator {
   /// with the service parameter to validate and create a session.
   Future<String> loginWithTicket(String username, String ticket) async {
     dev.log(
-        '[_CasAuth] Logging in with ticket for ${_redactIdentifier(username)}',
-        name: 'DirectSchool');
+      '[_CasAuth] Logging in with ticket for ${_redactIdentifier(username)}',
+      name: 'DirectSchool',
+    );
 
     final result = await _httpClient.get(
       _config.casLoginUrl,
@@ -733,7 +768,8 @@ class _CasAuthenticator {
   /// Extract the value of a hidden input by name or id.
   String? _extractInputValue(String html, String name) {
     final document = html_parser.parse(html);
-    final element = document.querySelector('input[name="$name"]') ??
+    final element =
+        document.querySelector('input[name="$name"]') ??
         document.querySelector('input#$name');
     return element?.attributes['value']?.trim();
   }
@@ -743,14 +779,17 @@ class _CasAuthenticator {
   String? _extractPwdEncryptSalt(String html) {
     // Pattern 1: Hidden input with id="pwdEncryptSalt"
     final inputPattern = RegExp(
-        r"""<input[^>]*\s+id=["']pwdEncryptSalt["'][^>]*\s+value=["']([^"']+)["']""",
-        caseSensitive: false);
+      r"""<input[^>]*\s+id=["']pwdEncryptSalt["'][^>]*\s+value=["']([^"']+)["']""",
+      caseSensitive: false,
+    );
     final inputMatch = inputPattern.firstMatch(html);
     if (inputMatch != null) return inputMatch.group(1);
 
     // Pattern 2: var pwdEncryptSalt = "xxxx";
-    final varPattern = RegExp(r"""pwdEncryptSalt\s*=\s*["']([^"']{16})["']""",
-        caseSensitive: false);
+    final varPattern = RegExp(
+      r"""pwdEncryptSalt\s*=\s*["']([^"']{16})["']""",
+      caseSensitive: false,
+    );
     final varMatch = varPattern.firstMatch(html);
     if (varMatch != null) return varMatch.group(1);
 
@@ -798,7 +837,8 @@ class _CasAuthenticator {
 
   String? _extractLoginErrorMessage(String html) {
     final document = html_parser.parse(html);
-    final errorElem = document.getElementById('showErrorTip') ??
+    final errorElem =
+        document.getElementById('showErrorTip') ??
         document.getElementById('msg') ??
         document.getElementById('error') ??
         document.querySelector('.error_tip') ??
@@ -971,7 +1011,10 @@ class _ScheduleParser {
     final parenIndex = timeStr.indexOf('(');
     if (parenIndex < 0)
       return _ParsedTimeStr(
-          weekList: weekList, startSlot: startSlot, endSlot: endSlot);
+        weekList: weekList,
+        startSlot: startSlot,
+        endSlot: endSlot,
+      );
 
     final weekPart = timeStr.substring(0, parenIndex).trim();
     final typePart = timeStr.substring(parenIndex + 1);
@@ -1011,7 +1054,10 @@ class _ScheduleParser {
 
     weekList.sort();
     return _ParsedTimeStr(
-        weekList: weekList, startSlot: startSlot, endSlot: endSlot);
+      weekList: weekList,
+      startSlot: startSlot,
+      endSlot: endSlot,
+    );
   }
 }
 
@@ -1034,7 +1080,8 @@ class _ParsedTimeStr {
 /// Parses the grade page HTML from the 强智 system.
 class _GradeParser {
   static ({Map<String, String> summary, List<Grade> grades}) parse(
-      String html) {
+    String html,
+  ) {
     final summary = _parseSummary(html);
     final grades = _parseGradeList(html);
     return (summary: summary, grades: grades);
@@ -1067,8 +1114,10 @@ class _GradeParser {
     final rows = table.querySelectorAll('tr');
     if (rows.length < 2) return grades;
 
-    final headerCells =
-        rows.first.querySelectorAll('th,td').map((c) => c.text.trim()).toList();
+    final headerCells = rows.first
+        .querySelectorAll('th,td')
+        .map((c) => c.text.trim())
+        .toList();
     final attrIdx = headerCells.indexOf('课程属性');
     final natureIdx = headerCells.indexOf('课程性质');
     final nameIdx = headerCells.indexOf('课程名称');
@@ -1111,19 +1160,21 @@ class _GradeParser {
           ? cells[natureIdx]
           : (cells.length > 13 ? cells[13] : '');
 
-      grades.add(Grade(
-        semester: semester,
-        courseCode: courseCode,
-        courseName: courseName,
-        score: score,
-        credits: credits,
-        gradePoint: gradePoint,
-        courseAttribute: courseAttribute,
-        courseNature: courseNature,
-        studentId: detailParams?['xs0101id'] ?? '',
-        teachingClassId: detailParams?['jx0404id'] ?? '',
-        gradeRecordId: detailParams?['cj0708id'] ?? '',
-      ));
+      grades.add(
+        Grade(
+          semester: semester,
+          courseCode: courseCode,
+          courseName: courseName,
+          score: score,
+          credits: credits,
+          gradePoint: gradePoint,
+          courseAttribute: courseAttribute,
+          courseNature: courseNature,
+          studentId: detailParams?['xs0101id'] ?? '',
+          teachingClassId: detailParams?['jx0404id'] ?? '',
+          gradeRecordId: detailParams?['cj0708id'] ?? '',
+        ),
+      );
     }
 
     return grades;
@@ -1162,8 +1213,10 @@ class _GradeParser {
         .querySelectorAll('th,td')
         .map((cell) => cell.text.trim())
         .toList();
-    final values =
-        rows[1].querySelectorAll('td').map((cell) => cell.text.trim()).toList();
+    final values = rows[1]
+        .querySelectorAll('td')
+        .map((cell) => cell.text.trim())
+        .toList();
     if (headers.isEmpty || values.isEmpty) {
       return const GradeDetail(items: [], totalScore: '');
     }
@@ -1223,15 +1276,16 @@ class StudyProgressDashboardParser {
   }
 
   static double? _findCredit(dom.Document document, String label) {
-    final candidates = document
-        .querySelectorAll('*')
-        .where((element) => _normalize(element.text).contains(label))
-        .toList()
-      ..sort(
-        (left, right) => _normalize(left.text)
-            .length
-            .compareTo(_normalize(right.text).length),
-      );
+    final candidates =
+        document
+            .querySelectorAll('*')
+            .where((element) => _normalize(element.text).contains(label))
+            .toList()
+          ..sort(
+            (left, right) => _normalize(
+              left.text,
+            ).length.compareTo(_normalize(right.text).length),
+          );
 
     for (final element in candidates) {
       var container = element;
@@ -1304,14 +1358,8 @@ class _StudyProgressParser {
     Map<String, double> requiredCreditsByCategory = const {},
   }) {
     final document = html_parser.parse(html);
-    final summaryTable = _findStudyProgressTable(
-      document,
-      '课程体系',
-    );
-    final courseTable = _findStudyProgressTable(
-      document,
-      '修读学期',
-    );
+    final summaryTable = _findStudyProgressTable(document, '课程体系');
+    final courseTable = _findStudyProgressTable(document, '修读学期');
     if (summaryTable == null || courseTable == null) {
       return StudyProgressData(
         groups: const [],
@@ -1334,7 +1382,8 @@ class _StudyProgressParser {
       final summary = summaryByKey[key];
       final courses =
           coursesByKey[key]?.courses ?? const <StudyProgressCourse>[];
-      final meta = summary?.meta ??
+      final meta =
+          summary?.meta ??
           coursesByKey[key]?.meta ??
           _StudyProgressGroupMeta.empty();
       groups.add(
@@ -1453,13 +1502,17 @@ class _StudyProgressParser {
 
     final right = text.contains('_') ? text.split('_').last.trim() : text;
     final match = RegExp(r'^(.*?)(?:\((必修|选修|校选)\))?$').firstMatch(right);
-    final baseTitle =
-        (match?.group(1) ?? right).trim().replaceAll(RegExp(r'\s+'), ' ');
+    final baseTitle = (match?.group(1) ?? right).trim().replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
     final creditCategory = (match?.group(2) ?? '').trim();
-    final displayTitle =
-        creditCategory.isEmpty ? baseTitle : '$baseTitle（$creditCategory）';
-    final key =
-        creditCategory.isEmpty ? baseTitle : '$baseTitle::$creditCategory';
+    final displayTitle = creditCategory.isEmpty
+        ? baseTitle
+        : '$baseTitle（$creditCategory）';
+    final key = creditCategory.isEmpty
+        ? baseTitle
+        : '$baseTitle::$creditCategory';
 
     return _StudyProgressGroupMeta(
       key: key,
@@ -1502,10 +1555,10 @@ class _StudyProgressGroupMeta {
   });
 
   const _StudyProgressGroupMeta.empty()
-      : key = '',
-        baseTitle = '',
-        displayTitle = '',
-        creditCategory = '';
+    : key = '',
+      baseTitle = '',
+      displayTitle = '',
+      creditCategory = '';
 
   final String key;
   final String baseTitle;
@@ -1545,15 +1598,17 @@ class _ExamParser {
       if (cells.length == 1 && cells.first.contains('未查询到数据')) break;
       if (cells.length < 12) continue;
 
-      exams.add(Exam(
-        campus: cells.length > 2 ? cells[2] : '',
-        courseName: cells.length > 5 ? cells[5] : '',
-        teacher: cells.length > 6 ? cells[6] : '',
-        examTime: cells.length > 7 ? cells[7] : '',
-        examRoom: cells.length > 8 ? cells[8] : '',
-        seatNumber: cells.length > 9 ? cells[9] : '-',
-        ticketNumber: cells.length > 10 ? cells[10] : '-',
-      ));
+      exams.add(
+        Exam(
+          campus: cells.length > 2 ? cells[2] : '',
+          courseName: cells.length > 5 ? cells[5] : '',
+          teacher: cells.length > 6 ? cells[6] : '',
+          examTime: cells.length > 7 ? cells[7] : '',
+          examRoom: cells.length > 8 ? cells[8] : '',
+          seatNumber: cells.length > 9 ? cells[9] : '-',
+          ticketNumber: cells.length > 10 ? cells[10] : '-',
+        ),
+      );
     }
 
     return exams;
@@ -1583,10 +1638,7 @@ class _EcardParser {
     final siblingNumber = _numbersOnly(siblingValue ?? '');
     if (siblingNumber.isNotEmpty) return siblingNumber;
 
-    final fallback = _extractNumberNearAnyKeyword(
-      html,
-      const ['剩余电量', '电量'],
-    );
+    final fallback = _extractNumberNearAnyKeyword(html, const ['剩余电量', '电量']);
     return fallback ?? '查询失败';
   }
 
@@ -1602,10 +1654,7 @@ class _EcardParser {
       if (siblingValue.isNotEmpty) return siblingValue;
     }
 
-    final fallback = _extractNumberNearAnyKeyword(
-      html,
-      const ['账户余额', '余额'],
-    );
+    final fallback = _extractNumberNearAnyKeyword(html, const ['账户余额', '余额']);
     return fallback ?? '查询失败';
   }
 
@@ -1622,9 +1671,9 @@ class _EcardParser {
       if (index < 0) continue;
       final end = (index + 900).clamp(0, html.length);
       final window = html.substring(index, end);
-      final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(
-        _stripTags(_decodeBasicHtmlEntities(window)),
-      );
+      final match = RegExp(
+        r'\d+(?:\.\d+)?',
+      ).firstMatch(_stripTags(_decodeBasicHtmlEntities(window)));
       if (match != null) return match.group(0);
     }
     return null;
@@ -1646,7 +1695,7 @@ class _EcardParser {
 
   /// Extract billno and refno from the elepaybill page.
   static ({String billno, String refno, String csrfToken, String csrfHeader})?
-      parseRechargePage(String html) {
+  parseRechargePage(String html) {
     final billno = _extractInputValue(html, 'billno');
     final refno = _extractInputValue(html, 'refno');
     if (billno == null || refno == null) return null;
@@ -1714,8 +1763,8 @@ class DirectSchoolCampusGateway implements CampusGateway {
   DirectSchoolCampusGateway({
     SchoolSystemConfig? config,
     SelfHostedSessionStore? sessionStore,
-  })  : _config = config ?? const SchoolSystemConfig(),
-        _sessionStore = sessionStore;
+  }) : _config = config ?? const SchoolSystemConfig(),
+       _sessionStore = sessionStore;
 
   final SchoolSystemConfig _config;
   final SelfHostedSessionStore? _sessionStore;
@@ -1939,20 +1988,14 @@ class DirectSchoolCampusGateway implements CampusGateway {
   }) async {
     final resp = await session.httpClient.get(
       _config.gradesUrl,
-      queryParams: {
-        'kksj': semester,
-        'zylx': '0',
-      },
+      queryParams: {'kksj': semester, 'zylx': '0'},
     );
 
     if (_isSessionExpired(resp.body)) {
       await session.forceRelogin(username, password);
       final retryResp = await session.httpClient.get(
         _config.gradesUrl,
-        queryParams: {
-          'kksj': semester,
-          'zylx': '0',
-        },
+        queryParams: {'kksj': semester, 'zylx': '0'},
       );
       return retryResp.body;
     }
@@ -2046,10 +2089,7 @@ class DirectSchoolCampusGateway implements CampusGateway {
     final targetSemester = semester == null || semester.trim().isEmpty
         ? _currentSemester()
         : semester;
-    final formBody = <String, String>{
-      'xnxqid': targetSemester,
-      'xqlb': '',
-    };
+    final formBody = <String, String>{'xnxqid': targetSemester, 'xqlb': ''};
 
     final resp = await session.httpClient.post(
       _config.examsUrl,
@@ -2182,10 +2222,7 @@ class DirectSchoolCampusGateway implements CampusGateway {
       // Step 2: POST to confirm payment
       final confirmResp = await session.httpClient.post(
         _config.ecardPayconfirmUrl,
-        formBody: {
-          'billno': orderInfo.billno,
-          'refno': orderInfo.refno,
-        },
+        formBody: {'billno': orderInfo.billno, 'refno': orderInfo.refno},
       );
 
       return confirmResp.body;
@@ -2237,9 +2274,7 @@ class DirectSchoolCampusGateway implements CampusGateway {
     try {
       final url =
           '${_config.ecardDodikechargeUrl}?amount=${amount.toStringAsFixed(2)}&paytype=dike_alipay';
-      final resp = await session.httpClient.get(
-        url,
-      );
+      final resp = await session.httpClient.get(url);
 
       // If we got a redirect (302), the Location header contains the alipay URL
       if (resp.statusCode >= 300 && resp.statusCode < 400) {
@@ -2299,8 +2334,10 @@ class _UserSession {
     if (_authenticated) {
       // Quick session validity check
       if (await _authenticator.isSessionValid()) return;
-      dev.log('[_Session] Session expired, re-logging in',
-          name: 'DirectSchool');
+      dev.log(
+        '[_Session] Session expired, re-logging in',
+        name: 'DirectSchool',
+      );
     }
 
     if (await _restoreStoredCookies(username) &&
@@ -2380,12 +2417,16 @@ class _UserSession {
     var restored = false;
     restored =
         await _restoreCookie(username, store.loadCasCookies, _casCookieUrl) ||
-            restored;
+        restored;
     restored =
         await _restoreCookie(username, store.loadJwgCookies, _jwgCookieUrl) ||
-            restored;
-    restored = await _restoreCookie(
-            username, store.loadEcardCookies, _ecardCookieUrl) ||
+        restored;
+    restored =
+        await _restoreCookie(
+          username,
+          store.loadEcardCookies,
+          _ecardCookieUrl,
+        ) ||
         restored;
     return restored;
   }

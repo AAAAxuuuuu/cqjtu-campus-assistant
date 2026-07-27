@@ -6,16 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'session_service.dart';
 
 final accountCacheServiceProvider = Provider<AccountCacheService>((ref) {
-  return AccountCacheService(
-    sessionService: ref.watch(sessionServiceProvider),
-  );
+  return AccountCacheService(sessionService: ref.watch(sessionServiceProvider));
 });
 
 class AccountCacheService {
   final SessionService _sessionService;
 
   AccountCacheService({SessionService? sessionService})
-      : _sessionService = sessionService ?? SessionService();
+    : _sessionService = sessionService ?? SessionService();
 
   /// Clears persistent SharedPreferences keys and session tokens/cookies for [username].
   ///
@@ -31,8 +29,8 @@ class AccountCacheService {
     final sp = prefs ?? await SharedPreferences.getInstance();
     final effectiveAccountId =
         (accountId != null && accountId.trim().isNotEmpty)
-            ? accountId.trim()
-            : trimmedUsername;
+        ? accountId.trim()
+        : trimmedUsername;
 
     final usernameB64Url = base64Url.encode(utf8.encode(trimmedUsername));
     final usernameB64Std = base64.encode(utf8.encode(trimmedUsername));
@@ -69,8 +67,7 @@ class AccountCacheService {
     String username, {
     String? accountId,
     SharedPreferences? prefs,
-  }) =>
-      clearAccountCache(username, accountId: accountId, prefs: prefs);
+  }) => clearAccountCache(username, accountId: accountId, prefs: prefs);
 
   /// Clears account cache and invalidates specified Riverpod providers.
   Future<void> clearAndInvalidate({

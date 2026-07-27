@@ -2,8 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:data/data.dart';
 
-final sessionServiceProvider =
-    Provider<SessionService>((ref) => SessionService());
+final sessionServiceProvider = Provider<SessionService>(
+  (ref) => SessionService(),
+);
 
 class SessionService implements SelfHostedSessionStore {
   static const _storage = FlutterSecureStorage(

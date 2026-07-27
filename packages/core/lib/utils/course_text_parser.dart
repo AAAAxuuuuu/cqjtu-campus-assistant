@@ -166,8 +166,9 @@ class CourseTextParser {
     for (final token in tokens) {
       // 教室识别模式：形如 A101、科学楼301、第一教学楼201、3-201
       if (classroom == null &&
-          (RegExp(r'[A-Za-z0-9\u4e00-\u9fa5]*(?:楼|室|堂|馆|中心)\d*')
-                  .hasMatch(token) ||
+          (RegExp(
+                r'[A-Za-z0-9\u4e00-\u9fa5]*(?:楼|室|堂|馆|中心)\d*',
+              ).hasMatch(token) ||
               RegExp(r'^[A-Za-z]\d{3,4}$').hasMatch(token) ||
               RegExp(r'^\d{1,2}-\d{3,4}$').hasMatch(token))) {
         classroom = token;
