@@ -62,18 +62,16 @@ void main() {
       expect(
         shouldRunPolling(
           now: now,
-          lastRunAtMs: now
-              .subtract(const Duration(hours: 2))
-              .millisecondsSinceEpoch,
+          lastRunAtMs:
+              now.subtract(const Duration(hours: 2)).millisecondsSinceEpoch,
         ),
         isFalse,
       );
       expect(
         shouldRunPolling(
           now: now,
-          lastRunAtMs: now
-              .subtract(const Duration(hours: 3))
-              .millisecondsSinceEpoch,
+          lastRunAtMs:
+              now.subtract(const Duration(hours: 3)).millisecondsSinceEpoch,
         ),
         isTrue,
       );

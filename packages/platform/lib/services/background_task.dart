@@ -31,7 +31,8 @@ CampusRuntimeMode resolveBackgroundRuntimeMode(String env) {
   return switch (normalized) {
     'selfhosted' ||
     'remotebackend' ||
-    'backend' => CampusRuntimeMode.selfHosted,
+    'backend' =>
+      CampusRuntimeMode.selfHosted,
     _ => CampusRuntimeMode.localAndroid,
   };
 }
@@ -65,10 +66,8 @@ void backgroundCallbackDispatcher() {
         ),
       );
 
-      final androidPlugin = plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+      final androidPlugin = plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           _elecChannelId,

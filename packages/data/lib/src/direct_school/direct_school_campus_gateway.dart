@@ -139,9 +139,8 @@ class ManualCookieJar {
       final domain = (hostOnly ? uri.host : rawDomain)
           .replaceFirst(RegExp(r'^\.'), '')
           .toLowerCase();
-      final path = (cookie.path == null || cookie.path!.isEmpty)
-          ? '/'
-          : cookie.path!;
+      final path =
+          (cookie.path == null || cookie.path!.isEmpty) ? '/' : cookie.path!;
       final key = '$domain|$path|${cookie.name}';
 
       if (cookie.expires != null && cookie.expires!.isBefore(DateTime.now())) {
@@ -238,14 +237,13 @@ class ManualCookieJar {
 /// we disable it and manage cookies + redirects ourselves.
 class _SchoolHttpClient {
   _SchoolHttpClient({Duration? readTimeout})
-    : _readTimeout = readTimeout ?? const Duration(seconds: 20);
+      : _readTimeout = readTimeout ?? const Duration(seconds: 20);
 
   final Duration _readTimeout;
   final HttpClient _client = HttpClient();
   final ManualCookieJar _jar = ManualCookieJar();
 
-  static const String _ua =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+  static const String _ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
       'Chrome/120.0.0.0 Safari/537.36';
 
@@ -267,9 +265,8 @@ class _SchoolHttpClient {
 
     final redacted = <String, String>{};
     uri.queryParameters.forEach((key, value) {
-      redacted[key] = sensitiveKeys.contains(key.toLowerCase())
-          ? '<redacted>'
-          : value;
+      redacted[key] =
+          sensitiveKeys.contains(key.toLowerCase()) ? '<redacted>' : value;
     });
     return uri.replace(queryParameters: redacted).toString();
   }
@@ -385,8 +382,7 @@ class _SchoolHttpClient {
 
       final status = res.statusCode;
       final location = res.headers.value(HttpHeaders.locationHeader);
-      final isRedirect =
-          status == 301 ||
+      final isRedirect = status == 301 ||
           status == 302 ||
           status == 303 ||
           status == 307 ||
@@ -768,8 +764,7 @@ class _CasAuthenticator {
   /// Extract the value of a hidden input by name or id.
   String? _extractInputValue(String html, String name) {
     final document = html_parser.parse(html);
-    final element =
-        document.querySelector('input[name="$name"]') ??
+    final element = document.querySelector('input[name="$name"]') ??
         document.querySelector('input#$name');
     return element?.attributes['value']?.trim();
   }
@@ -837,8 +832,7 @@ class _CasAuthenticator {
 
   String? _extractLoginErrorMessage(String html) {
     final document = html_parser.parse(html);
-    final errorElem =
-        document.getElementById('showErrorTip') ??
+    final errorElem = document.getElementById('showErrorTip') ??
         document.getElementById('msg') ??
         document.getElementById('error') ??
         document.querySelector('.error_tip') ??
@@ -1114,10 +1108,8 @@ class _GradeParser {
     final rows = table.querySelectorAll('tr');
     if (rows.length < 2) return grades;
 
-    final headerCells = rows.first
-        .querySelectorAll('th,td')
-        .map((c) => c.text.trim())
-        .toList();
+    final headerCells =
+        rows.first.querySelectorAll('th,td').map((c) => c.text.trim()).toList();
     final attrIdx = headerCells.indexOf('课程属性');
     final natureIdx = headerCells.indexOf('课程性质');
     final nameIdx = headerCells.indexOf('课程名称');
@@ -1213,10 +1205,8 @@ class _GradeParser {
         .querySelectorAll('th,td')
         .map((cell) => cell.text.trim())
         .toList();
-    final values = rows[1]
-        .querySelectorAll('td')
-        .map((cell) => cell.text.trim())
-        .toList();
+    final values =
+        rows[1].querySelectorAll('td').map((cell) => cell.text.trim()).toList();
     if (headers.isEmpty || values.isEmpty) {
       return const GradeDetail(items: [], totalScore: '');
     }
@@ -1276,16 +1266,15 @@ class StudyProgressDashboardParser {
   }
 
   static double? _findCredit(dom.Document document, String label) {
-    final candidates =
-        document
-            .querySelectorAll('*')
-            .where((element) => _normalize(element.text).contains(label))
-            .toList()
-          ..sort(
-            (left, right) => _normalize(
-              left.text,
-            ).length.compareTo(_normalize(right.text).length),
-          );
+    final candidates = document
+        .querySelectorAll('*')
+        .where((element) => _normalize(element.text).contains(label))
+        .toList()
+      ..sort(
+        (left, right) => _normalize(
+          left.text,
+        ).length.compareTo(_normalize(right.text).length),
+      );
 
     for (final element in candidates) {
       var container = element;
@@ -1382,8 +1371,7 @@ class _StudyProgressParser {
       final summary = summaryByKey[key];
       final courses =
           coursesByKey[key]?.courses ?? const <StudyProgressCourse>[];
-      final meta =
-          summary?.meta ??
+      final meta = summary?.meta ??
           coursesByKey[key]?.meta ??
           _StudyProgressGroupMeta.empty();
       groups.add(
@@ -1503,16 +1491,14 @@ class _StudyProgressParser {
     final right = text.contains('_') ? text.split('_').last.trim() : text;
     final match = RegExp(r'^(.*?)(?:\((必修|选修|校选)\))?$').firstMatch(right);
     final baseTitle = (match?.group(1) ?? right).trim().replaceAll(
-      RegExp(r'\s+'),
-      ' ',
-    );
+          RegExp(r'\s+'),
+          ' ',
+        );
     final creditCategory = (match?.group(2) ?? '').trim();
-    final displayTitle = creditCategory.isEmpty
-        ? baseTitle
-        : '$baseTitle（$creditCategory）';
-    final key = creditCategory.isEmpty
-        ? baseTitle
-        : '$baseTitle::$creditCategory';
+    final displayTitle =
+        creditCategory.isEmpty ? baseTitle : '$baseTitle（$creditCategory）';
+    final key =
+        creditCategory.isEmpty ? baseTitle : '$baseTitle::$creditCategory';
 
     return _StudyProgressGroupMeta(
       key: key,
@@ -1555,10 +1541,10 @@ class _StudyProgressGroupMeta {
   });
 
   const _StudyProgressGroupMeta.empty()
-    : key = '',
-      baseTitle = '',
-      displayTitle = '',
-      creditCategory = '';
+      : key = '',
+        baseTitle = '',
+        displayTitle = '',
+        creditCategory = '';
 
   final String key;
   final String baseTitle;
@@ -1695,7 +1681,7 @@ class _EcardParser {
 
   /// Extract billno and refno from the elepaybill page.
   static ({String billno, String refno, String csrfToken, String csrfHeader})?
-  parseRechargePage(String html) {
+      parseRechargePage(String html) {
     final billno = _extractInputValue(html, 'billno');
     final refno = _extractInputValue(html, 'refno');
     if (billno == null || refno == null) return null;
@@ -1763,8 +1749,8 @@ class DirectSchoolCampusGateway implements CampusGateway {
   DirectSchoolCampusGateway({
     SchoolSystemConfig? config,
     SelfHostedSessionStore? sessionStore,
-  }) : _config = config ?? const SchoolSystemConfig(),
-       _sessionStore = sessionStore;
+  })  : _config = config ?? const SchoolSystemConfig(),
+        _sessionStore = sessionStore;
 
   final SchoolSystemConfig _config;
   final SelfHostedSessionStore? _sessionStore;
@@ -2417,12 +2403,11 @@ class _UserSession {
     var restored = false;
     restored =
         await _restoreCookie(username, store.loadCasCookies, _casCookieUrl) ||
-        restored;
+            restored;
     restored =
         await _restoreCookie(username, store.loadJwgCookies, _jwgCookieUrl) ||
-        restored;
-    restored =
-        await _restoreCookie(
+            restored;
+    restored = await _restoreCookie(
           username,
           store.loadEcardCookies,
           _ecardCookieUrl,

@@ -51,10 +51,8 @@ class NotificationService {
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
 
-    final androidPlugin = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
 
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
@@ -327,14 +325,12 @@ class NotificationService {
       value = prefs.getInt(scopedKey) ?? defaultCourseReminderMinutes;
     } else if (scopedKey != null &&
         prefs.containsKey(_courseReminderMinutesKey)) {
-      value =
-          prefs.getInt(_courseReminderMinutesKey) ??
+      value = prefs.getInt(_courseReminderMinutesKey) ??
           defaultCourseReminderMinutes;
       await prefs.setInt(scopedKey, value);
       await prefs.remove(_courseReminderMinutesKey);
     } else {
-      value =
-          prefs.getInt(_courseReminderMinutesKey) ??
+      value = prefs.getInt(_courseReminderMinutesKey) ??
           defaultCourseReminderMinutes;
     }
     return value
@@ -347,9 +343,8 @@ class NotificationService {
     String? accountId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final safeValue = value
-        .clamp(minCourseReminderMinutes, maxCourseReminderMinutes)
-        .toInt();
+    final safeValue =
+        value.clamp(minCourseReminderMinutes, maxCourseReminderMinutes).toInt();
     await prefs.setInt(
       _scopedPreferenceKey(_courseReminderMinutesKey, accountId) ??
           _courseReminderMinutesKey,
