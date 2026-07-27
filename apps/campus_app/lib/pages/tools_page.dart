@@ -133,6 +133,9 @@ class ToolsPage extends ConsumerWidget {
 
   static const _emailUrl = 'https://i.cqjtu.edu.cn/email/#/index';
   static const _evaluationUrl = 'https://jwzlapp.cqjtu.edu.cn/#/login';
+  static const _busReservationUrl = 'https://wxfw.cqjtu.edu.cn/bus/h5/#/';
+  static const _ecardServiceUrl =
+      'https://ids.cqjtu.edu.cn/authserver/login?service=https%3A%2F%2Fecard.cqjtu.edu.cn%2Fepay%2Fj_spring_cas_security_check';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -219,9 +222,28 @@ class ToolsPage extends ConsumerWidget {
                 color: Colors.amber.shade800,
                 title: '宿舍电费',
                 subtitle: '余额查询与充值',
-                onTap: () => Navigator.push(
+                onTap: () => ElectricityPage.open(context, ref),
+              ),
+              _ServiceTile(
+                icon: Icons.directions_bus_outlined,
+                color: Colors.indigo,
+                title: '校车预约',
+                subtitle: '校车班次查询与预约',
+                onTap: () => _openWebService(
                   context,
-                  MaterialPageRoute(builder: (_) => const ElectricityPage()),
+                  title: '校车预约',
+                  url: _busReservationUrl,
+                ),
+              ),
+              _ServiceTile(
+                icon: Icons.credit_card_outlined,
+                color: Colors.redAccent,
+                title: '一卡通服务',
+                subtitle: '进入一卡通系统办理校园卡服务',
+                onTap: () => _openWebService(
+                  context,
+                  title: '一卡通服务',
+                  url: _ecardServiceUrl,
                 ),
               ),
               _ServiceTile(
