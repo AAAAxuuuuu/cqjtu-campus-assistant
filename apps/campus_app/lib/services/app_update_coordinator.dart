@@ -81,10 +81,7 @@ class AppUpdateCoordinator {
       builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
-            const Icon(
-              Icons.system_update_alt,
-              color: AppColors.secondary,
-            ),
+            const Icon(Icons.system_update_alt, color: AppColors.secondary),
             const SizedBox(width: 8),
             Expanded(child: Text(latest.title)),
           ],

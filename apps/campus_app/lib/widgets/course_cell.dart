@@ -23,8 +23,9 @@ class CourseCell extends StatelessWidget {
   Color get _cellColor => isActive ? _baseColor : AppColors.tintSoft;
   Color get _textColor =>
       isActive ? AppColors.textPrimary : AppColors.textMuted;
-  Color get _subColor =>
-      isActive ? const Color(0xFF6B4556) : AppColors.textMuted.withValues(alpha: 0.6);
+  Color get _subColor => isActive
+      ? const Color(0xFF6B4556)
+      : AppColors.textMuted.withValues(alpha: 0.6);
   Color get _borderColor => isActive
       ? HSLColor.fromColor(_baseColor)
             .withLightness(
@@ -166,8 +167,11 @@ class CourseCell extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: (course.isExam ? AppColors.primary : AppColors.secondary)
-                          .withValues(alpha: 0.15),
+                      color:
+                          (course.isExam
+                                  ? AppColors.primary
+                                  : AppColors.secondary)
+                              .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -175,7 +179,9 @@ class CourseCell extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: course.isExam ? AppColors.primary : AppColors.secondary,
+                        color: course.isExam
+                            ? AppColors.primary
+                            : AppColors.secondary,
                       ),
                     ),
                   ),

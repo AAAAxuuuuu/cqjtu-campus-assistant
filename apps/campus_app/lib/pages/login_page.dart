@@ -229,7 +229,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 420),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 36,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(AppRadius.hero),
@@ -342,7 +345,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           fillColor: AppColors.tintSoft,
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscure ? Icons.visibility_off : Icons.visibility,
+                              _obscure
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               color: AppColors.textMuted,
                             ),
                             onPressed: () =>
@@ -423,9 +428,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             : () {
                                 final username = _usernameCtrl.text.trim();
                                 if (!RegExp(r'^\d{12}$').hasMatch(username)) {
-                                  setState(
-                                    () => _error = '请先输入正确学号再使用网页登录',
-                                  );
+                                  setState(() => _error = '请先输入正确学号再使用网页登录');
                                   return;
                                 }
                                 _openWebViewLogin(username, _passwordCtrl.text);

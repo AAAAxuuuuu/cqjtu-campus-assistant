@@ -55,7 +55,9 @@ class _AppCardState extends State<AppCard> {
         border: border,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: widget.elevation * 0.015),
+            color: AppColors.primary.withValues(
+              alpha: widget.elevation * 0.015,
+            ),
             blurRadius: widget.elevation * 4,
             offset: Offset(0, widget.elevation * 0.8),
           ),
@@ -70,10 +72,7 @@ class _AppCardState extends State<AppCard> {
             onHighlightChanged: widget.onTap != null
                 ? (highlight) => setState(() => _isPressed = highlight)
                 : null,
-            child: Padding(
-              padding: widget.padding,
-              child: widget.child,
-            ),
+            child: Padding(padding: widget.padding, child: widget.child),
           ),
         ),
       ),

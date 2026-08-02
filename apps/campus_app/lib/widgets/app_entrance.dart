@@ -39,8 +39,7 @@ class _AppEntranceState extends State<AppEntrance>
     super.initState();
     // 交错延迟通过 Interval 折叠进单个动画，总时长 = 延迟 + 标准时长。
     // 延迟阶段动画值为 0（保持隐藏），进入阶段按强 ease-out 展开。
-    final delayMs =
-        widget.index * AppMotion.staggerStep.inMilliseconds;
+    final delayMs = widget.index * AppMotion.staggerStep.inMilliseconds;
     final totalMs = delayMs + AppMotion.standard.inMilliseconds;
 
     _controller = AnimationController(
@@ -50,11 +49,7 @@ class _AppEntranceState extends State<AppEntrance>
 
     _animation = CurvedAnimation(
       parent: _controller,
-      curve: Interval(
-        delayMs / totalMs,
-        1.0,
-        curve: AppMotion.easeOutStrong,
-      ),
+      curve: Interval(delayMs / totalMs, 1.0, curve: AppMotion.easeOutStrong),
     );
 
     _controller.forward();

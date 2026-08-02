@@ -394,9 +394,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       appBar: GlassAppBar(
         title: const Text('请假申请'),
         actions: [
-          SpinningRefreshButton(
-            onPressed: _booting ? null : _openLeaveSite,
-          ),
+          SpinningRefreshButton(onPressed: _booting ? null : _openLeaveSite),
         ],
       ),
       body: Stack(

@@ -316,7 +316,10 @@ class AppTheme {
         filled: true,
         fillColor: Colors.white,
         focusColor: AppColors.primary,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         labelStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
         floatingLabelStyle: const TextStyle(
           color: AppColors.primary,
@@ -398,9 +401,7 @@ class AppTheme {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: AppColors.primary,
@@ -455,9 +456,8 @@ class AppTheme {
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? AppColors.primary
-              : null,
+          (states) =>
+              states.contains(WidgetState.selected) ? AppColors.primary : null,
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
@@ -473,9 +473,7 @@ class AppTheme {
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w500,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
@@ -489,7 +487,9 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
@@ -499,7 +499,8 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-      ),      menuTheme: MenuThemeData(
+      ),
+      menuTheme: MenuThemeData(
         style: MenuStyle(
           backgroundColor: WidgetStateProperty.all(Colors.white),
           surfaceTintColor: WidgetStateProperty.all(Colors.transparent),

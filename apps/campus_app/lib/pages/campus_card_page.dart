@@ -147,12 +147,20 @@ class _BalanceCard extends ConsumerWidget {
                         color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.credit_card, color: Colors.white, size: 18),
+                      child: const Icon(
+                        Icons.credit_card,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     const Text(
                       '校园卡余额',
-                      style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const Spacer(),
                     SpinningRefreshButton(
@@ -223,7 +231,9 @@ class _BalanceCard extends ConsumerWidget {
                             )
                           : Text(
                               balanceAsync.hasData ? balanceAsync.data : '--',
-                              style: AppType.metric.copyWith(color: Colors.white),
+                              style: AppType.metric.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                     ),
                     const SizedBox(width: 12),
@@ -236,7 +246,10 @@ class _BalanceCard extends ConsumerWidget {
                       icon: const Icon(Icons.add_card_outlined, size: 18),
                       label: const Text('充值'),
                       style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.primary,
                         elevation: 4,
@@ -244,7 +257,10 @@ class _BalanceCard extends ConsumerWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ],
@@ -258,7 +274,10 @@ class _BalanceCard extends ConsumerWidget {
                         SizedBox(
                           width: 12,
                           height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white70),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Colors.white70,
+                          ),
                         ),
                         SizedBox(width: 6),
                         Text(
@@ -347,7 +366,11 @@ class _QrCard extends ConsumerWidget {
             ),
             error: (e, _) => Column(
               children: [
-                const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: AppColors.danger,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   e.toString(),
@@ -403,7 +426,10 @@ class _QrCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -415,7 +441,11 @@ class _QrCard extends ConsumerWidget {
                         SizedBox(width: 6),
                         Text(
                           '二维码仅用于当次消费，请勿截图保存',
-                          style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -428,10 +458,7 @@ class _QrCard extends ConsumerWidget {
                         ? null
                         : () => ref
                               .read(payCodeProvider.notifier)
-                              .refresh(
-                                forceRefresh: true,
-                                throwOnError: false,
-                              ),
+                              .refresh(forceRefresh: true, throwOnError: false),
                   ),
                 ],
               );

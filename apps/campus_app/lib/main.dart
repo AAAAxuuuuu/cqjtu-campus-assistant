@@ -595,7 +595,10 @@ class _FirstRunBatteryGuideDialogState
                     Expanded(
                       child: Text(
                         '所有步骤已完成，后台通知已就绪！',
-                        style: TextStyle(color: AppColors.success, fontSize: 13),
+                        style: TextStyle(
+                          color: AppColors.success,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -655,7 +658,10 @@ class _StepRow extends StatelessWidget {
               ),
               Text(
                 desc,
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
