@@ -302,27 +302,47 @@ class _MainShellState extends ConsumerState<_MainShell>
   ];
 
   static const _destinations = [
-    NavigationDestination(icon: Icon(Icons.calendar_today), label: '课表'),
-    NavigationDestination(icon: Icon(Icons.credit_card), label: '校园卡'),
-    NavigationDestination(icon: Icon(Icons.apps_outlined), label: '服务'),
-    NavigationDestination(icon: Icon(Icons.person_outline), label: '我的'),
+    NavigationDestination(
+      icon: Icon(Icons.calendar_today_outlined),
+      selectedIcon: Icon(Icons.calendar_today),
+      label: '课表',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.credit_card_outlined),
+      selectedIcon: Icon(Icons.credit_card),
+      label: '校园卡',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.apps_outlined),
+      selectedIcon: Icon(Icons.apps),
+      label: '服务',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.person_outline),
+      selectedIcon: Icon(Icons.person),
+      label: '我的',
+    ),
   ];
 
   static const _railDestinations = [
     NavigationRailDestination(
-      icon: Icon(Icons.calendar_today),
+      icon: Icon(Icons.calendar_today_outlined),
+      selectedIcon: Icon(Icons.calendar_today),
       label: Text('课表'),
     ),
     NavigationRailDestination(
-      icon: Icon(Icons.credit_card),
+      icon: Icon(Icons.credit_card_outlined),
+      selectedIcon: Icon(Icons.credit_card),
       label: Text('校园卡'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.apps_outlined),
+      selectedIcon: Icon(Icons.apps),
       label: Text('服务'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.person_outline),
+      selectedIcon: Icon(Icons.person),
       label: Text('我的'),
     ),
   ];
@@ -450,7 +470,7 @@ class _FirstRunBatteryGuideDialogState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Row(
         children: [
-          Icon(Icons.notifications_active_outlined, color: Colors.orange),
+          Icon(Icons.notifications_active_outlined, color: AppColors.warning),
           SizedBox(width: 8),
           Text('开启后台通知'),
         ],
@@ -467,7 +487,7 @@ class _FirstRunBatteryGuideDialogState
             const SizedBox(height: 20),
             _StepRow(
               icon: Icons.battery_saver_outlined,
-              color: Colors.green,
+              color: AppColors.success,
               title: '第 1 步：关闭电池优化',
               desc: '允许 App 不受限地在后台运行',
               statusWidget: _step1Done == null
@@ -479,7 +499,7 @@ class _FirstRunBatteryGuideDialogState
                   : _step1Done!
                   ? const Icon(
                       Icons.check_circle,
-                      color: Colors.green,
+                      color: AppColors.success,
                       size: 20,
                     )
                   : FilledButton.tonal(
@@ -500,7 +520,7 @@ class _FirstRunBatteryGuideDialogState
             const SizedBox(height: 14),
             _StepRow(
               icon: Icons.autorenew_outlined,
-              color: Colors.blue,
+              color: AppColors.info,
               title: '第 2 步：开启自启动',
               desc: _step2AppOps == true
                   ? '已通过系统检测'
@@ -510,13 +530,13 @@ class _FirstRunBatteryGuideDialogState
               statusWidget: _step2AppOps == true
                   ? const Icon(
                       Icons.check_circle,
-                      color: Colors.green,
+                      color: AppColors.success,
                       size: 20,
                     )
                   : _step2Opened
                   ? const Icon(
                       Icons.check_circle_outline,
-                      color: Colors.orange,
+                      color: AppColors.warning,
                       size: 20,
                     )
                   : FilledButton.tonal(
@@ -538,13 +558,13 @@ class _FirstRunBatteryGuideDialogState
             const SizedBox(height: 14),
             _StepRow(
               icon: Icons.lock_outline,
-              color: Colors.purple,
+              color: AppColors.secondary,
               title: '第 3 步：锁定后台任务',
               desc: '最近任务界面 → 长按本应用 → 锁定',
               statusWidget: _step3Confirmed
                   ? const Icon(
                       Icons.check_circle,
-                      color: Colors.green,
+                      color: AppColors.success,
                       size: 20,
                     )
                   : OutlinedButton(
@@ -565,17 +585,17 @@ class _FirstRunBatteryGuideDialogState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: AppColors.success.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.verified, color: Colors.green, size: 18),
+                    Icon(Icons.verified, color: AppColors.success, size: 18),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '所有步骤已完成，后台通知已就绪！',
-                        style: TextStyle(color: Colors.green, fontSize: 13),
+                        style: TextStyle(color: AppColors.success, fontSize: 13),
                       ),
                     ),
                   ],
@@ -635,7 +655,7 @@ class _StepRow extends StatelessWidget {
               ),
               Text(
                 desc,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
             ],
           ),
