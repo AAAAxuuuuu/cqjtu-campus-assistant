@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:campus_platform/services/credential_service.dart';
 import 'package:data/data.dart';
 
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
 import '../utils/campus_error_message.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_entrance.dart';
 import 'webview_login_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -218,98 +221,220 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/campus_app_mark.png',
-                  width: 118,
-                  height: 118,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'CQJTU Hub',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.pageGradient),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 420),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(AppRadius.hero),
+                  border: Border.all(
+                    color: AppColors.outline.withValues(alpha: 0.8),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text('使用教务账号登录'),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _usernameCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 12,
-                  decoration: const InputDecoration(
-                    labelText: '学号',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _passwordCtrl,
-                  obscureText: _obscure,
-                  onSubmitted: (_) => _login(),
-                  decoration: InputDecoration(
-                    labelText: '密码',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscure ? Icons.visibility_off : Icons.visibility,
-                      ),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
-                  ),
+                  ],
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: FilledButton(
-                    onPressed: _loading ? null : _login,
-                    child: _loading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppEntrance(
+                      index: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(AppRadius.hero),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
-                          )
-                        : const Text('登录'),
-                  ),
+                          ],
+                        ),
+                        child: Image.asset(
+                          'assets/campus_app_mark.png',
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    AppEntrance(
+                      index: 1,
+                      child: ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [
+                            AppColors.textPrimary,
+                            AppColors.textSecondary,
+                          ],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'CQJTU Hub',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AppEntrance(
+                      index: 2,
+                      child: Text(
+                        '重庆交通大学 · 统一身份认证登录',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    AppEntrance(
+                      index: 3,
+                      child: TextField(
+                        controller: _usernameCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 12,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        decoration: InputDecoration(
+                          labelText: '学号',
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: AppColors.primary,
+                          ),
+                          counterText: '',
+                          filled: true,
+                          fillColor: AppColors.tintSoft,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    AppEntrance(
+                      index: 4,
+                      child: TextField(
+                        controller: _passwordCtrl,
+                        obscureText: _obscure,
+                        onSubmitted: (_) => _login(),
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        decoration: InputDecoration(
+                          labelText: '密码',
+                          prefixIcon: const Icon(
+                            Icons.lock_outline,
+                            color: AppColors.secondary,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.tintSoft,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscure ? Icons.visibility_off : Icons.visibility,
+                              color: AppColors.textMuted,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      AppEntrance(
+                        index: 5,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(
+                              AppRadius.sm + 2,
+                            ),
+                            border: Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                color: AppColors.accent,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    AppEntrance(
+                      index: 6,
+                      child: AppButton(
+                        label: '登 录',
+                        isLoading: _loading,
+                        onPressed: _login,
+                        width: double.infinity,
+                        height: 50,
+                        style: AppButtonStyle.gradient,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    AppEntrance(
+                      index: 7,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.open_in_browser, size: 16),
+                        label: const Text('遇到验证问题？使用网页登录'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.secondary,
+                          textStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                final username = _usernameCtrl.text.trim();
+                                if (!RegExp(r'^\d{12}$').hasMatch(username)) {
+                                  setState(
+                                    () => _error = '请先输入正确学号再使用网页登录',
+                                  );
+                                  return;
+                                }
+                                _openWebViewLogin(username, _passwordCtrl.text);
+                              },
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: _loading
-                      ? null
-                      : () {
-                          final username = _usernameCtrl.text.trim();
-                          if (!RegExp(r'^\d{12}$').hasMatch(username)) {
-                            setState(() => _error = '请先输入正确学号再使用网页登录');
-                            return;
-                          }
-                          _openWebViewLogin(username, _passwordCtrl.text);
-                        },
-                  child: const Text('遇到验证问题？使用网页登录'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
