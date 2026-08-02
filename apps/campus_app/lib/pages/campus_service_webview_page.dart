@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/glass_surface.dart';
 import '../utils/providers.dart';
 import '../services/webview_session_scope.dart';
 
@@ -123,7 +125,7 @@ class _CampusServiceWebViewPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: Text(widget.title),
         actions: [
           IconButton(
@@ -152,7 +154,12 @@ class _CampusServiceWebViewPageState
         children: [
           WebViewWidget(controller: _controller),
           if (_loadingProgress > 0 && _loadingProgress < 100)
-            LinearProgressIndicator(value: _loadingProgress / 100),
+            LinearProgressIndicator(
+              value: _loadingProgress / 100,
+              minHeight: 2,
+              color: AppColors.primary,
+              backgroundColor: AppColors.tint.withValues(alpha: 0.2),
+            ),
         ],
       ),
     );

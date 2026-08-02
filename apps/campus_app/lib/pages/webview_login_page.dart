@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/app_snackbar.dart';
+import '../widgets/error_view.dart';
+import '../widgets/glass_surface.dart';
 import '../utils/campus_error_message.dart';
 import '../services/webview_session_scope.dart';
 
@@ -236,9 +240,6 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
         await WebViewSessionScope.markAuthenticated(widget.username);
       }
       if (mounted) {
-        await WebViewSessionScope.markAuthenticated(widget.username);
-      }
-      if (mounted) {
         debugPrint(
           '[WebViewLoginPage] return result mode=${widget.mode} ticketLen=${ticket.length} casCookieLen=${casCookies.length} jwgCookieLen=${jwgCookies.length} ecardCookieLen=${ecardCookies.length} zoveTokenLen=${zoveToken.length} passwordLen=${(_capturedPassword ?? widget.password).length}',
         );
@@ -371,16 +372,15 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
 
   void _fail(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    AppSnackBar.error(context, msg);
     Navigator.of(context).pop(null);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('安全验证'),
-        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(null),
@@ -392,25 +392,10 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           if (_loadError != null)
             Positioned.fill(
               child: ColoredBox(
-                color: Theme.of(context).colorScheme.surface,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.wifi_off_outlined, size: 40),
-                        const SizedBox(height: 12),
-                        Text(_loadError!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _retryLoginPage,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('重试'),
-                        ),
-                      ],
-                    ),
-                  ),
+                color: AppColors.surface,
+                child: ErrorView(
+                  message: _loadError!,
+                  onRetry: _retryLoginPage,
                 ),
               ),
             ),
