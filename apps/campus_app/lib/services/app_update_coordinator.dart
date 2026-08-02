@@ -2,6 +2,8 @@ import 'package:campus_platform/services/app_update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/app_snackbar.dart';
 import 'app_update_installer.dart';
 
 class AppUpdateCoordinator {
@@ -77,10 +79,12 @@ class AppUpdateCoordinator {
       context: context,
       barrierDismissible: !forceUpdate,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.system_update_alt, color: Colors.blue),
+            const Icon(
+              Icons.system_update_alt,
+              color: AppColors.secondary,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text(latest.title)),
           ],
@@ -102,14 +106,17 @@ class AppUpdateCoordinator {
                 const SizedBox(height: 8),
                 Text(
                   latest.notes,
-                  style: const TextStyle(color: Colors.black87, height: 1.45),
+                  style: const TextStyle(
+                    color: AppColors.textBody,
+                    height: 1.45,
+                  ),
                 ),
               ],
               if (!hasDirectDownload) ...[
                 const SizedBox(height: 16),
                 Text(
                   '没有拿到 APK 直链，将跳转到 Release 页面：${latest.releasePageUrl}',
-                  style: const TextStyle(color: Colors.orange),
+                  style: const TextStyle(color: AppColors.warning),
                 ),
               ],
             ],
@@ -143,7 +150,6 @@ class AppUpdateCoordinator {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: const Row(
           children: [
             SizedBox(
@@ -182,8 +188,6 @@ class AppUpdateCoordinator {
   }
 
   static void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    AppSnackBar.status(context, message);
   }
 }
