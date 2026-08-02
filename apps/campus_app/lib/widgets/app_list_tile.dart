@@ -67,15 +67,15 @@ class _AppListTileState extends State<AppListTile> {
                 widget.subtitle!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textMuted,
+                ),
               )
             : null,
-        trailing: widget.trailing ??
-            const Icon(
-              Icons.chevron_right,
-              color: Color(0xFFAAAABB),
-              size: 20,
-            ),
+        trailing:
+            widget.trailing ??
+            const Icon(Icons.chevron_right, color: Color(0xFFAAAABB), size: 20),
         onTap: widget.onTap != null
             ? () {
                 setState(() => _isPressed = true);

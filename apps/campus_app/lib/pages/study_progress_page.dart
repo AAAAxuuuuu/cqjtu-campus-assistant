@@ -418,7 +418,10 @@ class _SectionBlock extends StatelessWidget {
               onOpenGrade: () => onOpenGrade(section.courses[i]),
             ),
             if (i != section.courses.length - 1)
-              Divider(height: 1, color: AppColors.outline.withValues(alpha: 0.6)),
+              Divider(
+                height: 1,
+                color: AppColors.outline.withValues(alpha: 0.6),
+              ),
           ],
         ],
       ),

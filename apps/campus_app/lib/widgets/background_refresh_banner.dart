@@ -19,9 +19,7 @@ class BackgroundRefreshBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: AppColors.warning.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -34,10 +32,7 @@ class BackgroundRefreshBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: AppColors.textBody,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: AppColors.textBody, fontSize: 12),
             ),
           ),
           TextButton.icon(

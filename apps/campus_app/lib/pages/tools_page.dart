@@ -149,10 +149,7 @@ class ToolsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: GlassAppBar(
-        title: const Text('服务'),
-        centerTitle: false,
-      ),
+      appBar: GlassAppBar(title: const Text('服务'), centerTitle: false),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -205,7 +202,9 @@ class ToolsPage extends ConsumerWidget {
                   subtitle: '执行计划与培养方案',
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const StudyProgressPage()),
+                    MaterialPageRoute(
+                      builder: (_) => const StudyProgressPage(),
+                    ),
                   ),
                 ),
                 _ServiceTile(
@@ -333,9 +332,7 @@ class _AcademicProgressServiceCard extends StatelessWidget {
         onTap: onTap,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.all(
-              color: AppColors.outline.withValues(alpha: 0.7),
-            ),
+            border: Border.all(color: AppColors.outline.withValues(alpha: 0.7)),
             borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: [
               BoxShadow(
@@ -435,7 +432,10 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                       children: [
                         topContent,
                         const SizedBox(height: 18),
-                        Divider(height: 1, color: AppColors.outline.withValues(alpha: 0.6)),
+                        Divider(
+                          height: 1,
+                          color: AppColors.outline.withValues(alpha: 0.6),
+                        ),
                         const SizedBox(height: 14),
                         _EarnedCreditProgressGrid(
                           summary: summary,
@@ -918,7 +918,10 @@ class _GradesPageState extends ConsumerState<GradesPage> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text('暂无成绩数据', style: TextStyle(color: AppColors.textMuted)),
+                  child: Text(
+                    '暂无成绩数据',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
                 ),
               ),
           ],
@@ -997,7 +1000,10 @@ class _Item extends StatelessWidget {
           color: AppColors.primary,
         ),
       ),
-      Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+      Text(
+        label,
+        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+      ),
     ],
   );
 }
@@ -1132,7 +1138,7 @@ class _GradeHeroCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     '${grade.semester}  ${grade.credits} 学分  绩点 ${grade.gradePoint}',
-style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                   if (grade.courseAttribute.isNotEmpty ||
                       grade.courseNature.isNotEmpty)

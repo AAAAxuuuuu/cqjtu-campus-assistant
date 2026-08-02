@@ -53,10 +53,7 @@ class ResponsiveScaffold extends StatelessWidget {
               switchInCurve: AppMotion.easeOutStrong,
               switchOutCurve: AppMotion.easeInOutStrong,
               transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
+                return FadeTransition(opacity: animation, child: child);
               },
               child: KeyedSubtree(
                 key: ValueKey<int>(currentIndex),

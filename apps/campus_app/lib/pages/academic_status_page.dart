@@ -44,10 +44,7 @@ class _AcademicStatusPageState extends ConsumerState<AcademicStatusPage> {
       appBar: GlassAppBar(
         title: const Text('学业情况'),
         actions: [
-          SpinningRefreshButton(
-            tooltip: '刷新学业数据',
-            onPressed: _refreshAll,
-          ),
+          SpinningRefreshButton(tooltip: '刷新学业数据', onPressed: _refreshAll),
         ],
       ),
       body:
@@ -105,7 +102,10 @@ class _AcademicStatusContent extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 64),
               child: Center(
-                child: Text('暂无学业数据', style: TextStyle(color: AppColors.textMuted)),
+                child: Text(
+                  '暂无学业数据',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
               ),
             ),
         ],
@@ -185,10 +185,7 @@ class _OverviewCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 '按当前可读取成绩估算加权均分 ${stats.weightedAverage!.toStringAsFixed(1)}',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
             ],
           ],

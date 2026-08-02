@@ -38,14 +38,26 @@ abstract final class AppSnackBar {
       show(context, message, icon: Icons.info_outline);
 
   /// 完成/成功
-  static void success(BuildContext context, String message) =>
-      show(context, message, icon: Icons.check_circle_outline, color: AppColors.success);
+  static void success(BuildContext context, String message) => show(
+    context,
+    message,
+    icon: Icons.check_circle_outline,
+    color: AppColors.success,
+  );
 
   /// 警告
-  static void warning(BuildContext context, String message) =>
-      show(context, message, icon: Icons.warning_amber_outlined, color: AppColors.warning);
+  static void warning(BuildContext context, String message) => show(
+    context,
+    message,
+    icon: Icons.warning_amber_outlined,
+    color: AppColors.warning,
+  );
 
   /// 错误
-  static void error(BuildContext context, String message) =>
-      show(context, message, icon: Icons.error_outline, color: AppColors.danger);
+  static void error(BuildContext context, String message) => show(
+    context,
+    message,
+    icon: Icons.error_outline,
+    color: AppColors.danger,
+  );
 }

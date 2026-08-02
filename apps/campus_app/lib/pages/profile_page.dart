@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
@@ -54,23 +54,15 @@ class ProfilePage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         children: [
-          AppEntrance(
-            child: _buildUserInfoCard(creds?.username ?? '未登录'),
-          ),
+          AppEntrance(child: _buildUserInfoCard(creds?.username ?? '未登录')),
           const SizedBox(height: 20),
-          AppEntrance(
-            index: 1,
-            child: const _ElectricityCardWidget(),
-          ),
+          AppEntrance(index: 1, child: const _ElectricityCardWidget()),
           const SizedBox(height: 20),
           AppEntrance(
             index: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('宿舍设置'),
-                const _DormSettingsCard(),
-              ],
+              children: [_sectionLabel('宿舍设置'), const _DormSettingsCard()],
             ),
           ),
           const SizedBox(height: 20),
@@ -89,10 +81,7 @@ class ProfilePage extends ConsumerWidget {
             index: 4,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('数据与缓存'),
-                const _CacheSettingsCard(),
-              ],
+              children: [_sectionLabel('数据与缓存'), const _CacheSettingsCard()],
             ),
           ),
           const SizedBox(height: 20),
@@ -111,17 +100,11 @@ class ProfilePage extends ConsumerWidget {
             index: 6,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('版本更新'),
-                const _AppUpdateCard(),
-              ],
+              children: [_sectionLabel('版本更新'), const _AppUpdateCard()],
             ),
           ),
           const SizedBox(height: 30),
-          AppEntrance(
-            index: 7,
-            child: _buildLogoutButton(context, ref),
-          ),
+          AppEntrance(index: 7, child: _buildLogoutButton(context, ref)),
           const SizedBox(height: 40),
         ],
       ),
@@ -180,7 +163,11 @@ class ProfilePage extends ConsumerWidget {
                   child: const CircleAvatar(
                     radius: 32,
                     backgroundColor: Colors.white,
-                    child: Icon(Icons.person, size: 38, color: AppColors.primary),
+                    child: Icon(
+                      Icons.person,
+                      size: 38,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -201,7 +188,10 @@ class ProfilePage extends ConsumerWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
@@ -212,11 +202,19 @@ class ProfilePage extends ConsumerWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.school, size: 13, color: Colors.white),
+                                Icon(
+                                  Icons.school,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   '重庆交通大学',
-                                  style: TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ),
@@ -240,10 +238,16 @@ class ProfilePage extends ConsumerWidget {
       height: 50,
       child: OutlinedButton.icon(
         icon: const Icon(Icons.logout, size: 18),
-        label: const Text('退出登录', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        label: const Text(
+          '退出登录',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
+          side: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -267,7 +271,10 @@ class ProfilePage extends ConsumerWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消', style: TextStyle(color: AppColors.textMuted)),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(
@@ -442,7 +449,10 @@ class _CacheSettingsCard extends ConsumerWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消', style: TextStyle(color: AppColors.textMuted)),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
                 ),
                 TextButton(
                   onPressed: () async {
@@ -532,10 +542,7 @@ class _DormSettingsCard extends ConsumerWidget {
         onSaved: (room) async {
           await ref.read(dormRoomProvider.notifier).set(room);
           if (context.mounted) {
-            AppSnackBar.success(
-              context,
-              '已保存：${room.displayName}，电费数据正在刷新',
-            );
+            AppSnackBar.success(context, '已保存：${room.displayName}，电费数据正在刷新');
           }
         },
       ),
@@ -729,7 +736,10 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                         ),
                         Text(
                           '支持科学城校区与南岸校区学生宿舍',
-                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -1422,9 +1432,12 @@ class _BackgroundSettingsCardState
                 ),
               ),
             if (_backgroundSetupCompleted)
-              const Divider(height: 1, indent: 56, color: AppColors.outline),            _SettingTile(
+              const Divider(height: 1, indent: 56, color: AppColors.outline),
+            _SettingTile(
               icon: Icons.battery_saver_outlined,
-              iconColor: _isIgnoring == true ? AppColors.success : AppColors.warning,
+              iconColor: _isIgnoring == true
+                  ? AppColors.success
+                  : AppColors.warning,
               title: '关闭电池优化',
               subtitle: _isIgnoring == null
                   ? '检测中...'
@@ -1498,7 +1511,9 @@ class _BackgroundSettingsCardState
                   : '在最近任务界面长按本应用 → 锁定，防止被清理',
               trailing: Icon(
                 _lockBackgroundDone ? Icons.check_circle : Icons.info_outline,
-                color: _lockBackgroundDone ? AppColors.success : AppColors.textMuted,
+                color: _lockBackgroundDone
+                    ? AppColors.success
+                    : AppColors.textMuted,
                 size: 20,
               ),
               onTap: () => _showLockGuideDialog(context),
@@ -1871,7 +1886,9 @@ class _ElectricityCardWidget extends ConsumerWidget {
                                             : '余额充足，安心用电'),
                                   style: TextStyle(
                                     color: isLowBalance
-                                        ? AppColors.danger.withValues(alpha: 0.85)
+                                        ? AppColors.danger.withValues(
+                                            alpha: 0.85,
+                                          )
                                         : Colors.white70,
                                     fontSize: 13,
                                   ),

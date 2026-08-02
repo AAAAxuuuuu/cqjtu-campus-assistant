@@ -1087,10 +1087,10 @@ Widget _sheetSectionLabel(String value) => Padding(
   child: Text(
     value,
     style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMuted,
-            ),
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textMuted,
+    ),
   ),
 );
 
@@ -2124,10 +2124,14 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                       vertical: 10,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.accent.withValues(alpha: 0.08),
+                                      color: AppColors.accent.withValues(
+                                        alpha: 0.08,
+                                      ),
                                       border: Border(
                                         top: BorderSide(
-                                          color: AppColors.accent.withValues(alpha: 0.3),
+                                          color: AppColors.accent.withValues(
+                                            alpha: 0.3,
+                                          ),
                                           width: 1,
                                         ),
                                       ),
@@ -2146,14 +2150,16 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                               Icon(
                                                 Icons.sticky_note_2_outlined,
                                                 size: 14,
-                                                color: AppColors.accent.withValues(alpha: 0.9),
+                                                color: AppColors.accent
+                                                    .withValues(alpha: 0.9),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
                                                 '备注',
                                                 style: TextStyle(
                                                   fontSize: 9,
-                                                  color: AppColors.accent.withValues(alpha: 0.9),
+                                                  color: AppColors.accent
+                                                      .withValues(alpha: 0.9),
                                                 ),
                                               ),
                                             ],
@@ -2665,9 +2671,9 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontSize: 9.5,
-                    color: AppColors.textMuted.withValues(alpha: 0.7),
-                  ),
+                  fontSize: 9.5,
+                  color: AppColors.textMuted.withValues(alpha: 0.7),
+                ),
               ),
             ],
           ),

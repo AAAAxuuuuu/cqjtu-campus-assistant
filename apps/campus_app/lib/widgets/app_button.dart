@@ -85,8 +85,9 @@ class _AppButtonState extends State<AppButton> {
             boxShadow: enabled
                 ? [
                     BoxShadow(
-                      color: (widget.color ?? AppColors.primary)
-                          .withValues(alpha: 0.25),
+                      color: (widget.color ?? AppColors.primary).withValues(
+                        alpha: 0.25,
+                      ),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -141,7 +142,10 @@ class _AppButtonState extends State<AppButton> {
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
               foregroundColor: strokeColor,
-              side: BorderSide(color: strokeColor.withValues(alpha: 0.6), width: 1.5),
+              side: BorderSide(
+                color: strokeColor.withValues(alpha: 0.6),
+                width: 1.5,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
@@ -153,8 +157,9 @@ class _AppButtonState extends State<AppButton> {
         break;
 
       case AppButtonStyle.tonal:
-        final tonalBg = (widget.color ?? AppColors.tint)
-            .withValues(alpha: 0.14);
+        final tonalBg = (widget.color ?? AppColors.tint).withValues(
+          alpha: 0.14,
+        );
         final tonalFg = widget.color ?? AppColors.primary;
         buttonWidget = SizedBox(
           width: widget.width,

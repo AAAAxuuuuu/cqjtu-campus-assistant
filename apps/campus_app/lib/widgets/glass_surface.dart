@@ -76,9 +76,7 @@ class _GlassAppBarState extends State<GlassAppBar> {
             children: [
               // 透明时无材质，滚动后浮起白色半透明层
               AnimatedContainer(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : AppMotion.standard,
+                duration: reduceMotion ? Duration.zero : AppMotion.standard,
                 curve: AppMotion.easeOutStrong,
                 color: _scrolled
                     ? Colors.white.withValues(alpha: 0.72)

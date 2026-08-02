@@ -111,10 +111,7 @@ class ElectricityPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          AppEntrance(
-            index: 1,
-            child: const _RechargeCard(),
-          ),
+          AppEntrance(index: 1, child: const _RechargeCard()),
         ],
       ),
     );
@@ -163,14 +160,20 @@ class _BalanceCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: const Icon(Icons.bolt, size: 40, color: Colors.white),
                 ),
                 const SizedBox(height: 12),
                 const Text(
                   '当前剩余电量',
-                  style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -186,7 +189,10 @@ class _BalanceCard extends StatelessWidget {
                         SizedBox(
                           width: 12,
                           height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white70),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Colors.white70,
+                          ),
                         ),
                         SizedBox(width: 6),
                         Text(
@@ -399,7 +405,11 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                 // 电费阈值
                 const Row(
                   children: [
-                    Icon(Icons.electric_bolt, size: 16, color: AppColors.warning),
+                    Icon(
+                      Icons.electric_bolt,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
                     SizedBox(width: 6),
                     Text('电费预警', style: TextStyle(fontWeight: FontWeight.w600)),
                   ],
@@ -409,7 +419,10 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _elecValue == 0
                       ? '预警已关闭'
                       : '低于 ${_elecValue.toStringAsFixed(0)} 块时发送提醒',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
                 Slider(
                   value: _elecValue,
@@ -436,7 +449,10 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _cardValue == 0
                       ? '预警已关闭'
                       : '低于 ¥${_cardValue.toStringAsFixed(0)} 时发送提醒',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
                 Slider(
                   value: _cardValue,
