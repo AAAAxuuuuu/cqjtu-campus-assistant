@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:core/models/course.dart';
+import 'package:campus_app/theme/app_theme.dart';
 
 class CourseCell extends StatelessWidget {
   final Course course;
@@ -17,36 +18,45 @@ class CourseCell extends StatelessWidget {
     this.densityScale = 1,
   });
 
-  Color get _baseColor => color ?? const Color(0xFFF9ECF2);
+  Color get _baseColor => color ?? const Color(0xFFF7ECF2);
 
-  Color get _cellColor => isActive ? _baseColor : Colors.grey.shade300;
+  Color get _cellColor => isActive ? _baseColor : AppColors.tintSoft;
   Color get _textColor =>
-      isActive ? const Color(0xFF25313D) : Colors.grey.shade500;
+      isActive ? AppColors.textPrimary : AppColors.textMuted;
   Color get _subColor =>
-      isActive ? const Color(0xFF5F6B76) : Colors.grey.shade400;
+      isActive ? const Color(0xFF6B4556) : AppColors.textMuted.withValues(alpha: 0.6);
   Color get _borderColor => isActive
       ? HSLColor.fromColor(_baseColor)
             .withLightness(
-              (HSLColor.fromColor(_baseColor).lightness - 0.12).clamp(0.0, 1.0),
+              (HSLColor.fromColor(_baseColor).lightness - 0.10).clamp(0.0, 1.0),
             )
             .toColor()
-      : Colors.grey.shade300;
+      : AppColors.outline;
 
   @override
   Widget build(BuildContext context) {
-    // 高度完全由父级 Positioned 决定，这里不设固定 height
     return GestureDetector(
       onTap: () => _showDetail(context),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppMotion.quick,
+        curve: AppMotion.easeOutStrong,
         padding: EdgeInsets.symmetric(
-          horizontal: 5 * densityScale,
-          vertical: 4 * densityScale,
+          horizontal: 6 * densityScale,
+          vertical: 5 * densityScale,
         ),
         decoration: BoxDecoration(
           color: _cellColor,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _borderColor, width: 0.8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _borderColor, width: 1),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: _baseColor.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,21 +64,37 @@ class CourseCell extends StatelessWidget {
             Text(
               course.name,
               style: TextStyle(
-                fontSize: 11 * densityScale,
-                fontWeight: FontWeight.bold,
+                fontSize: 11.5 * densityScale,
+                fontWeight: FontWeight.w700,
                 color: _textColor,
+                height: 1.15,
               ),
               maxLines: course.slotSpan >= 2 ? 4 : 2,
               overflow: TextOverflow.ellipsis,
             ),
-            // 只有跨 2 节及以上才显示教室，避免单节时溢出
             if (course.slotSpan >= 2) ...[
               const Spacer(),
-              Text(
-                course.placeText,
-                style: TextStyle(fontSize: 10 * densityScale, color: _subColor),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 10 * densityScale,
+                    color: _subColor,
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(
+                      course.placeText,
+                      style: TextStyle(
+                        fontSize: 9.5 * densityScale,
+                        color: _subColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -80,8 +106,9 @@ class CourseCell extends StatelessWidget {
   void _showDetail(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
@@ -89,32 +116,45 @@ class CourseCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             Row(
               children: [
                 Expanded(
                   child: Text(
                     course.name,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
                 if (!isActive)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                      horizontal: 10,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
+                      color: AppColors.tintSoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '本周无课',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -122,26 +162,27 @@ class CourseCell extends StatelessWidget {
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                      horizontal: 10,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: (course.isExam ? Colors.purple : Colors.teal)
-                          .withValues(alpha: 0.1),
+                      color: (course.isExam ? AppColors.primary : AppColors.secondary)
+                          .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       course.isExam ? '考试' : '自定义',
                       style: TextStyle(
                         fontSize: 11,
-                        color: course.isExam ? Colors.purple : Colors.teal,
+                        fontWeight: FontWeight.w600,
+                        color: course.isExam ? AppColors.primary : AppColors.secondary,
                       ),
                     ),
                   ),
                 ],
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             if (!course.isExam && course.teacher.trim().isNotEmpty)
               _InfoRow(Icons.person_outline, course.teacher),
             _InfoRow(Icons.access_time_outlined, course.timeStr),
@@ -150,18 +191,18 @@ class CourseCell extends StatelessWidget {
               _InfoRow(Icons.event_seat_outlined, '座位号：${course.seatNumber}'),
             _InfoRow(
               Icons.calendar_month_outlined,
-              // 改为展示这门课一共要上多少周，节次保持不变
               '共 ${course.weekList.length} 周 | 第 ${course.timeSlot}–${course.endTimeSlot} 节',
             ),
             if (onDelete != null) ...[
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('删除这门自定义课程'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
+                    foregroundColor: AppColors.danger,
+                    side: const BorderSide(color: AppColors.danger),
                   ),
                   onPressed: () {
                     Navigator.pop(context);
@@ -184,12 +225,24 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.symmetric(vertical: 7),
     child: Row(
       children: [
-        Icon(icon, size: 18, color: Colors.grey),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text)),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.tint.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 14, color: AppColors.textBody),
+          ),
+        ),
       ],
     ),
   );
