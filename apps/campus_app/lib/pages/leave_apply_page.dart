@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../widgets/error_view.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/spinning_refresh_button.dart';
 import '../utils/providers.dart';
 import '../services/webview_session_scope.dart';
 
@@ -388,44 +391,18 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('请假申请'),
         actions: [
-          IconButton(
+          SpinningRefreshButton(
             onPressed: _booting ? null : _openLeaveSite,
-            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: Stack(
         children: [
           if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 44,
-                      color: Colors.redAccent,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.black87),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _openLeaveSite,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            ErrorView(message: _error!, onRetry: _openLeaveSite)
           else
             WebViewWidget(controller: _controller),
           if (_booting || _loadingPage)
