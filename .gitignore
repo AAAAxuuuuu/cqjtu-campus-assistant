@@ -35,3 +35,4 @@ packages/data/tool/test_user.dart
 release/
 *.apk
 logo_showcase.html
+assets/
