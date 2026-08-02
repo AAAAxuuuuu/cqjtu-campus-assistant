@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/models/grade.dart';
 import '../features/study_progress/study_progress_providers.dart';
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
+import '../widgets/app_entrance.dart';
 import '../widgets/background_refresh_banner.dart';
+import '../widgets/glass_surface.dart';
 import '../widgets/grade_item.dart';
+import '../widgets/app_list_tile.dart';
+import '../widgets/spinning_refresh_button.dart';
 import 'academic_status_page.dart';
 import 'campus_service_webview_page.dart';
 import 'electricity_page.dart';
@@ -143,134 +148,144 @@ class ToolsPage extends ConsumerWidget {
     final studySummary = ref.watch(studyCreditProgressSummaryProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
+      backgroundColor: AppColors.surface,
+      appBar: GlassAppBar(
         title: const Text('服务'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         centerTitle: false,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _AcademicProgressServiceCard(
-            summary: studySummary,
-            hasData: studyProgress.hasData,
-            isLoading: studyProgress.isLoading,
-            hasError: studyProgress.hasError && !studyProgress.hasData,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AcademicStatusPage()),
+          AppEntrance(
+            index: 0,
+            child: _AcademicProgressServiceCard(
+              summary: studySummary,
+              hasData: studyProgress.hasData,
+              isLoading: studyProgress.isLoading,
+              hasError: studyProgress.hasError && !studyProgress.hasData,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AcademicStatusPage()),
+              ),
+              onRefresh: () => ref
+                  .read(studyProgressProvider.notifier)
+                  .refresh(forceRefresh: true),
             ),
-            onRefresh: () => ref
-                .read(studyProgressProvider.notifier)
-                .refresh(forceRefresh: true),
           ),
           const SizedBox(height: 18),
-          _ServiceSection(
-            title: '教务',
-            children: [
-              _ServiceTile(
-                icon: Icons.grade_outlined,
-                color: Colors.orange,
-                title: '成绩查询',
-                subtitle: '成绩列表与明细',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const GradesPage()),
+          AppEntrance(
+            index: 1,
+            child: _ServiceSection(
+              title: '教务',
+              children: [
+                _ServiceTile(
+                  icon: Icons.grade_outlined,
+                  color: AppColors.primary,
+                  title: '成绩查询',
+                  subtitle: '成绩列表与明细',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GradesPage()),
+                  ),
                 ),
-              ),
-              _ServiceTile(
-                icon: Icons.event_note_outlined,
-                color: Colors.purple,
-                title: '考试安排',
-                subtitle: '考试时间、考场与座位',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ExamsPage()),
+                _ServiceTile(
+                  icon: Icons.event_note_outlined,
+                  color: AppColors.secondary,
+                  title: '考试安排',
+                  subtitle: '考试时间、考场与座位',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ExamsPage()),
+                  ),
                 ),
-              ),
-              _ServiceTile(
-                icon: Icons.schema_outlined,
-                color: Colors.teal,
-                title: '培养计划',
-                subtitle: '执行计划与培养方案',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const StudyProgressPage()),
+                _ServiceTile(
+                  icon: Icons.schema_outlined,
+                  color: AppColors.accent,
+                  title: '培养计划',
+                  subtitle: '执行计划与培养方案',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const StudyProgressPage()),
+                  ),
                 ),
-              ),
-              _ServiceTile(
-                icon: Icons.rate_review_outlined,
-                color: Colors.deepPurple,
-                title: '课程评价',
-                subtitle: '进入评教系统',
-                onTap: () => _openWebService(
-                  context,
+                _ServiceTile(
+                  icon: Icons.rate_review_outlined,
+                  color: AppColors.primary.withValues(alpha: 0.8),
                   title: '课程评价',
-                  url: _evaluationUrl,
+                  subtitle: '进入评教系统',
+                  onTap: () => _openWebService(
+                    context,
+                    title: '课程评价',
+                    url: _evaluationUrl,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 18),
-          _ServiceSection(
-            title: '校园',
-            children: [
-              _ServiceTile(
-                icon: Icons.bolt_outlined,
-                color: Colors.amber.shade800,
-                title: '宿舍电费',
-                subtitle: '余额查询与充值',
-                onTap: () => ElectricityPage.open(context, ref),
-              ),
-              _ServiceTile(
-                icon: Icons.directions_bus_outlined,
-                color: Colors.indigo,
-                title: '校车预约',
-                subtitle: '校车班次查询与预约',
-                onTap: () => _openWebService(
-                  context,
+          AppEntrance(
+            index: 2,
+            child: _ServiceSection(
+              title: '校园',
+              children: [
+                _ServiceTile(
+                  icon: Icons.bolt_outlined,
+                  color: AppColors.accent,
+                  title: '宿舍电费',
+                  subtitle: '余额查询与充值',
+                  onTap: () => ElectricityPage.open(context, ref),
+                ),
+                _ServiceTile(
+                  icon: Icons.directions_bus_outlined,
+                  color: AppColors.secondary,
                   title: '校车预约',
-                  url: _busReservationUrl,
+                  subtitle: '校车班次查询与预约',
+                  onTap: () => _openWebService(
+                    context,
+                    title: '校车预约',
+                    url: _busReservationUrl,
+                  ),
                 ),
-              ),
-              _ServiceTile(
-                icon: Icons.credit_card_outlined,
-                color: Colors.redAccent,
-                title: '一卡通服务',
-                subtitle: '进入一卡通系统办理校园卡服务',
-                onTap: () => _openWebService(
-                  context,
+                _ServiceTile(
+                  icon: Icons.credit_card_outlined,
+                  color: AppColors.primary,
                   title: '一卡通服务',
-                  url: _ecardServiceUrl,
+                  subtitle: '进入一卡通系统办理校园卡服务',
+                  onTap: () => _openWebService(
+                    context,
+                    title: '一卡通服务',
+                    url: _ecardServiceUrl,
+                  ),
                 ),
-              ),
-              _ServiceTile(
-                icon: Icons.assignment_return_outlined,
-                color: Colors.green,
-                title: '请假申请',
-                subtitle: '出入校与请假记录',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LeaveApplyPage()),
+                _ServiceTile(
+                  icon: Icons.assignment_return_outlined,
+                  color: AppColors.success,
+                  title: '请假申请',
+                  subtitle: '出入校与请假记录',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LeaveApplyPage()),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 18),
-          _ServiceSection(
-            title: '在线系统',
-            children: [
-              _ServiceTile(
-                icon: Icons.alternate_email,
-                color: Colors.blue,
-                title: '邮箱服务',
-                subtitle: '学校邮箱与别名',
-                onTap: () =>
-                    _openWebService(context, title: '邮箱服务', url: _emailUrl),
-              ),
-            ],
+          AppEntrance(
+            index: 3,
+            child: _ServiceSection(
+              title: '在线系统',
+              children: [
+                _ServiceTile(
+                  icon: Icons.alternate_email,
+                  color: AppColors.secondary,
+                  title: '邮箱服务',
+                  subtitle: '学校邮箱与别名',
+                  onTap: () =>
+                      _openWebService(context, title: '邮箱服务', url: _emailUrl),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -312,17 +327,19 @@ class _AcademicProgressServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFE6ECF3)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.outline.withValues(alpha: 0.7),
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.025),
+                color: AppColors.primary.withValues(alpha: 0.05),
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),
@@ -343,7 +360,7 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF25313D),
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -353,7 +370,7 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF667085),
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ],
@@ -373,7 +390,10 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                         onPressed: onRefresh,
                       )
                     else
-                      const Icon(Icons.chevron_right, color: Colors.black26),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textMuted.withValues(alpha: 0.5),
+                      ),
                   ],
                 ),
               ),
@@ -415,7 +435,7 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                       children: [
                         topContent,
                         const SizedBox(height: 18),
-                        const Divider(height: 1, color: Color(0xFFE6ECF3)),
+                        Divider(height: 1, color: AppColors.outline.withValues(alpha: 0.6)),
                         const SizedBox(height: 14),
                         _EarnedCreditProgressGrid(
                           summary: summary,
@@ -456,17 +476,17 @@ class _RequiredCreditRing extends StatelessWidget {
                 child: Text(
                   hasData ? _formatCredit(summary.requiredCredits) : '--',
                   style: const TextStyle(
-                    fontSize: 24,
-                    height: 1,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF25313D),
+                    height: 1,
+                    color: AppColors.textPrimary,
+                    fontSize: 24,
                   ),
                 ),
               ),
               const SizedBox(height: 5),
               const Text(
                 '应修学分',
-                style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
             ],
           ),
@@ -493,7 +513,7 @@ class _RequiredCreditLegend extends StatelessWidget {
             hasData: hasData,
           ),
           if (i != summary.buckets.length - 1)
-            const Divider(height: 18, color: Color(0xFFE6ECF3)),
+            const Divider(height: 18, color: AppColors.outline),
         ],
       ],
     );
@@ -536,7 +556,7 @@ class _RequiredCreditLegendRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF4B5563),
+              color: AppColors.textSecondary,
             ),
           ),
         ),
@@ -545,14 +565,14 @@ class _RequiredCreditLegendRow extends StatelessWidget {
           child: Text(
             hasData ? '$percent%' : '--',
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
         ),
         Container(
           width: 1,
           height: 16,
           margin: const EdgeInsets.symmetric(horizontal: 10),
-          color: const Color(0xFFE6ECF3),
+          color: AppColors.outline,
         ),
         SizedBox(
           width: 46,
@@ -561,7 +581,7 @@ class _RequiredCreditLegendRow extends StatelessWidget {
             textAlign: TextAlign.end,
             style: const TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF25313D),
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -633,13 +653,13 @@ class _EarnedCreditProgressTile extends StatelessWidget {
                 '已修${bucket.label}',
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF25313D),
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
             Text(
               hasData ? '${_formatCredit(bucket.earnedCredits)}分' : '--',
-              style: const TextStyle(color: Color(0xFF25313D)),
+              style: const TextStyle(color: AppColors.textPrimary),
             ),
           ],
         ),
@@ -650,7 +670,7 @@ class _EarnedCreditProgressTile extends StatelessWidget {
             value: progress,
             minHeight: 7,
             color: color,
-            backgroundColor: const Color(0xFFE8EAED),
+            backgroundColor: AppColors.tintSoft,
           ),
         ),
       ],
@@ -672,7 +692,7 @@ class _CreditRingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.butt
-      ..color = const Color(0xFFE8EAED);
+      ..color = AppColors.tintSoft;
 
     canvas.drawArc(arcRect, -math.pi / 2, math.pi * 2, false, basePaint);
 
@@ -717,11 +737,11 @@ String _academicCardSubtitle(StudyCreditProgressSummary summary, bool hasData) {
 Color _creditCategoryColor(StudyCreditCategory category) {
   switch (category) {
     case StudyCreditCategory.compulsory:
-      return const Color(0xFF2F63D7);
+      return AppColors.primary;
     case StudyCreditCategory.elective:
-      return const Color(0xFF5AA9FF);
+      return AppColors.secondary;
     case StudyCreditCategory.schoolElective:
-      return const Color(0xFFFF8452);
+      return AppColors.accent;
   }
 }
 
@@ -743,17 +763,17 @@ class _ServiceSection extends StatelessWidget {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
             ),
           ),
         ),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: AppColors.primary.withValues(alpha: 0.04),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -767,7 +787,7 @@ class _ServiceSection extends StatelessWidget {
                   const Divider(
                     height: 1,
                     indent: 56,
-                    color: Color(0xFFF0F0F0),
+                    color: AppColors.outline,
                   ),
               ],
             ],
@@ -795,19 +815,11 @@ class _ServiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: color),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+    return AppListTile(
+      icon: icon,
+      iconColor: color,
+      title: title,
+      subtitle: subtitle,
       onTap: onTap,
     );
   }
@@ -837,7 +849,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
     final gradesAsync = ref.watch(gradesProvider(_semester));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('成绩查询'),
         actions: [
           // 学期筛选入口：显示当前选中学期
@@ -906,7 +918,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text('暂无成绩数据', style: TextStyle(color: Colors.grey)),
+                  child: Text('暂无成绩数据', style: TextStyle(color: AppColors.textMuted)),
                 ),
               ),
           ],
@@ -942,7 +954,7 @@ class _SummaryCard extends StatelessWidget {
     );
 
     return Card(
-      color: Colors.blue.shade50,
+      color: AppColors.tint.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -982,10 +994,10 @@ class _Item extends StatelessWidget {
         style: const TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          color: Colors.blue,
+          color: AppColors.primary,
         ),
       ),
-      Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
     ],
   );
 }
@@ -1002,12 +1014,11 @@ class GradeDetailPage extends ConsumerWidget {
     final isFetching = detailAsync.isRefreshing && !detailAsync.hasValue;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('成绩明细'),
         actions: [
-          IconButton(
+          SpinningRefreshButton(
             tooltip: '刷新明细',
-            icon: const Icon(Icons.refresh),
             onPressed: () => ref
                 .read(gradeDetailProvider(arg).notifier)
                 .refresh(forceRefresh: true),
@@ -1090,10 +1101,10 @@ class _GradeHeroCard extends StatelessWidget {
   Color _scoreColor(BuildContext context) {
     final score = double.tryParse(totalScore);
     if (score == null) return Theme.of(context).colorScheme.primary;
-    if (score >= 90) return Colors.green.shade700;
+    if (score >= 90) return AppColors.success;
     if (score >= 75) return Theme.of(context).colorScheme.primary;
-    if (score >= 60) return Colors.orange.shade700;
-    return Colors.red.shade700;
+    if (score >= 60) return AppColors.warning;
+    return AppColors.danger;
   }
 
   @override
@@ -1121,7 +1132,7 @@ class _GradeHeroCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     '${grade.semester}  ${grade.credits} 学分  绩点 ${grade.gradePoint}',
-                    style: TextStyle(color: Colors.grey.shade700),
+style: TextStyle(color: AppColors.textSecondary),
                   ),
                   if (grade.courseAttribute.isNotEmpty ||
                       grade.courseNature.isNotEmpty)
@@ -1133,7 +1144,7 @@ class _GradeHeroCard extends StatelessWidget {
                           grade.courseNature,
                         ].where((text) => text.trim().isNotEmpty).join(' · '),
                         style: TextStyle(
-                          color: Colors.grey.shade600,
+                          color: AppColors.textMuted,
                           fontSize: 12,
                         ),
                       ),
@@ -1156,7 +1167,7 @@ class _GradeHeroCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '总成绩',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
               ],
             ),
@@ -1190,7 +1201,7 @@ class _BreakdownCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (segments.isEmpty)
-              Text('暂无可展示的成绩构成', style: TextStyle(color: Colors.grey.shade600))
+              Text('暂无可展示的成绩构成', style: TextStyle(color: AppColors.textMuted))
             else ...[
               _SegmentedBreakdownBar(segments: segments),
               const SizedBox(height: 14),
@@ -1287,7 +1298,7 @@ class _SegmentedBreakdownBar extends StatelessWidget {
               Expanded(
                 flex: _flexFor(remainder),
                 child: ColoredBox(
-                  color: Colors.grey.shade200,
+                  color: AppColors.tintSoft,
                   child: const SizedBox.expand(),
                 ),
               ),
@@ -1345,12 +1356,12 @@ class _BreakdownRow extends StatelessWidget {
           children: [
             Text(
               '占比 ${item.ratio.isEmpty ? '-' : item.ratio}',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
             const Spacer(),
             Text(
               weighted == null ? '折算 -' : '折算 ${weighted.toStringAsFixed(1)}',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -1373,13 +1384,13 @@ class _DetailEmptyState extends StatelessWidget {
           children: [
             Icon(
               isFetching ? Icons.cloud_sync_outlined : Icons.info_outline,
-              color: Colors.grey.shade500,
+              color: AppColors.textMuted.withValues(alpha: 0.4),
               size: 36,
             ),
             const SizedBox(height: 10),
             Text(
               isFetching ? '正在后台获取成绩明细' : '该课程暂无可展示的明细',
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -1411,7 +1422,7 @@ class _GradeDetailError extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Column(
               children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent),
+                const Icon(Icons.error_outline, color: AppColors.danger),
                 const SizedBox(height: 8),
                 Text(message, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
@@ -1461,7 +1472,7 @@ class _ExamsPageState extends ConsumerState<ExamsPage> {
     final examsAsync = ref.watch(examsProvider(_semester));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('考试安排'),
         actions: [
           TextButton.icon(
@@ -1503,7 +1514,7 @@ class _ExamsPageState extends ConsumerState<ExamsPage> {
                 const Center(
                   child: Text(
                     '当前学期暂无考试安排',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppColors.textMuted),
                   ),
                 ),
               ],
@@ -1571,7 +1582,7 @@ class _ExamRow extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
       children: [
-        Icon(icon, size: 16, color: Colors.grey),
+        Icon(icon, size: 16, color: AppColors.textMuted),
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
       ],

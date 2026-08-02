@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/study_progress/study_progress_providers.dart';
+import '../theme/app_theme.dart';
 import '../widgets/background_refresh_banner.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/spinning_refresh_button.dart';
 import 'tools_page.dart' show GradeDetailPage;
 
 class StudyProgressPage extends ConsumerStatefulWidget {
@@ -22,13 +25,12 @@ class _StudyProgressPageState extends ConsumerState<StudyProgressPage> {
     final notifier = ref.read(studyProgressProvider.notifier);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
-      appBar: AppBar(
+      backgroundColor: AppColors.surface,
+      appBar: GlassAppBar(
         title: const Text('培养计划'),
         actions: [
-          IconButton(
+          SpinningRefreshButton(
             tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
             onPressed: () => notifier.refresh(forceRefresh: true),
           ),
         ],
@@ -152,8 +154,8 @@ class _SummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFD9E3EF)),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.outline.withValues(alpha: 0.7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,13 +165,13 @@ class _SummaryPanel extends StatelessWidget {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF1F2A37),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             currentSemester.isEmpty ? '当前学期未识别' : '当前学期 $currentSemester',
-            style: const TextStyle(color: Color(0xFF607082)),
+            style: const TextStyle(color: AppColors.textMuted),
           ),
           const SizedBox(height: 16),
           Row(
@@ -178,8 +180,8 @@ class _SummaryPanel extends StatelessWidget {
                 child: _MetricChip(
                   label: '已修读',
                   value: completedCount.toString(),
-                  foreground: const Color(0xFF1F9D55),
-                  background: const Color(0xFFE8F7EE),
+                  foreground: AppColors.success,
+                  background: AppColors.success.withValues(alpha: 0.12),
                 ),
               ),
               const SizedBox(width: 10),
@@ -187,8 +189,8 @@ class _SummaryPanel extends StatelessWidget {
                 child: _MetricChip(
                   label: '修读中',
                   value: inProgressCount.toString(),
-                  foreground: const Color(0xFF2563EB),
-                  background: const Color(0xFFEAF2FF),
+                  foreground: AppColors.info,
+                  background: AppColors.info.withValues(alpha: 0.12),
                 ),
               ),
               const SizedBox(width: 10),
@@ -196,8 +198,8 @@ class _SummaryPanel extends StatelessWidget {
                 child: _MetricChip(
                   label: '未修读',
                   value: pendingCount.toString(),
-                  foreground: const Color(0xFFDC2626),
-                  background: const Color(0xFFFDECEC),
+                  foreground: AppColors.danger,
+                  background: AppColors.danger.withValues(alpha: 0.12),
                 ),
               ),
             ],
@@ -281,14 +283,6 @@ class _FilterBar extends StatelessWidget {
             prefixIcon: const Icon(Icons.search),
             filled: true,
             fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFD9E3EF)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFD9E3EF)),
-            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -339,19 +333,21 @@ class _FilterChip extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: AppMotion.quick,
+        curve: AppMotion.easeOutStrong,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1F4B7F) : Colors.white,
+          color: selected ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected ? const Color(0xFF1F4B7F) : const Color(0xFFD9E3EF),
+            color: selected ? AppColors.primary : AppColors.outline,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : const Color(0xFF4B5B6B),
+            color: selected ? Colors.white : AppColors.textBody,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -377,8 +373,8 @@ class _SectionBlock extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFD9E3EF)),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.outline.withValues(alpha: 0.7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,9 +382,11 @@ class _SectionBlock extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFFEAF3FB),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+            decoration: BoxDecoration(
+              color: AppColors.tint.withValues(alpha: 0.25),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.lg),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,7 +396,7 @@ class _SectionBlock extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF16324F),
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 if (progressText.isNotEmpty) ...[
@@ -407,7 +405,7 @@ class _SectionBlock extends StatelessWidget {
                     progressText,
                     style: const TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF5E738A),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -420,7 +418,7 @@ class _SectionBlock extends StatelessWidget {
               onOpenGrade: () => onOpenGrade(section.courses[i]),
             ),
             if (i != section.courses.length - 1)
-              const Divider(height: 1, color: Color(0xFFE6EDF5)),
+              Divider(height: 1, color: AppColors.outline.withValues(alpha: 0.6)),
           ],
         ],
       ),
@@ -453,7 +451,7 @@ class _CourseRow extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1F2A37),
+                      color: AppColors.textBody,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -483,8 +481,8 @@ class _CourseRow extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: scoreInteractive
-                      ? const Color(0xFFEAF2FF)
-                      : const Color(0xFFF3F5F7),
+                      ? AppColors.secondary.withValues(alpha: 0.12)
+                      : AppColors.outline.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -496,8 +494,8 @@ class _CourseRow extends StatelessWidget {
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: scoreInteractive
-                            ? const Color(0xFF1D4ED8)
-                            : const Color(0xFF607082),
+                            ? AppColors.secondary
+                            : AppColors.textMuted,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -506,8 +504,8 @@ class _CourseRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: scoreInteractive
-                            ? const Color(0xFF4A67A1)
-                            : const Color(0xFF98A3AF),
+                            ? AppColors.secondary.withValues(alpha: 0.8)
+                            : AppColors.textMuted,
                       ),
                     ),
                   ],
@@ -531,7 +529,7 @@ class _SmallTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FA),
+        color: AppColors.outline.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -539,7 +537,7 @@ class _SmallTag extends StatelessWidget {
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF556577),
+          color: AppColors.textMuted,
         ),
       ),
     );
@@ -556,16 +554,16 @@ class _StatusTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final (background, foreground) = switch (status) {
       StudyCourseStatus.completed => (
-        const Color(0xFFE8F7EE),
-        const Color(0xFF1F9D55),
+        AppColors.success.withValues(alpha: 0.12),
+        AppColors.success,
       ),
       StudyCourseStatus.inProgress => (
-        const Color(0xFFEAF2FF),
-        const Color(0xFF2563EB),
+        AppColors.info.withValues(alpha: 0.12),
+        AppColors.info,
       ),
       StudyCourseStatus.pending => (
-        const Color(0xFFFDECEC),
-        const Color(0xFFDC2626),
+        AppColors.danger.withValues(alpha: 0.12),
+        AppColors.danger,
       ),
     };
 
@@ -596,13 +594,13 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 36),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFD9E3EF)),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.outline.withValues(alpha: 0.7)),
       ),
       child: const Center(
         child: Text(
           '当前筛选下没有可展示的课程',
-          style: TextStyle(color: Color(0xFF607082)),
+          style: TextStyle(color: AppColors.textMuted),
         ),
       ),
     );
@@ -680,7 +678,7 @@ class _SheetRow extends StatelessWidget {
             width: 72,
             child: Text(
               label,
-              style: const TextStyle(color: Color(0xFF607082)),
+              style: const TextStyle(color: AppColors.textMuted),
             ),
           ),
           Expanded(
