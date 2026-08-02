@@ -24,5 +24,14 @@ Thumbs.db
 
 # 本地诊断与 AI 工作记录，可能包含截图、网络日志或会话上下文
 .agents/
+.claude/
+agent/
+skills/
+skills-lock.json
 debug_logs/
 packages/data/tool/test_user.dart
+
+# 产物与本地提案文件
+release/
+*.apk
+logo_showcase.html
