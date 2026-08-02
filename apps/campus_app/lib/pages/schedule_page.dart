@@ -11,11 +11,14 @@ import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
 import '../features/schedule/schedule_export_service.dart';
 import '../features/schedule/utils/course_text_parser.dart';
+import '../theme/app_theme.dart';
 import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/course_cell.dart';
 import '../widgets/error_view.dart';
+import '../widgets/glass_surface.dart';
 import 'webview_login_page.dart';
 
 const int _kTotalSlots = 13;
@@ -195,20 +198,20 @@ class _ScheduleGridPalette {
         morning: Colors.transparent,
         afternoon: Colors.transparent,
         evening: Colors.transparent,
-        divider: Color(0x4D0F172A),
-        timeText: Color(0xFF1F2937),
+        divider: AppColors.outline,
+        timeText: AppColors.textPrimary,
       );
     }
     return _ScheduleGridPalette(
       usesDirectImage: false,
-      header: const Color(0xFFFAF2F5),
-      surface: Colors.white,
-      timeColumn: Colors.white,
-      morning: Colors.white,
-      afternoon: const Color(0xFFBB6688).withValues(alpha: 0.04),
-      evening: const Color(0xFF1A4A7A).withValues(alpha: 0.07),
-      divider: const Color(0xFFCBD5E1),
-      timeText: const Color(0xFF475569),
+      header: AppColors.surface,
+      surface: AppColors.surfaceCard,
+      timeColumn: AppColors.surfaceCard,
+      morning: AppColors.surfaceCard,
+      afternoon: AppColors.primary.withValues(alpha: 0.04),
+      evening: AppColors.secondary.withValues(alpha: 0.06),
+      divider: AppColors.outline,
+      timeText: AppColors.textPrimary,
     );
   }
 }
@@ -281,7 +284,13 @@ class _NoSemesterPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('课程表')),
+      appBar: GlassAppBar(
+        centerTitle: false,
+        title: const Text(
+          '课程表',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -291,7 +300,7 @@ class _NoSemesterPage extends ConsumerWidget {
               Icon(
                 Icons.calendar_today_outlined,
                 size: 64,
-                color: Colors.grey.shade400,
+                color: AppColors.textMuted.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -303,7 +312,7 @@ class _NoSemesterPage extends ConsumerWidget {
               Text(
                 '设置开学日期后，将自动识别学期并获取课表。',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+                style: TextStyle(color: AppColors.textMuted, height: 1.5),
               ),
               const SizedBox(height: 28),
               FilledButton.icon(
@@ -343,12 +352,7 @@ class _ScheduleBody extends ConsumerWidget {
     if (creds == null) return;
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('正在同步最新课表...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      AppSnackBar.status(context, '正在同步最新课表...');
 
       // 强制后端发起请求
       final result =
@@ -379,9 +383,7 @@ class _ScheduleBody extends ConsumerWidget {
       );
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('课表已更新')));
+        AppSnackBar.success(context, '课表已更新');
       }
     } catch (e) {
       final errorStr = e.toString();
@@ -408,9 +410,7 @@ class _ScheduleBody extends ConsumerWidget {
                   .bind(username: creds.username, result: result);
             } catch (injectErr) {
               if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('会话恢复失败: $injectErr')));
+                AppSnackBar.error(context, '会话恢复失败: $injectErr');
               }
             }
           }
@@ -418,9 +418,7 @@ class _ScheduleBody extends ConsumerWidget {
       } else {
         // 普通的网络错误直接提示
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('刷新失败：${formatCampusError(e)}')),
-          );
+          AppSnackBar.error(context, '刷新失败：${formatCampusError(e)}');
         }
       }
     }
@@ -447,8 +445,12 @@ class _ScheduleBody extends ConsumerWidget {
         : '设置学期开学日期';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('课程表'),
+      appBar: GlassAppBar(
+        centerTitle: false,
+        title: const Text(
+          '课程表',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.edit_calendar, size: 16),
@@ -750,15 +752,11 @@ class _ScheduleMoreSheet extends ConsumerWidget {
           .read(scheduleBackgroundImageProvider.notifier)
           .setImage(image.path);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已应用自定义课表背景')));
+        AppSnackBar.success(context, '已应用自定义课表背景');
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('设置背景失败：$error')));
+        AppSnackBar.error(context, '设置背景失败：$error');
       }
     }
   }
@@ -769,8 +767,7 @@ class _ScheduleMoreSheet extends ConsumerWidget {
     _ScheduleExportType type,
   ) async {
     Navigator.pop(sheetContext);
-    final messenger = ScaffoldMessenger.of(pageContext);
-    messenger.showSnackBar(const SnackBar(content: Text('正在生成导出文件...')));
+    AppSnackBar.status(pageContext, '正在生成导出文件...');
     try {
       final calendarRules = await ref.read(
         scheduleCalendarRulesProvider.future,
@@ -805,7 +802,7 @@ class _ScheduleMoreSheet extends ConsumerWidget {
       }
     } catch (error) {
       if (pageContext.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('导出失败：$error')));
+        AppSnackBar.error(pageContext, '导出失败：$error');
       }
     }
   }
@@ -989,9 +986,7 @@ class _ScheduleCalendarRulesSheet extends ConsumerWidget {
     );
     if (targetDate == null || !context.mounted) return;
     if (scheduleDateKey(sourceDate) == scheduleDateKey(targetDate)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('原上课日期和补课日期不能相同')));
+      AppSnackBar.warning(context, '原上课日期和补课日期不能相同');
       return;
     }
     await ref
@@ -1092,10 +1087,10 @@ Widget _sheetSectionLabel(String value) => Padding(
   child: Text(
     value,
     style: const TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
-      color: Color(0xFF64748B),
-    ),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMuted,
+            ),
   ),
 );
 
@@ -1139,9 +1134,7 @@ Future<void> _pickSemesterStart(BuildContext context, WidgetRef ref) async {
   );
 
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已自动切换为 ${_semesterLabel(semesterStr)}')),
-    );
+    AppSnackBar.status(context, '已自动切换为 ${_semesterLabel(semesterStr)}');
   }
 }
 
@@ -1237,23 +1230,14 @@ Future<void> _showAddCustomCourseSheet(
 
               if (!sheetContext.mounted) return;
               if (count > 0) {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      recognizedCount > 1
-                          ? '已识别 $recognizedCount 条上课安排，当前展示第 1 条'
-                          : '已自动识别填充 $count 项信息',
-                    ),
-                    duration: const Duration(seconds: 2),
-                  ),
+                AppSnackBar.success(
+                  sheetContext,
+                  recognizedCount > 1
+                      ? '已识别 $recognizedCount 条上课安排，当前展示第 1 条'
+                      : '已自动识别填充 $count 项信息',
                 );
               } else {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('未识别到有效课程信息'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                AppSnackBar.warning(sheetContext, '未识别到有效课程信息');
               }
             }
 
@@ -1261,12 +1245,7 @@ Future<void> _showAddCustomCourseSheet(
               recognizedEntries = entries;
               if (entries.isEmpty) {
                 if (!sheetContext.mounted) return;
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('未识别到有效课程信息'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                AppSnackBar.warning(sheetContext, '未识别到有效课程信息');
                 return;
               }
               applyParsedData(entries.first, recognizedCount: entries.length);
@@ -1291,14 +1270,12 @@ Future<void> _showAddCustomCourseSheet(
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(
-                                0xFFBB6688,
-                              ).withValues(alpha: 0.1),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.edit_calendar_outlined,
-                              color: Color(0xFFBB6688),
+                              color: AppColors.primary,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1317,14 +1294,10 @@ Future<void> _showAddCustomCourseSheet(
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFFBB6688,
-                          ).withValues(alpha: 0.05),
+                          color: AppColors.primary.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: const Color(
-                              0xFFBB6688,
-                            ).withValues(alpha: 0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Column(
@@ -1338,7 +1311,7 @@ Future<void> _showAddCustomCourseSheet(
                                     Icon(
                                       Icons.auto_awesome,
                                       size: 18,
-                                      color: Color(0xFFBB6688),
+                                      color: AppColors.primary,
                                     ),
                                     SizedBox(width: 6),
                                     Text(
@@ -1346,7 +1319,7 @@ Future<void> _showAddCustomCourseSheet(
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFFBB6688),
+                                        color: AppColors.primary,
                                       ),
                                     ),
                                   ],
@@ -1366,13 +1339,9 @@ Future<void> _showAddCustomCourseSheet(
                                       applyParsedEntries(parsed);
                                     } else {
                                       if (!sheetContext.mounted) return;
-                                      ScaffoldMessenger.of(
+                                      AppSnackBar.warning(
                                         sheetContext,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('剪贴板为空'),
-                                          duration: Duration(seconds: 2),
-                                        ),
+                                        '剪贴板为空',
                                       );
                                     }
                                   },
@@ -1446,7 +1415,7 @@ Future<void> _showAddCustomCourseSheet(
                             const Icon(
                               Icons.playlist_add_check_outlined,
                               size: 18,
-                              color: Color(0xFF8D4E6B),
+                              color: AppColors.textPrimary,
                             ),
                             const SizedBox(width: 7),
                             Expanded(
@@ -1454,7 +1423,7 @@ Future<void> _showAddCustomCourseSheet(
                                 '识别到 ${recognizedEntries.length} 条上课安排，保存时会一次性创建全部课程。',
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: Color(0xFF8D4E6B),
+                                  color: AppColors.textPrimary,
                                   height: 1.35,
                                 ),
                               ),
@@ -1675,14 +1644,11 @@ Future<void> _showAddCustomCourseSheet(
                             if (!sheetContext.mounted) return;
                             Navigator.pop(sheetContext);
                             if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  courses.length == 1
-                                      ? '已新增「${courses.first.name}」'
-                                      : '已新增 ${courses.length} 条自定义课程',
-                                ),
-                              ),
+                            AppSnackBar.success(
+                              context,
+                              courses.length == 1
+                                  ? '已新增「${courses.first.name}」'
+                                  : '已新增 ${courses.length} 条自定义课程',
                             );
                           },
                         ),
@@ -1890,7 +1856,7 @@ class _WeekNavigator extends ConsumerWidget {
                   Text(
                     '${weekStart.month}/${weekStart.day} - '
                     '${weekEnd.month}/${weekEnd.day}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                   ),
                 ],
               ),
@@ -1946,7 +1912,7 @@ class _WeekNavigator extends ConsumerWidget {
                             ? Theme.of(context).colorScheme.primary
                             : isCur
                             ? Theme.of(context).colorScheme.primaryContainer
-                            : Colors.grey.shade100,
+                            : AppColors.tintSoft,
                         borderRadius: BorderRadius.circular(8),
                         border: isCur && !isSel
                             ? Border.all(
@@ -2158,10 +2124,10 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                       vertical: 10,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.shade50,
+                                      color: AppColors.accent.withValues(alpha: 0.08),
                                       border: Border(
                                         top: BorderSide(
-                                          color: Colors.amber.shade200,
+                                          color: AppColors.accent.withValues(alpha: 0.3),
                                           width: 1,
                                         ),
                                       ),
@@ -2180,14 +2146,14 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                               Icon(
                                                 Icons.sticky_note_2_outlined,
                                                 size: 14,
-                                                color: Colors.amber.shade800,
+                                                color: AppColors.accent.withValues(alpha: 0.9),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
                                                 '备注',
                                                 style: TextStyle(
                                                   fontSize: 9,
-                                                  color: Colors.amber.shade800,
+                                                  color: AppColors.accent.withValues(alpha: 0.9),
                                                 ),
                                               ),
                                             ],
@@ -2196,9 +2162,9 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                         Expanded(
                                           child: Text(
                                             widget.remark,
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                               fontSize: 11.5,
-                                              color: Colors.brown.shade700,
+                                              color: AppColors.textPrimary,
                                               height: 1.6,
                                             ),
                                           ),
@@ -2589,9 +2555,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
         .read(customCoursesProvider(widget.selectedSemester).notifier)
         .removeCourse(course);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已删除「${course.name}」')));
+    AppSnackBar.success(context, '已删除「${course.name}」');
   }
 
   List<Widget> _sectionBg(_ScheduleGridPalette palette) => [
@@ -2675,9 +2639,9 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
       onTap: () => _showDetails(context),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: AppColors.tintSoft,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.grey.shade300, width: 0.6),
+          border: Border.all(color: AppColors.outline, width: 0.6),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
@@ -2691,7 +2655,7 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textMuted,
                   height: 1.15,
                 ),
               ),
@@ -2700,7 +2664,10 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 9.5, color: Colors.grey.shade500),
+                style: TextStyle(
+                    fontSize: 9.5,
+                    color: AppColors.textMuted.withValues(alpha: 0.7),
+                  ),
               ),
             ],
           ),
@@ -2723,7 +2690,7 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
           children: [
             const Row(
               children: [
-                Icon(Icons.layers_outlined, color: Colors.grey),
+                Icon(Icons.layers_outlined, color: AppColors.textMuted),
                 SizedBox(width: 10),
                 Text(
                   '本周无课的重叠课程',
@@ -2742,7 +2709,7 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                       '${course.timeSlot}-${course.endTimeSlot}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textMuted,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2765,7 +2732,7 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                                 course.classroom,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey.shade600,
+                                  color: AppColors.textMuted,
                                 ),
                               ),
                             ),

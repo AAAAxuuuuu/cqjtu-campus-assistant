@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:core/models/grade.dart';
+import 'package:campus_app/theme/app_theme.dart';
 
 class GradeItem extends StatelessWidget {
   final Grade grade;
@@ -9,11 +10,11 @@ class GradeItem extends StatelessWidget {
 
   Color get _scoreColor {
     final n = double.tryParse(grade.score);
-    if (n == null) return Colors.blue;
-    if (n >= 90) return Colors.green;
-    if (n >= 75) return Colors.blue;
-    if (n >= 60) return Colors.orange;
-    return Colors.red;
+    if (n == null) return AppColors.info;
+    if (n >= 90) return AppColors.success;
+    if (n >= 75) return AppColors.info;
+    if (n >= 60) return AppColors.warning;
+    return AppColors.danger;
   }
 
   @override
