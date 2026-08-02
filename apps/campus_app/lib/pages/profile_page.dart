@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
+import '../widgets/app_entrance.dart';
+import '../widgets/app_snackbar.dart';
+import '../widgets/glass_surface.dart';
 import 'package:campus_platform/services/credential_service.dart';
 import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/battery_optimization_service.dart';
@@ -42,36 +46,82 @@ class ProfilePage extends ConsumerWidget {
     final creds = ref.watch(credentialsProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
+      backgroundColor: AppColors.surface,
+      appBar: GlassAppBar(
         title: const Text('我的', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         centerTitle: false,
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         children: [
-          _buildUserInfoCard(creds?.username ?? '未登录'),
+          AppEntrance(
+            child: _buildUserInfoCard(creds?.username ?? '未登录'),
+          ),
           const SizedBox(height: 20),
-          const _ElectricityCardWidget(),
+          AppEntrance(
+            index: 1,
+            child: const _ElectricityCardWidget(),
+          ),
           const SizedBox(height: 20),
-          _sectionLabel('宿舍设置'),
-          const _DormSettingsCard(),
+          AppEntrance(
+            index: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('宿舍设置'),
+                const _DormSettingsCard(),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
-          _sectionLabel('课表偏好'),
-          const _SchedulePreferenceCard(),
+          AppEntrance(
+            index: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('课表偏好'),
+                const _SchedulePreferenceCard(),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
-          _sectionLabel('数据与缓存'),
-          const _CacheSettingsCard(),
+          AppEntrance(
+            index: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('数据与缓存'),
+                const _CacheSettingsCard(),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
-          _sectionLabel('通知与后台'),
-          const _BackgroundSettingsCard(),
+          AppEntrance(
+            index: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('通知与后台'),
+                const _BackgroundSettingsCard(),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
-          _sectionLabel('版本更新'),
-          const _AppUpdateCard(),
+          AppEntrance(
+            index: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('版本更新'),
+                const _AppUpdateCard(),
+              ],
+            ),
+          ),
           const SizedBox(height: 30),
-          _buildLogoutButton(context, ref),
+          AppEntrance(
+            index: 7,
+            child: _buildLogoutButton(context, ref),
+          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -85,61 +135,99 @@ class ProfilePage extends ConsumerWidget {
       style: const TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: AppColors.textPrimary,
       ),
     ),
   );
 
   Widget _buildUserInfoCard(String username) {
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFBB6688), Color(0xFF8888CC)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        borderRadius: BorderRadius.circular(AppRadius.hero),
+        gradient: AppColors.primaryGradient,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFBB6688).withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: AppColors.primary.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Row(
+      child: Stack(
         children: [
-          const CircleAvatar(
-            radius: 36,
-            backgroundColor: Color(0xFF8888CC),
-            child: Icon(Icons.person, size: 40, color: Colors.white),
+          Positioned(
+            right: -15,
+            bottom: -20,
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
           ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                username,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  child: const CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 38, color: AppColors.primary),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        username,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.school, size: 13, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  '重庆交通大学',
+                                  style: TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Text(
-                  '重庆交通大学',
-                  style: TextStyle(fontSize: 12, color: Colors.white),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -150,49 +238,51 @@ class ProfilePage extends ConsumerWidget {
     return SizedBox(
       width: double.infinity,
       height: 50,
-      child: TextButton(
-        style: TextButton.styleFrom(
-          backgroundColor: Colors.white,
+      child: OutlinedButton.icon(
+        icon: const Icon(Icons.logout, size: 18),
+        label: const Text('退出登录', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          backgroundColor: Colors.white,
         ),
         onPressed: () {
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
               ),
-              title: const Text('退出登录'),
+              title: const Row(
+                children: [
+                  Icon(Icons.logout, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text('退出登录'),
+                ],
+              ),
               content: const Text('确定要退出当前账号吗？'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消', style: TextStyle(color: Colors.grey)),
+                  child: const Text('取消', style: TextStyle(color: AppColors.textMuted)),
                 ),
-                TextButton(
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
                   onPressed: () {
                     Navigator.pop(ctx);
                     _logout(context, ref);
                   },
-                  child: const Text(
-                    '退出',
-                    style: TextStyle(color: Colors.redAccent),
-                  ),
+                  child: const Text('确定退出'),
                 ),
               ],
             ),
           );
         },
-        child: const Text(
-          '退出登录',
-          style: TextStyle(
-            color: Colors.redAccent,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
@@ -216,22 +306,12 @@ class _SchedulePreferenceCard extends ConsumerWidget {
     final totalWeeks = totalWeeksAsync.valueOrNull ?? defaultSemesterTotalWeeks;
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.brandedCardDecoration(),
       child: Column(
         children: [
           _SettingTile(
             icon: Icons.calendar_view_week_outlined,
-            iconColor: sundayFirst ? Colors.teal : Colors.blueGrey,
+            iconColor: sundayFirst ? AppColors.success : AppColors.textMuted,
             title: '周日作为每周起始日',
             subtitle: sundayFirst
                 ? '课表按周日到周六展示，并按周日起算当前周'
@@ -244,24 +324,23 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                   )
                 : Switch(
                     value: sundayFirst,
-                    activeThumbColor: Colors.teal,
+                    activeThumbColor: AppColors.success,
                     onChanged: (value) async {
                       await ref
                           .read(scheduleSundayFirstProvider.notifier)
                           .setSundayFirst(value);
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(value ? '已切换为周日起始' : '已切换为周一起始'),
-                        ),
+                      AppSnackBar.success(
+                        context,
+                        value ? '已切换为周日起始' : '已切换为周一起始',
                       );
                     },
                   ),
           ),
-          const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
+          const Divider(height: 1, indent: 56, color: AppColors.outline),
           _SettingTile(
             icon: Icons.layers_outlined,
-            iconColor: showInactive ? Colors.deepPurple : Colors.blueGrey,
+            iconColor: showInactive ? AppColors.secondary : AppColors.textMuted,
             title: '显示本周无课课程',
             subtitle: showInactive ? '课表中显示本周无课但与当前周相关的课程提示' : '课表只显示当周实际有课的课程',
             trailing: showInactiveAsync.isLoading
@@ -272,24 +351,23 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                   )
                 : Switch(
                     value: showInactive,
-                    activeThumbColor: Colors.deepPurple,
+                    activeThumbColor: AppColors.secondary,
                     onChanged: (value) async {
                       await ref
                           .read(scheduleShowInactiveCoursesProvider.notifier)
                           .setShowInactiveCourses(value);
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(value ? '已显示本周无课课程' : '已隐藏本周无课课程'),
-                        ),
+                      AppSnackBar.success(
+                        context,
+                        value ? '已显示本周无课课程' : '已隐藏本周无课课程',
                       );
                     },
                   ),
           ),
-          const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
+          const Divider(height: 1, indent: 56, color: AppColors.outline),
           _SettingTile(
             icon: Icons.view_week_outlined,
-            iconColor: Colors.indigo,
+            iconColor: AppColors.info,
             title: '学期周数',
             subtitle: '当前学期按 $totalWeeks 周计算课表、小组件和课前提醒',
             trailing: totalWeeksAsync.isLoading
@@ -310,9 +388,7 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                           )
                           .setWeeks(value);
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('学期周数已改为 $value 周')),
-                      );
+                      AppSnackBar.success(context, '学期周数已改为 $value 周');
                     },
                     itemBuilder: (context) => [
                       for (
@@ -325,7 +401,7 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                     child: Text(
                       '$totalWeeks 周',
                       style: const TextStyle(
-                        color: Colors.blue,
+                        color: AppColors.info,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -347,23 +423,13 @@ class _CacheSettingsCard extends ConsumerWidget {
     final username = creds?.username ?? '';
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.brandedCardDecoration(),
       child: _SettingTile(
         icon: Icons.cleaning_services_outlined,
-        iconColor: Colors.deepOrange,
+        iconColor: AppColors.warning,
         title: '清空缓存',
         subtitle: '清理当前账号的学业、课表与本地配置缓存',
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
         onTap: () {
           showDialog(
             context: context,
@@ -376,20 +442,18 @@ class _CacheSettingsCard extends ConsumerWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消', style: TextStyle(color: Colors.grey)),
+                  child: const Text('取消', style: TextStyle(color: AppColors.textMuted)),
                 ),
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
                     await clearCurrentAccountCache(ref, username);
                     if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('当前账号缓存已成功清空')),
-                    );
+                    AppSnackBar.success(context, '当前账号缓存已成功清空');
                   },
                   child: const Text(
                     '确认清空',
-                    style: TextStyle(color: Colors.deepOrange),
+                    style: TextStyle(color: AppColors.warning),
                   ),
                 ),
               ],
@@ -412,45 +476,35 @@ class _DormSettingsCard extends ConsumerWidget {
     final dormAsync = ref.watch(dormRoomProvider);
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.brandedCardDecoration(),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            color: AppColors.warning.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: const Icon(Icons.home_outlined, color: Colors.amber),
+          child: const Icon(Icons.home_outlined, color: AppColors.warning),
         ),
         title: const Text(
           '我的宿舍',
-          style: TextStyle(fontSize: 15, color: Colors.black87),
+          style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
         ),
         subtitle: dormAsync.when(
           loading: () => const Text(
             '加载中...',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           error: (_, _) => const Text(
             '加载失败',
-            style: TextStyle(fontSize: 12, color: Colors.red),
+            style: TextStyle(fontSize: 12, color: AppColors.danger),
           ),
           data: (dorm) => Text(
             dorm == null ? '未设置，请先选择后使用电费服务' : dorm.displayName,
             style: TextStyle(
               fontSize: 12,
-              color: dorm == null ? Colors.orange : Colors.grey,
+              color: dorm == null ? AppColors.warning : AppColors.textMuted,
             ),
           ),
         ),
@@ -478,8 +532,9 @@ class _DormSettingsCard extends ConsumerWidget {
         onSaved: (room) async {
           await ref.read(dormRoomProvider.notifier).set(room);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('已保存：${room.displayName}，电费数据正在刷新')),
+            AppSnackBar.success(
+              context,
+              '已保存：${room.displayName}，电费数据正在刷新',
             );
           }
         },
@@ -637,7 +692,7 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: AppColors.outline,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -651,12 +706,12 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.1),
+                      color: AppColors.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
                       Icons.home_outlined,
-                      color: Colors.amber,
+                      color: AppColors.accent,
                       size: 20,
                     ),
                   ),
@@ -674,7 +729,7 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                         ),
                         Text(
                           '支持科学城校区与南岸校区学生宿舍',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                         ),
                       ],
                     ),
@@ -693,16 +748,18 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
               margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade200),
+                color: AppColors.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.home_outlined,
                     size: 16,
-                    color: Colors.amber.shade700,
+                    color: AppColors.accent.withValues(alpha: 0.9),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -713,7 +770,7 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.amber.shade800,
+                        color: AppColors.accent.withValues(alpha: 0.95),
                         fontSize: 15,
                       ),
                     ),
@@ -832,7 +889,7 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black54,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -876,9 +933,9 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                       : const Icon(Icons.check_rounded, size: 20),
                   label: Text(_saving ? '保存中...' : '保存宿舍设置'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.amber.shade700,
+                    backgroundColor: AppColors.accent.withValues(alpha: 0.85),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                   onPressed: _saving ? null : _save,
@@ -914,8 +971,8 @@ class _DormPickerWheel extends StatelessWidget {
             height: 44,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: AppColors.accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
           ),
         ),
@@ -937,7 +994,9 @@ class _DormPickerWheel extends StatelessWidget {
                   style: TextStyle(
                     fontSize: selected ? 20 : 16,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected ? Colors.amber.shade800 : Colors.grey,
+                    color: selected
+                        ? AppColors.accent.withValues(alpha: 0.95)
+                        : AppColors.textMuted,
                   ),
                 ),
               );
@@ -994,36 +1053,26 @@ class _AppUpdateCardState extends State<_AppUpdateCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.brandedCardDecoration(),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            color: AppColors.info.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: const Icon(Icons.system_update_alt, color: Colors.blue),
+          child: const Icon(Icons.system_update_alt, color: AppColors.info),
         ),
         title: const Text(
           '检查更新',
-          style: TextStyle(fontSize: 15, color: Colors.black87),
+          style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
         ),
         subtitle: Text(
           '当前版本：$_versionLabel\n发现新版本后可直接打开下载链接',
           style: const TextStyle(
             fontSize: 12,
-            color: Colors.grey,
+            color: AppColors.textMuted,
             height: 1.45,
           ),
         ),
@@ -1190,9 +1239,7 @@ class _BackgroundSettingsCardState
     if (semesterStart == null) {
       debugPrint('[Profile] 开启失败：尚未设置开学日期');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请先在课程表页面设置开学日期')));
+        AppSnackBar.warning(context, '请先在课程表页面设置开学日期');
       }
       return false;
     }
@@ -1223,17 +1270,13 @@ class _BackgroundSettingsCardState
       );
 
       if (successMessage != null && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(successMessage)));
+        AppSnackBar.success(context, successMessage);
       }
       return true;
     } catch (e) {
       debugPrint('[Profile] 调度失败（拉取课表出错）：$e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('课表获取失败，请稍后重试')));
+        AppSnackBar.error(context, '课表获取失败，请稍后重试');
       }
       return false;
     }
@@ -1253,14 +1296,10 @@ class _BackgroundSettingsCardState
     if (_courseReminderEnabled == true) {
       final ok = await _rescheduleCourseReminders();
       if (ok && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('课前提醒已改为提前 $minutes 分钟')));
+        AppSnackBar.success(context, '课前提醒已改为提前 $minutes 分钟');
       }
     } else if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已保存为提前 $minutes 分钟，开启课前提醒后生效')));
+      AppSnackBar.status(context, '已保存为提前 $minutes 分钟，开启课前提醒后生效');
     }
   }
 
@@ -1271,30 +1310,20 @@ class _BackgroundSettingsCardState
         NotificationService.defaultCourseReminderMinutes;
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.brandedCardDecoration(),
       child: Column(
         children: [
           _SettingTile(
             icon: Icons.notifications_active_outlined,
             iconColor: _courseReminderEnabled == true
-                ? Colors.deepOrange
-                : Colors.grey,
+                ? AppColors.warning
+                : AppColors.textMuted,
             title: '课程表课前通知',
             subtitleWidget:
                 _courseReminderEnabled == null || _courseReminderMinutes == null
                 ? const Text(
                     '加载中...',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                   )
                 : Wrap(
                     spacing: 8,
@@ -1306,7 +1335,7 @@ class _BackgroundSettingsCardState
                             : '预警已关闭（默认提前 $currentReminderMinutes 分钟）',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: AppColors.textMuted,
                         ),
                       ),
                       PopupMenuButton<int>(
@@ -1324,7 +1353,7 @@ class _BackgroundSettingsCardState
                         child: const Text(
                           '修改',
                           style: TextStyle(
-                            color: Colors.blue,
+                            color: AppColors.info,
                             fontSize: 12,
                             decoration: TextDecoration.underline,
                           ),
@@ -1340,7 +1369,7 @@ class _BackgroundSettingsCardState
                   )
                 : Switch(
                     value: _courseReminderEnabled!,
-                    activeThumbColor: Colors.deepOrange,
+                    activeThumbColor: AppColors.warning,
                     onChanged: (val) async {
                       await NotificationService.setCourseReminderEnabled(
                         val,
@@ -1352,9 +1381,7 @@ class _BackgroundSettingsCardState
                         await NotificationService.cancelAllClassReminders();
                         debugPrint('[Profile] 课前通知已关闭，所有调度已清空');
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('课前提醒已关闭')),
-                        );
+                        AppSnackBar.status(context, '课前提醒已关闭');
                       } else {
                         final minutes =
                             _courseReminderMinutes ??
@@ -1366,7 +1393,7 @@ class _BackgroundSettingsCardState
                     },
                   ),
           ),
-          const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
+          const Divider(height: 1, indent: 56, color: AppColors.outline),
           if (_showCompactBackgroundCard)
             _buildCompactBackgroundCard()
           else ...[
@@ -1378,7 +1405,7 @@ class _BackgroundSettingsCardState
                 ),
                 leading: const Icon(
                   Icons.verified_outlined,
-                  color: Colors.green,
+                  color: AppColors.success,
                 ),
                 title: const Text(
                   '后台保活设置已完成',
@@ -1386,7 +1413,7 @@ class _BackgroundSettingsCardState
                 ),
                 subtitle: const Text(
                   '电池优化、自启动、锁后台均已完成',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
                 trailing: TextButton(
                   onPressed: () =>
@@ -1395,10 +1422,9 @@ class _BackgroundSettingsCardState
                 ),
               ),
             if (_backgroundSetupCompleted)
-              const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
-            _SettingTile(
+              const Divider(height: 1, indent: 56, color: AppColors.outline),            _SettingTile(
               icon: Icons.battery_saver_outlined,
-              iconColor: _isIgnoring == true ? Colors.green : Colors.orange,
+              iconColor: _isIgnoring == true ? AppColors.success : AppColors.warning,
               title: '关闭电池优化',
               subtitle: _isIgnoring == null
                   ? '检测中...'
@@ -1408,7 +1434,7 @@ class _BackgroundSettingsCardState
               trailing: _isIgnoring == true
                   ? const Icon(
                       Icons.check_circle,
-                      color: Colors.green,
+                      color: AppColors.success,
                       size: 20,
                     )
                   : FilledButton.tonal(
@@ -1428,10 +1454,10 @@ class _BackgroundSettingsCardState
                       child: const Text('去设置', style: TextStyle(fontSize: 13)),
                     ),
             ),
-            const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
+            const Divider(height: 1, indent: 56, color: AppColors.outline),
             _SettingTile(
               icon: Icons.autorenew_outlined,
-              iconColor: _autostartDone ? Colors.blue : Colors.blueGrey,
+              iconColor: _autostartDone ? AppColors.info : AppColors.textMuted,
               title: '开启自启动',
               subtitle: _autostartSubtitle,
               trailing: _autostartDone
@@ -1440,8 +1466,8 @@ class _BackgroundSettingsCardState
                           ? Icons.check_circle
                           : Icons.check_circle_outline,
                       color: _autostartAppOps == true
-                          ? Colors.green
-                          : Colors.orange,
+                          ? AppColors.success
+                          : AppColors.warning,
                       size: 20,
                     )
                   : OutlinedButton(
@@ -1460,17 +1486,19 @@ class _BackgroundSettingsCardState
                       child: const Text('去设置', style: TextStyle(fontSize: 13)),
                     ),
             ),
-            const Divider(height: 1, indent: 56, color: Color(0xFFF0F0F0)),
+            const Divider(height: 1, indent: 56, color: AppColors.outline),
             _SettingTile(
               icon: Icons.lock_outline,
-              iconColor: _lockBackgroundDone ? Colors.green : Colors.purple,
+              iconColor: _lockBackgroundDone
+                  ? AppColors.success
+                  : AppColors.secondary,
               title: '锁定后台',
               subtitle: _lockBackgroundDone
                   ? '✅ 已完成，后台任务更稳定'
                   : '在最近任务界面长按本应用 → 锁定，防止被清理',
               trailing: Icon(
                 _lockBackgroundDone ? Icons.check_circle : Icons.info_outline,
-                color: _lockBackgroundDone ? Colors.green : Colors.grey,
+                color: _lockBackgroundDone ? AppColors.success : AppColors.textMuted,
                 size: 20,
               ),
               onTap: () => _showLockGuideDialog(context),
@@ -1487,18 +1515,18 @@ class _BackgroundSettingsCardState
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+          color: AppColors.success.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
-        child: const Icon(Icons.verified_outlined, color: Colors.green),
+        child: const Icon(Icons.verified_outlined, color: AppColors.success),
       ),
       title: const Text(
         '后台保活设置已完成',
-        style: TextStyle(fontSize: 15, color: Colors.black87),
+        style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
       ),
       subtitle: const Text(
         '电池优化、自启动、锁后台均已完成',
-        style: TextStyle(fontSize: 12, color: Colors.grey),
+        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
       ),
       trailing: TextButton(
         onPressed: () => setState(() => _backgroundSettingsExpanded = true),
@@ -1515,7 +1543,7 @@ class _BackgroundSettingsCardState
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.lock_outline, color: Colors.purple),
+            Icon(Icons.lock_outline, color: AppColors.secondary),
             SizedBox(width: 8),
             Text('如何锁定后台'),
           ],
@@ -1536,7 +1564,7 @@ class _BackgroundSettingsCardState
             SizedBox(height: 12),
             Text(
               '锁定后 App 不会被"清理全部"按钮关闭，后台余额监控将持续运行。',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -1557,9 +1585,7 @@ class _BackgroundSettingsCardState
 
     await _markLockBackgroundDone();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已标记为完成锁定后台')));
+    AppSnackBar.success(context, '已标记为完成锁定后台');
   }
 }
 
@@ -1596,13 +1622,13 @@ class _SettingTile extends StatelessWidget {
       ),
       title: Text(
         title,
-        style: const TextStyle(fontSize: 15, color: Colors.black87),
+        style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
       ),
       subtitle:
           subtitleWidget ??
           Text(
             subtitle!,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
       trailing: trailing,
       onTap: onTap,
@@ -1625,7 +1651,7 @@ class _GuideStep extends StatelessWidget {
           height: 22,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.purple.withValues(alpha: 0.15),
+            color: AppColors.secondary.withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
           child: Text(
@@ -1633,7 +1659,7 @@ class _GuideStep extends StatelessWidget {
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.purple,
+              color: AppColors.secondary,
             ),
           ),
         ),
@@ -1661,13 +1687,13 @@ class _ElectricityCardWidget extends ConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
           gradient: const LinearGradient(
-            colors: [Color(0xFF141E30), Color(0xFF243B55)],
+            colors: [AppColors.textPrimary, AppColors.textSecondary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF243B55).withValues(alpha: 0.4),
+              color: AppColors.textPrimary.withValues(alpha: 0.4),
               blurRadius: 15,
               offset: const Offset(0, 8),
             ),
@@ -1684,12 +1710,12 @@ class _ElectricityCardWidget extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
                         Icons.bolt,
-                        color: Colors.amberAccent,
+                        color: AppColors.accent,
                         size: 18,
                       ),
                     ),
@@ -1757,7 +1783,7 @@ class _ElectricityCardWidget extends ConsumerWidget {
                       : const Text(
                           '获取失败',
                           style: TextStyle(
-                            color: Colors.redAccent,
+                            color: AppColors.danger,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1820,15 +1846,15 @@ class _ElectricityCardWidget extends ConsumerWidget {
                                   height: 8,
                                   decoration: BoxDecoration(
                                     color: isLowBalance
-                                        ? Colors.redAccent
-                                        : Colors.greenAccent,
+                                        ? AppColors.danger
+                                        : AppColors.success,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
                                         color:
                                             (isLowBalance
-                                                    ? Colors.redAccent
-                                                    : Colors.greenAccent)
+                                                    ? AppColors.danger
+                                                    : AppColors.success)
                                                 .withValues(alpha: 0.6),
                                         blurRadius: 6,
                                         spreadRadius: 1,
@@ -1845,7 +1871,7 @@ class _ElectricityCardWidget extends ConsumerWidget {
                                             : '余额充足，安心用电'),
                                   style: TextStyle(
                                     color: isLowBalance
-                                        ? Colors.red[200]
+                                        ? AppColors.danger.withValues(alpha: 0.85)
                                         : Colors.white70,
                                     fontSize: 13,
                                   ),
