@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:campus_app/theme/app_theme.dart';
 
 class BackgroundRefreshBanner extends StatelessWidget {
   const BackgroundRefreshBanner({
@@ -12,23 +13,31 @@ class BackgroundRefreshBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade200),
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(
+          color: AppColors.warning.withValues(alpha: 0.25),
+        ),
       ),
       child: Row(
         children: [
-          Icon(Icons.sync_problem, color: Colors.amber.shade800, size: 18),
+          Icon(
+            Icons.sync_problem,
+            color: AppColors.warning.withValues(alpha: 0.9),
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(color: colors.onSurface, fontSize: 12),
+              style: TextStyle(
+                color: AppColors.textBody,
+                fontSize: 12,
+              ),
             ),
           ),
           TextButton.icon(

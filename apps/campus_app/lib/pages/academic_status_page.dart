@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/study_progress/study_progress_providers.dart';
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
 import '../widgets/background_refresh_banner.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/spinning_refresh_button.dart';
 
 class AcademicStatusPage extends ConsumerStatefulWidget {
   const AcademicStatusPage({super.key});
@@ -38,12 +41,11 @@ class _AcademicStatusPageState extends ConsumerState<AcademicStatusPage> {
     final summary = ref.watch(studyCreditProgressSummaryProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('学业情况'),
         actions: [
-          IconButton(
+          SpinningRefreshButton(
             tooltip: '刷新学业数据',
-            icon: const Icon(Icons.refresh),
             onPressed: _refreshAll,
           ),
         ],
@@ -103,7 +105,7 @@ class _AcademicStatusContent extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 64),
               child: Center(
-                child: Text('暂无学业数据', style: TextStyle(color: Colors.grey)),
+                child: Text('暂无学业数据', style: TextStyle(color: AppColors.textMuted)),
               ),
             ),
         ],
@@ -183,7 +185,10 @@ class _OverviewCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 '按当前可读取成绩估算加权均分 ${stats.weightedAverage!.toStringAsFixed(1)}',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
               ),
             ],
           ],
@@ -254,7 +259,7 @@ class _CreditCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 '成绩单中有 ${stats.failedCourses} 门课程待关注',
-                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                style: TextStyle(color: AppColors.danger, fontSize: 12),
               ),
             ],
           ],
@@ -275,7 +280,7 @@ class _MetricTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: AppColors.tint.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -284,7 +289,7 @@ class _MetricTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
           ),
           const SizedBox(height: 3),
           Text(
@@ -317,7 +322,7 @@ class _AcademicError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.redAccent, size: 36),
+            const Icon(Icons.error_outline, color: AppColors.danger, size: 36),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 14),
