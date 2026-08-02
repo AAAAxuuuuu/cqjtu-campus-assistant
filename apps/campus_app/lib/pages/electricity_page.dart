@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:data/data.dart';
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
 import 'package:campus_platform/services/notification_service.dart';
+import '../widgets/app_entrance.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/error_view.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/spinning_refresh_button.dart';
 
 class ElectricityPage extends ConsumerWidget {
   const ElectricityPage({super.key});
@@ -37,9 +42,7 @@ class ElectricityPage extends ConsumerWidget {
       ).push(MaterialPageRoute(builder: (_) => const ElectricityPage()));
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('宿舍信息读取失败，请稍后重试')));
+      AppSnackBar.error(context, '宿舍信息读取失败，请稍后重试');
     }
   }
 
@@ -49,7 +52,7 @@ class ElectricityPage extends ConsumerWidget {
     final isUpdating = balanceAsync.isRefreshing && balanceAsync.hasValue;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('电费监控'),
         actions: [
           IconButton(
@@ -60,15 +63,10 @@ class ElectricityPage extends ConsumerWidget {
               builder: (_) => const _ThresholdDialog(),
             ),
           ),
-          IconButton(
-            icon: Icon(isUpdating ? Icons.sync : Icons.refresh),
+          SpinningRefreshButton(
+            tooltip: '刷新电量',
             onPressed: () async {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('正在获取最新电量...'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
+              AppSnackBar.status(context, '正在获取最新电量...');
 
               try {
                 await ref
@@ -76,15 +74,11 @@ class ElectricityPage extends ConsumerWidget {
                     .refresh(forceRefresh: true, throwOnError: true);
 
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('电量已更新')));
+                  AppSnackBar.success(context, '电量已更新');
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('刷新失败，请检查网络')));
+                  AppSnackBar.error(context, '刷新失败，请检查网络');
                 }
               }
             },
@@ -100,22 +94,27 @@ class ElectricityPage extends ConsumerWidget {
                   .read(electricityProvider.notifier)
                   .refresh(forceRefresh: true),
             ),
-          balanceAsync.when(
-            skipError: true,
-            skipLoadingOnRefresh: true,
-            skipLoadingOnReload: true,
-            loading: () => const _BalanceSkeleton(),
-            error: (e, _) => ErrorView(
-              message: e.toString(),
-              onRetry: () => ref
-                  .read(electricityProvider.notifier)
-                  .refresh(forceRefresh: true),
+          AppEntrance(
+            child: balanceAsync.when(
+              skipError: true,
+              skipLoadingOnRefresh: true,
+              skipLoadingOnReload: true,
+              loading: () => const _BalanceSkeleton(),
+              error: (e, _) => ErrorView(
+                message: e.toString(),
+                onRetry: () => ref
+                    .read(electricityProvider.notifier)
+                    .refresh(forceRefresh: true),
+              ),
+              data: (balance) =>
+                  _BalanceCard(balance: balance, isUpdating: isUpdating),
             ),
-            data: (balance) =>
-                _BalanceCard(balance: balance, isUpdating: isUpdating),
           ),
           const SizedBox(height: 16),
-          const _RechargeCard(),
+          AppEntrance(
+            index: 1,
+            child: const _RechargeCard(),
+          ),
         ],
       ),
     );
@@ -129,41 +128,78 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-        child: Column(
-          children: [
-            const Icon(Icons.bolt, size: 52, color: Colors.amber),
-            const SizedBox(height: 8),
-            const Text(
-              '当前剩余电量',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              balance,
-              style: Theme.of(
-                context,
-              ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            if (isUpdating)
-              const Padding(
-                padding: EdgeInsets.only(top: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.sync, color: Colors.grey, size: 14),
-                    SizedBox(width: 4),
-                    Text(
-                      '静默更新中',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ],
-                ),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        gradient: AppColors.warmGradient,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -15,
+            top: -15,
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
               ),
-          ],
-        ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                  ),
+                  child: const Icon(Icons.bolt, size: 40, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '当前剩余电量',
+                  style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  balance,
+                  style: AppType.metric.copyWith(color: Colors.white),
+                ),
+                if (isUpdating)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white70),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          '静默更新中...',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -202,9 +238,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard> {
   Future<void> _recharge() async {
     final amount = double.tryParse(_ctrl.text.trim());
     if (amount == null || amount < 0.01 || amount > 200) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入正确的金额（0.01 ~ 200 元）')));
+      AppSnackBar.warning(context, '请输入正确的金额（0.01 ~ 200 元）');
       return;
     }
 
@@ -246,16 +280,12 @@ class _RechargeCardState extends ConsumerState<_RechargeCard> {
           );
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
+        AppSnackBar.success(context, msg);
         ref.read(electricityProvider.notifier).refresh(forceRefresh: true);
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        AppSnackBar.error(context, e.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -272,7 +302,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard> {
           children: [
             const Row(
               children: [
-                Icon(Icons.electric_bolt, color: Colors.amber),
+                Icon(Icons.electric_bolt, color: AppColors.warning),
                 SizedBox(width: 8),
                 Text(
                   '电费充值（校园卡扣款）',
@@ -369,7 +399,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                 // 电费阈值
                 const Row(
                   children: [
-                    Icon(Icons.electric_bolt, size: 16, color: Colors.amber),
+                    Icon(Icons.electric_bolt, size: 16, color: AppColors.warning),
                     SizedBox(width: 6),
                     Text('电费预警', style: TextStyle(fontWeight: FontWeight.w600)),
                   ],
@@ -379,7 +409,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _elecValue == 0
                       ? '预警已关闭'
                       : '低于 ${_elecValue.toStringAsFixed(0)} 块时发送提醒',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
                 Slider(
                   value: _elecValue,
@@ -393,7 +423,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                 // 校园卡阈值
                 const Row(
                   children: [
-                    Icon(Icons.credit_card, size: 16, color: Colors.blue),
+                    Icon(Icons.credit_card, size: 16, color: AppColors.info),
                     SizedBox(width: 6),
                     Text(
                       '校园卡预警',
@@ -406,7 +436,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _cardValue == 0
                       ? '预警已关闭'
                       : '低于 ¥${_cardValue.toStringAsFixed(0)} 时发送提醒',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
                 Slider(
                   value: _cardValue,
@@ -419,7 +449,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                 const SizedBox(height: 4),
                 const Text(
                   '后台每 15 分钟自动检查一次，低于阈值时推送通知\n（同一类型 6 小时内最多提醒一次）',
-                  style: TextStyle(color: Colors.grey, fontSize: 11),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                 ),
               ],
             )

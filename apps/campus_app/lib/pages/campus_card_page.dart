@@ -6,8 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:data/data.dart';
+import '../theme/app_theme.dart';
 import '../utils/providers.dart';
+import '../widgets/app_entrance.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/spinning_refresh_button.dart';
 
 class CampusCardPage extends ConsumerStatefulWidget {
   const CampusCardPage({super.key, this.scrollToQr = false});
@@ -65,7 +70,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('校园卡')),
+      appBar: GlassAppBar(title: const Text('校园卡')),
       body: ListView(
         controller: _controller,
         padding: const EdgeInsets.all(16),
@@ -76,9 +81,9 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
                   .read(campusCardBalanceProvider.notifier)
                   .refresh(forceRefresh: true),
             ),
-          const _BalanceCard(),
+          AppEntrance(child: const _BalanceCard()),
           const SizedBox(height: 16),
-          const _QrCard(),
+          AppEntrance(index: 1, child: const _QrCard()),
         ],
       ),
     );
@@ -88,8 +93,8 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
     if (!_controller.hasClients) return;
     _controller.animateTo(
       170,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+      duration: AppMotion.standard,
+      curve: AppMotion.easeOutStrong,
     );
   }
 }
@@ -103,151 +108,170 @@ class _BalanceCard extends ConsumerWidget {
     final balanceAsync = ref.watch(campusCardBalanceProvider);
     final isUpdating = balanceAsync.isRefreshing && balanceAsync.hasValue;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFBB6688), Color(0xFF8888CC)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        gradient: AppColors.primaryGradient,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.credit_card, color: Colors.white70, size: 18),
-                const SizedBox(width: 6),
-                const Text(
-                  '校园卡余额',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                const Spacer(),
-                // 刷新按钮
-                GestureDetector(
-                  onTap: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('正在刷新余额...'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                    try {
-                      await ref
-                          .read(campusCardBalanceProvider.notifier)
-                          .refresh(forceRefresh: true, throwOnError: true);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(const SnackBar(content: Text('余额已更新')));
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('刷新失败：$e')));
-                      }
-                    }
-                  },
-                  child: const Icon(
-                    Icons.refresh,
-                    color: Colors.white70,
-                    size: 20,
-                  ),
-                ),
-              ],
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: balanceAsync.isLoading
-                      ? const SizedBox(
-                          height: 42,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        )
-                      : balanceAsync.hasError && !balanceAsync.hasData
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '获取失败',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              balanceAsync.error.toString(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white60,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Text(
-                          balanceAsync.hasData ? balanceAsync.data : '--',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CampusCardRechargePage(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_card_outlined, size: 20),
-                  label: const Text('充值'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(96, 48),
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFFBB6688),
-                  ),
-                ),
-              ],
-            ),
-            if (isUpdating)
-              const Padding(
-                padding: EdgeInsets.only(top: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                Row(
                   children: [
-                    Icon(Icons.sync, color: Colors.white54, size: 13),
-                    SizedBox(width: 4),
-                    Text(
-                      '静默更新中',
-                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.credit_card, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      '校园卡余额',
+                      style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                    const Spacer(),
+                    SpinningRefreshButton(
+                      color: Colors.white,
+                      size: 22,
+                      tooltip: '刷新余额',
+                      onPressed: () async {
+                        AppSnackBar.status(context, '正在刷新余额...');
+                        try {
+                          await ref
+                              .read(campusCardBalanceProvider.notifier)
+                              .refresh(forceRefresh: true, throwOnError: true);
+                          if (context.mounted) {
+                            AppSnackBar.success(context, '余额已更新');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            AppSnackBar.error(context, '刷新失败：$e');
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),
-              ),
-          ],
-        ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: balanceAsync.isLoading
+                          ? const SizedBox(
+                              height: 42,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : balanceAsync.hasError && !balanceAsync.hasData
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '获取失败',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  balanceAsync.error.toString(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              balanceAsync.hasData ? balanceAsync.data : '--',
+                              style: AppType.metric.copyWith(color: Colors.white),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CampusCardRechargePage(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_card_outlined, size: 18),
+                      label: const Text('充值'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        elevation: 4,
+                        shadowColor: Colors.black.withValues(alpha: 0.15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+                if (isUpdating)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white70),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          '静默更新中...',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -262,97 +286,158 @@ class _QrCard extends ConsumerWidget {
     final tokenAsync = ref.watch(payCodeProvider);
     final isUpdating = tokenAsync.isRefreshing && tokenAsync.hasToken;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.qr_code_2, color: Color(0xFFBB6688)),
-                const SizedBox(width: 8),
-                const Text(
-                  '消费二维码',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.outline.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.tint.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                const Spacer(),
-                if (isUpdating)
-                  const Icon(Icons.sync, color: Colors.blueGrey, size: 18),
+                child: const Icon(
+                  Icons.qr_code_2,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                '消费二维码',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (isUpdating)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.secondary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          tokenAsync.when(
+            skipLoadingOnRefresh: true,
+            skipLoadingOnReload: true,
+            loading: () => const SizedBox(
+              height: 200,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Column(
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                const SizedBox(height: 8),
+                Text(
+                  e.toString(),
+                  style: const TextStyle(color: AppColors.danger, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => ref
+                      .read(payCodeProvider.notifier)
+                      .refresh(forceRefresh: true, throwOnError: false),
+                  child: const Text('重新获取'),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
-            tokenAsync.when(
-              skipLoadingOnRefresh: true,
-              skipLoadingOnReload: true,
-              loading: () => const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => Column(
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 8),
-                  Text(
-                    e.toString(),
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => ref
-                        .read(payCodeProvider.notifier)
-                        .refresh(forceRefresh: true, throwOnError: false),
-                    child: const Text('重新获取'),
-                  ),
-                ],
-              ),
-              data: (token) {
-                if (token.isEmpty) {
-                  return SizedBox(
-                    height: 220,
-                    child: Center(
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.qr_code_2),
-                        label: const Text('获取消费二维码'),
-                        onPressed: () => ref
-                            .read(payCodeProvider.notifier)
-                            .refresh(forceRefresh: true, throwOnError: false),
-                      ),
+            data: (token) {
+              if (token.isEmpty) {
+                return SizedBox(
+                  height: 220,
+                  child: Center(
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.qr_code_2),
+                      label: const Text('获取消费二维码'),
+                      onPressed: () => ref
+                          .read(payCodeProvider.notifier)
+                          .refresh(forceRefresh: true, throwOnError: false),
                     ),
-                  );
-                }
+                  ),
+                );
+              }
 
-                return Column(
-                  children: [
-                    QrImageView(
+              return Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.outline),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: QrImageView(
                       data: token,
-                      size: 220,
+                      size: 200,
                       backgroundColor: Colors.white,
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      '二维码仅用于当次消费，请勿截图保存',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('刷新二维码'),
-                      onPressed: tokenAsync.isRefreshing
-                          ? null
-                          : () => ref
-                                .read(payCodeProvider.notifier)
-                                .refresh(
-                                  forceRefresh: true,
-                                  throwOnError: false,
-                                ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.security, size: 14, color: AppColors.accent),
+                        SizedBox(width: 6),
+                        Text(
+                          '二维码仅用于当次消费，请勿截图保存',
+                          style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('刷新二维码'),
+                    onPressed: tokenAsync.isRefreshing
+                        ? null
+                        : () => ref
+                              .read(payCodeProvider.notifier)
+                              .refresh(
+                                forceRefresh: true,
+                                throwOnError: false,
+                              ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -426,15 +511,11 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
                       .refresh(forceRefresh: true, throwOnError: true);
 
                   if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('余额已更新')));
+                    AppSnackBar.success(context, '余额已更新');
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('刷新余额失败，请稍后手动点击刷新图标')),
-                    );
+                    AppSnackBar.error(context, '刷新余额失败，请稍后手动点击刷新图标');
                   }
                 }
               },
@@ -453,9 +534,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
   Future<void> _pay() async {
     final amount = double.tryParse(_ctrl.text.trim());
     if (amount == null || amount < 0.01 || amount > 500) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入正确的金额')));
+      AppSnackBar.warning(context, '请输入正确的金额');
       return;
     }
 
@@ -498,9 +577,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        AppSnackBar.error(context, e.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -519,7 +596,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
               children: [
                 Icon(
                   Icons.account_balance_wallet_outlined,
-                  color: Colors.green,
+                  color: AppColors.success,
                 ),
                 SizedBox(width: 8),
                 Text(
