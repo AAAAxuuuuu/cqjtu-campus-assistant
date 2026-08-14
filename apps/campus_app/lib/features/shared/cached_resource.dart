@@ -1,6 +1,9 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
+export 'package:core/utils/resource_cache_key.dart';
+
+import 'package:core/utils/resource_cache_key.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,233 +131,60 @@ class ResourceCacheStore<T> {
   }
 }
 
-abstract class CachedResourceNotifier<T, Arg>
-    extends FamilyNotifier<CachedResource<T>, Arg> {
-  late Arg _arg;
-  Timer? _timer;
-  Future<CachedResource<T>>? _inflightRefresh;
-  String? _inflightUsername;
-  bool _disposed = false;
+class _RefreshResult<T> {
+  const _RefreshResult.success(this.state) : error = null, stackTrace = null;
 
-  T get emptyData;
-  Arg get resourceArg => _arg;
-  String get cacheNamespace;
-  Duration? get automaticRefreshInterval => null;
-
-  Object? encode(T data);
-  T decode(Object? json);
-  String? cacheScopeForArg(Arg arg);
-
-  void listenDependencies(Arg arg) {}
-
-  Future<T> fetch(
-    ({String username, String password}) credentials, {
-    required bool forceRefresh,
+  const _RefreshResult.failure({
+    required this.error,
+    required this.stackTrace,
+    required this.state,
   });
 
-  FutureOr<void> onData(T data, {required bool changed}) {}
+  final CachedResource<T> state;
+  final Object? error;
+  final StackTrace? stackTrace;
 
-  @override
-  CachedResource<T> build(Arg arg) {
-    _arg = arg;
-    _disposed = false;
-    ref.onDispose(() {
-      _disposed = true;
-      _timer?.cancel();
-    });
+  bool get isSuccess => error == null;
 
-    ref.listen<({String username, String password})?>(credentialsProvider, (
-      previous,
-      next,
-    ) {
-      if (next == null) {
-        state = CachedResource<T>(data: emptyData);
-      } else if (previous?.username != next.username) {
-        state = CachedResource<T>(data: emptyData);
-        unawaited(restoreCachedThenRefresh(forceRefresh: true));
-      }
-    });
-
-    ref.listen<int>(sessionUpdateProvider, (_, next) {
-      unawaited(refresh(forceRefresh: true));
-    });
-
-    listenDependencies(arg);
-    _scheduleAutomaticRefresh();
-    unawaited(restoreCachedThenRefresh());
-
-    return CachedResource<T>(data: emptyData);
-  }
-
-  Future<CachedResource<T>> restoreCachedThenRefresh({
-    bool forceRefresh = false,
-  }) async {
-    final username = _activeUsername(ref);
-    if (username == null) {
-      if (!_disposed) state = CachedResource<T>(data: emptyData);
-      return state;
+  CachedResource<T> unwrap({required bool throwOnError}) {
+    if (throwOnError && error != null) {
+      Error.throwWithStackTrace(error!, stackTrace ?? StackTrace.current);
     }
-
-    final cached = await _readCache(username: username);
-    if (!_isCurrentAccount(username)) return state;
-
-    if (cached != null) {
-      state = state.copyWith(
-        data: cached.data,
-        hasData: true,
-        updatedAt: cached.updatedAt,
-      );
-    } else {
-      state = CachedResource<T>(data: emptyData);
-    }
-
-    return refresh(forceRefresh: forceRefresh);
-  }
-
-  Future<CachedResource<T>> refresh({
-    bool forceRefresh = false,
-    bool throwOnError = false,
-  }) {
-    final username = _activeUsername(ref);
-    if (username == null) return Future.value(state);
-    final existing = _inflightRefresh;
-    if (existing != null && !forceRefresh && _inflightUsername == username) {
-      return existing;
-    }
-
-    final task = _refreshInternal(
-      forceRefresh: forceRefresh,
-      throwOnError: throwOnError,
-    );
-    _inflightUsername = username;
-    late final Future<CachedResource<T>> trackedTask;
-    trackedTask = task.whenComplete(() {
-      if (identical(_inflightRefresh, trackedTask)) {
-        _inflightRefresh = null;
-        _inflightUsername = null;
-      }
-    });
-    _inflightRefresh = trackedTask;
-    return trackedTask;
-  }
-
-  Future<CachedResource<T>> _refreshInternal({
-    required bool forceRefresh,
-    required bool throwOnError,
-  }) async {
-    final creds = ref.read(credentialsProvider);
-    if (creds == null) return state;
-    final username = creds.username.trim();
-    if (username.isEmpty) return state;
-
-    state = state.copyWith(isRefreshing: true, error: null, stackTrace: null);
-
-    try {
-      final fresh = await fetch(creds, forceRefresh: forceRefresh);
-      if (!_isCurrentAccount(username)) return state;
-
-      final changed = !state.hasData || !_sameData(state.data, fresh);
-      final updatedAt = DateTime.now();
-      await _writeCache(fresh, username: username);
-      if (!_isCurrentAccount(username)) return state;
-
-      state = state.copyWith(
-        data: fresh,
-        hasData: true,
-        isRefreshing: false,
-        error: null,
-        stackTrace: null,
-        consecutiveFailures: 0,
-        updatedAt: updatedAt,
-      );
-
-      try {
-        await onData(fresh, changed: changed);
-      } catch (error) {
-        debugPrint('[CachedResource] post-update hook failed: $error');
-      }
-
-      return state;
-    } catch (error, stackTrace) {
-      if (_isCurrentAccount(username)) {
-        state = state.copyWith(
-          isRefreshing: false,
-          error: error,
-          stackTrace: stackTrace,
-          consecutiveFailures: state.consecutiveFailures + 1,
-        );
-      }
-      if (throwOnError) Error.throwWithStackTrace(error, stackTrace);
-      return state;
-    }
-  }
-
-  Future<CachedSnapshot<T>?> _readCache({required String? username}) {
-    return ResourceCacheStore<T>(
-      key: resourceCacheKey(
-        cacheNamespace,
-        username: username,
-        scope: cacheScopeForArg(_arg),
-      ),
-      encode: encode,
-      decode: decode,
-    ).read();
-  }
-
-  bool _isCurrentAccount(String username) =>
-      !_disposed && _activeUsername(ref) == username;
-
-  Future<void> _writeCache(T data, {required String username}) async {
-    if (!_isCurrentAccount(username)) return;
-    final scopedStore = ResourceCacheStore<T>(
-      key: resourceCacheKey(
-        cacheNamespace,
-        username: username,
-        scope: cacheScopeForArg(_arg),
-      ),
-      encode: encode,
-      decode: decode,
-    );
-    await scopedStore.write(data);
-  }
-
-  bool _sameData(T current, T next) {
-    try {
-      return jsonEncode(encode(current)) == jsonEncode(encode(next));
-    } catch (_) {
-      return false;
-    }
-  }
-
-  void _scheduleAutomaticRefresh() {
-    final interval = automaticRefreshInterval;
-    if (interval == null) return;
-
-    _timer?.cancel();
-    _timer = Timer(interval, () {
-      if (_disposed) return;
-      unawaited(refresh());
-      _scheduleAutomaticRefresh();
-    });
+    return state;
   }
 }
 
-abstract class SimpleCachedResourceNotifier<T>
-    extends Notifier<CachedResource<T>> {
-  Timer? _timer;
-  Future<CachedResource<T>>? _inflightRefresh;
-  String? _inflightUsername;
-  bool _disposed = false;
+/// Shared refresh machinery for cached resources.
+///
+/// Applied to both [CachedResourceNotifier] (family) and
+/// [SimpleCachedResourceNotifier] (non-family). The host must be a Riverpod
+/// notifier whose state is [CachedResource]; the mixin declares [ref] and
+/// [state] as abstract members that the host's inherited members satisfy.
+///
+/// Behavioural contract:
+/// - A cached snapshot is restored first, then a background refresh runs.
+/// - Concurrent refresh calls for the same account are merged: plain calls
+///   reuse the in-flight chain, and force calls are serialized behind it so
+///   the same resource never issues two concurrent network requests.
+/// - When [cacheFreshness] is set, non-forced refreshes skip the network while
+///   the cached data is younger than the freshness window; forced refreshes
+///   and manual refreshes always bypass it.
+mixin CachedResourceRefreshMixin<T> {
+  late Ref<CachedResource<T>> _ref;
+  CachedResource<T> get state;
+  set state(CachedResource<T> value);
 
   T get emptyData;
   String get cacheNamespace;
   String? get cacheScope => null;
   Duration? get automaticRefreshInterval => null;
 
+  /// Data-cache freshness window. Independent from session/domain health
+  /// freshness. Null disables the skip (default).
+  Duration? get cacheFreshness => null;
+
   Object? encode(T data);
   T decode(Object? json);
-
-  void listenDependencies() {}
 
   Future<T> fetch(
     ({String username, String password}) credentials, {
@@ -363,8 +193,19 @@ abstract class SimpleCachedResourceNotifier<T>
 
   FutureOr<void> onData(T data, {required bool changed}) {}
 
-  @override
-  CachedResource<T> build() {
+  Timer? _timer;
+  Future<_RefreshResult<T>>? _queueTail;
+  String? _inflightUsername;
+  bool _forcePending = false;
+  bool _disposed = false;
+
+  /// Wires lifecycle listeners. Must be called from the host's [build]
+  /// before returning the initial state.
+  void wireResourceLifecycle(
+    Ref<CachedResource<T>> ref,
+    void Function() listenDependencies,
+  ) {
+    _ref = ref;
     _disposed = false;
     ref.onDispose(() {
       _disposed = true;
@@ -390,14 +231,12 @@ abstract class SimpleCachedResourceNotifier<T>
     listenDependencies();
     _scheduleAutomaticRefresh();
     unawaited(restoreCachedThenRefresh());
-
-    return CachedResource<T>(data: emptyData);
   }
 
   Future<CachedResource<T>> restoreCachedThenRefresh({
     bool forceRefresh = false,
   }) async {
-    final username = _activeUsername(ref);
+    final username = _activeUsername(_ref);
     if (username == null) {
       if (!_disposed) state = CachedResource<T>(data: emptyData);
       return state;
@@ -419,52 +258,135 @@ abstract class SimpleCachedResourceNotifier<T>
     return refresh(forceRefresh: forceRefresh);
   }
 
+  /// Refreshes the resource.
+  ///
+  /// Same-account refreshes are serialized behind a single chain tail:
+  /// - plain refreshes join the in-flight chain (dedup);
+  /// - force refreshes merge into an already-pending force instead of
+  ///   queueing duplicate network work, and otherwise queue exactly one
+  ///   force refresh behind the chain;
+  /// - a queued force is dropped when the account changed while it waited,
+  ///   so it never issues a request with the new account's credentials.
   Future<CachedResource<T>> refresh({
     bool forceRefresh = false,
     bool throwOnError = false,
   }) {
-    final username = _activeUsername(ref);
+    final username = _activeUsername(_ref);
     if (username == null) return Future.value(state);
-    final existing = _inflightRefresh;
-    if (existing != null && !forceRefresh && _inflightUsername == username) {
-      return existing;
+
+    final tail = _queueTail;
+    final sameAccount = _inflightUsername == username;
+    if (tail != null && sameAccount) {
+      if (forceRefresh && _forcePending) {
+        // Merge: an in-flight or queued force already covers this request.
+        // The caller inspects the self-contained result of that force request,
+        // rethrowing on failure if throwOnError is true, or returning state.
+        return tail.then<CachedResource<T>>(
+          (result) => result.unwrap(throwOnError: throwOnError),
+        );
+      }
+      if (!forceRefresh) {
+        // Plain refresh joins the in-flight chain (dedup).
+        return tail.then<CachedResource<T>>(
+          (result) => result.unwrap(throwOnError: throwOnError),
+        );
+      }
+
+      _forcePending = true;
+      final chained = tail.then<_RefreshResult<T>>((_) {
+        if (_activeUsername(_ref) != username) {
+          // Account switched while queued: never fetch with new creds.
+          return _RefreshResult<T>.success(state);
+        }
+        return _refreshInternal(username: username, forceRefresh: true);
+      });
+      _queueTail = chained;
+      chained.whenComplete(() {
+        if (identical(_queueTail, chained)) {
+          _queueTail = null;
+          _inflightUsername = null;
+          _forcePending = false;
+        }
+      }).ignore();
+      return chained.then<CachedResource<T>>(
+        (result) => result.unwrap(throwOnError: throwOnError),
+      );
     }
 
-    final task = _refreshInternal(
+    return _startRefresh(
+      username: username,
       forceRefresh: forceRefresh,
       throwOnError: throwOnError,
     );
-    _inflightUsername = username;
-    late final Future<CachedResource<T>> trackedTask;
-    trackedTask = task.whenComplete(() {
-      if (identical(_inflightRefresh, trackedTask)) {
-        _inflightRefresh = null;
-        _inflightUsername = null;
-      }
-    });
-    _inflightRefresh = trackedTask;
-    return trackedTask;
   }
 
-  Future<CachedResource<T>> _refreshInternal({
+  Future<CachedResource<T>> _startRefresh({
+    required String username,
     required bool forceRefresh,
     required bool throwOnError,
-  }) async {
-    final creds = ref.read(credentialsProvider);
-    if (creds == null) return state;
-    final username = creds.username.trim();
-    if (username.isEmpty) return state;
+  }) {
+    final task = _refreshInternal(
+      username: username,
+      forceRefresh: forceRefresh,
+    );
+    final wasOtherAccount =
+        _inflightUsername != null && _inflightUsername != username;
+    _inflightUsername = username;
+    if (forceRefresh) _forcePending = true;
+    late final Future<_RefreshResult<T>> trackedTask;
+    trackedTask = task.whenComplete(() {
+      if (identical(_queueTail, trackedTask)) {
+        _queueTail = null;
+        _inflightUsername = null;
+        _forcePending = false;
+      }
+    });
+    // An account switch starts immediately (its tail replaces the previous
+    // account's), while same-account refreshes keep the serialized tail so
+    // queued work is never lost or duplicated.
+    if (_queueTail == null || wasOtherAccount) _queueTail = trackedTask;
+    return trackedTask.then<CachedResource<T>>(
+      (result) => result.unwrap(throwOnError: throwOnError),
+    );
+  }
 
-    state = state.copyWith(isRefreshing: true, error: null, stackTrace: null);
+  Future<_RefreshResult<T>> _refreshInternal({
+    required String username,
+    required bool forceRefresh,
+  }) async {
+    final creds = _ref.read(credentialsProvider);
+    if (creds == null) return _RefreshResult.success(state);
+    final activeUsername = creds.username.trim();
+    if (activeUsername.isEmpty || activeUsername != username) {
+      return _RefreshResult.success(state);
+    }
+
+    // Data-cache freshness: skip the network while cached data is young.
+    // Forced refreshes always bypass this window; a non-positive age means
+    // the device clock moved backwards, so the cache is treated as stale.
+    final freshness = cacheFreshness;
+    if (!forceRefresh && freshness != null && state.hasData) {
+      final updatedAt = state.updatedAt;
+      if (updatedAt != null) {
+        final age = DateTime.now().difference(updatedAt);
+        if (!age.isNegative && age < freshness) {
+          return _RefreshResult.success(state);
+        }
+      }
+    }
+
+    if (_isCurrentAccount(username)) {
+      state = state.copyWith(isRefreshing: true, error: null, stackTrace: null);
+    }
 
     try {
       final fresh = await fetch(creds, forceRefresh: forceRefresh);
-      if (!_isCurrentAccount(username)) return state;
+      if (!_isCurrentAccount(username)) return _RefreshResult.success(state);
 
       final changed = !state.hasData || !_sameData(state.data, fresh);
       final updatedAt = DateTime.now();
       await _writeCache(fresh, username: username);
-      if (!_isCurrentAccount(username)) return state;
+      if (!_isCurrentAccount(username)) return _RefreshResult.success(state);
 
       state = state.copyWith(
         data: fresh,
@@ -482,7 +404,7 @@ abstract class SimpleCachedResourceNotifier<T>
         debugPrint('[CachedResource] post-update hook failed: $error');
       }
 
-      return state;
+      return _RefreshResult.success(state);
     } catch (error, stackTrace) {
       if (_isCurrentAccount(username)) {
         state = state.copyWith(
@@ -492,8 +414,11 @@ abstract class SimpleCachedResourceNotifier<T>
           consecutiveFailures: state.consecutiveFailures + 1,
         );
       }
-      if (throwOnError) Error.throwWithStackTrace(error, stackTrace);
-      return state;
+      return _RefreshResult.failure(
+        error: error,
+        stackTrace: stackTrace,
+        state: state,
+      );
     }
   }
 
@@ -510,7 +435,7 @@ abstract class SimpleCachedResourceNotifier<T>
   }
 
   bool _isCurrentAccount(String username) =>
-      !_disposed && _activeUsername(ref) == username;
+      !_disposed && _activeUsername(_ref) == username;
 
   Future<void> _writeCache(T data, {required String username}) async {
     if (!_isCurrentAccount(username)) return;
@@ -547,21 +472,42 @@ abstract class SimpleCachedResourceNotifier<T>
   }
 }
 
-String resourceCacheKey(
-  String namespace, {
-  required String? username,
-  String? scope,
-}) {
-  return [
-    'resource_cache_v1',
-    _safeKeyPart(namespace),
-    _safeKeyPart(username),
-    _safeKeyPart(scope),
-  ].join(':');
+/// Family variant of the cached-resource notifier.
+///
+/// Kept as the public base class for API compatibility; the shared logic
+/// lives in [CachedResourceRefreshMixin].
+abstract class CachedResourceNotifier<T, Arg>
+    extends FamilyNotifier<CachedResource<T>, Arg>
+    with CachedResourceRefreshMixin<T> {
+  late Arg _arg;
+
+  Arg get resourceArg => _arg;
+  String? cacheScopeForArg(Arg arg);
+  void listenDependencies(Arg arg) {}
+
+  @override
+  String? get cacheScope => cacheScopeForArg(_arg);
+
+  @override
+  CachedResource<T> build(Arg arg) {
+    _arg = arg;
+    wireResourceLifecycle(ref, () => listenDependencies(arg));
+    return CachedResource<T>(data: emptyData);
+  }
 }
 
-String _safeKeyPart(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) return 'default';
-  return base64Url.encode(utf8.encode(trimmed));
+/// Non-family variant of the cached-resource notifier.
+abstract class SimpleCachedResourceNotifier<T>
+    extends Notifier<CachedResource<T>>
+    with CachedResourceRefreshMixin<T> {
+  @override
+  String? get cacheScope => null;
+
+  void listenDependencies() {}
+
+  @override
+  CachedResource<T> build() {
+    wireResourceLifecycle(ref, listenDependencies);
+    return CachedResource<T>(data: emptyData);
+  }
 }

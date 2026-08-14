@@ -24,6 +24,9 @@ class GradesNotifier extends CachedResourceNotifier<GradeResult, String> {
   String get cacheNamespace => 'grades';
 
   @override
+  Duration get cacheFreshness => const Duration(hours: 6);
+
+  @override
   String? cacheScopeForArg(String arg) => arg;
 
   @override
@@ -83,6 +86,9 @@ class GradeDetailNotifier
 
   @override
   String get cacheNamespace => 'grade_detail';
+
+  @override
+  Duration get cacheFreshness => const Duration(hours: 6);
 
   @override
   String? cacheScopeForArg(GradeDetailArg arg) {

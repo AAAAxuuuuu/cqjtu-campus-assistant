@@ -37,6 +37,9 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
   String get cacheNamespace => 'schedule';
 
   @override
+  Duration get cacheFreshness => const Duration(hours: 2);
+
+  @override
   String? cacheScopeForArg(String? arg) => arg;
 
   @override

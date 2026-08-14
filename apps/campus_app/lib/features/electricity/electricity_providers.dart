@@ -23,6 +23,8 @@ final electricityProvider =
     );
 
 class ElectricityNotifier extends SimpleCachedResourceNotifier<String> {
+  bool _widgetBalancePushed = false;
+
   @override
   String get emptyData => '';
 
@@ -82,7 +84,16 @@ class ElectricityNotifier extends SimpleCachedResourceNotifier<String> {
 
   @override
   Future<void> onData(String data, {required bool changed}) async {
-    NotificationService.checkAndNotify(data);
-    await ScheduleWidgetService.updateBalances(electricityBalance: data);
+    // Avoid redundant side effects when the balance did not change: the
+    // threshold notification is only worth (re)sending on an actual change,
+    // and the widget only needs a push on change or once per notifier
+    // lifetime (e.g. right after login, when widgets may have been cleared).
+    if (changed) {
+      NotificationService.checkAndNotify(data);
+    }
+    if (changed || !_widgetBalancePushed) {
+      await ScheduleWidgetService.updateBalances(electricityBalance: data);
+      _widgetBalancePushed = true;
+    }
   }
 }

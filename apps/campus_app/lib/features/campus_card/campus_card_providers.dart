@@ -31,6 +31,8 @@ final campusCardBalanceProvider =
     );
 
 class CampusCardBalanceNotifier extends SimpleCachedResourceNotifier<String> {
+  bool _widgetBalancePushed = false;
+
   @override
   String get emptyData => '';
 
@@ -62,8 +64,14 @@ class CampusCardBalanceNotifier extends SimpleCachedResourceNotifier<String> {
   }
 
   @override
-  Future<void> onData(String data, {required bool changed}) {
-    return ScheduleWidgetService.updateBalances(campusCardBalance: data);
+  Future<void> onData(String data, {required bool changed}) async {
+    // Push the widget on actual changes or once per notifier lifetime
+    // (covers re-login after widgets were cleared); skip redundant pushes
+    // when the balance is unchanged.
+    if (changed || !_widgetBalancePushed) {
+      await ScheduleWidgetService.updateBalances(campusCardBalance: data);
+      _widgetBalancePushed = true;
+    }
   }
 }
 
