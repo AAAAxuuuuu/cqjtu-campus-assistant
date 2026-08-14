@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/material.dart';
 
 /// 品牌色板 —— CQJTU Hub
@@ -166,6 +167,34 @@ abstract final class AppType {
   );
 }
 
+// Flutter 3.44 moved CupertinoPageTransitionsBuilder out of Material.
+class _CupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _CupertinoPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration =>
+      cupertino.CupertinoRouteTransitionMixin.kTransitionDuration;
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      cupertino.CupertinoPageTransition.delegatedTransition;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => cupertino.CupertinoRouteTransitionMixin.buildPageTransitions<T>(
+    route,
+    context,
+    animation,
+    secondaryAnimation,
+    child,
+  );
+}
+
 class AppTheme {
   @Deprecated('使用 AppColors.primary')
   static const Color primaryColor = AppColors.primary;
@@ -296,9 +325,9 @@ class AppTheme {
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: _CupertinoPageTransitionsBuilder(),
           TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: _CupertinoPageTransitionsBuilder(),
           TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
         },
       ),
