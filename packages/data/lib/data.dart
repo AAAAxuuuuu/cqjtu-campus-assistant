@@ -3,6 +3,9 @@ export 'src/campus_runtime_mode.dart';
 export 'src/campus_failure.dart';
 export 'src/campus_gateway.dart';
 
+// Session API contract.
+export 'src/session_api.dart';
+
 // Self-hosted backend implementation.
 export 'src/self_hosted/self_hosted_campus_gateway.dart';
 export 'src/self_hosted/self_hosted_session_manager.dart';

@@ -200,8 +200,8 @@ final sessionManagerProvider = Provider<SessionManager>((ref) {
 class SessionManager {
   SessionManager(this._api, this._sessionService, this._recoveryHealth);
 
-  final ApiService _api;
-  final SessionService _sessionService;
+  final CampusSessionApi _api;
+  final SelfHostedSessionStore _sessionService;
   final RecoveryHealthNotifier _recoveryHealth;
   final Map<String, String> _sessionIdCache = {};
   final Map<String, Future<void>> _inflightRecoveryTasks = {};

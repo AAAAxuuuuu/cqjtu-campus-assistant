@@ -230,16 +230,48 @@ class ManualCookieJar {
 // HTTP client wrapper with manual cookie + redirect handling
 // ---------------------------------------------------------------------------
 
+/// A raw HTTP response produced by [_SchoolHttpClient] or a fake transport.
+///
+/// Header names are normalized to lowercase so lookups are case-insensitive.
+class SchoolHttpResponse {
+  const SchoolHttpResponse({
+    required this.statusCode,
+    required this.headers,
+    required this.body,
+    this.cookies = const [],
+  });
+
+  final int statusCode;
+  final Map<String, String> headers;
+  final String body;
+  final List<Cookie> cookies;
+
+  String? headerValue(String name) => headers[name.toLowerCase()];
+}
+
+/// Pluggable transport for [_SchoolHttpClient].
+///
+/// Tests inject a fake to drive CAS/redirect/cookie flows offline; production
+/// uses the default dart:io client.
+typedef SchoolHttpTransport = Future<SchoolHttpResponse> Function(
+  String method,
+  Uri uri, {
+  Map<String, String>? headers,
+  List<int>? body,
+});
+
 /// Wraps [HttpClient] with [ManualCookieJar] and manual redirect following.
 ///
 /// CAS login involves cross-domain redirects (ids → jwgln). The built-in
 /// auto-follow strips sensitive headers (Cookie) on cross-domain hops, so
 /// we disable it and manage cookies + redirects ourselves.
 class _SchoolHttpClient {
-  _SchoolHttpClient({Duration? readTimeout})
-      : _readTimeout = readTimeout ?? const Duration(seconds: 20);
+  _SchoolHttpClient({Duration? readTimeout, SchoolHttpTransport? transport})
+      : _readTimeout = readTimeout ?? const Duration(seconds: 20),
+        _transport = transport;
 
   final Duration _readTimeout;
+  final SchoolHttpTransport? _transport;
   final HttpClient _client = HttpClient();
   final ManualCookieJar _jar = ManualCookieJar();
 
@@ -281,12 +313,24 @@ class _SchoolHttpClient {
   }
 
   /// Send a request with manual cookie attachment. Does NOT follow redirects.
-  Future<HttpClientResponse> _send(
+  Future<SchoolHttpResponse> _send(
     String method,
     Uri uri, {
     Map<String, String>? headers,
     List<int>? body,
   }) async {
+    final transport = _transport;
+    if (transport != null) {
+      final response = await transport(
+        method,
+        uri,
+        headers: headers,
+        body: body,
+      );
+      _jar.saveFromResponse(uri, response.cookies);
+      return response;
+    }
+
     final req = await _client.openUrl(method, uri);
     req.followRedirects = false;
 
@@ -308,7 +352,17 @@ class _SchoolHttpClient {
 
     final res = await req.close().timeout(_readTimeout);
     _jar.saveFromResponse(uri, res.cookies);
-    return res;
+    final bodyText = await res.transform(utf8.decoder).join();
+    final headerMap = <String, String>{};
+    res.headers.forEach((name, values) {
+      headerMap[name.toLowerCase()] = values.join(', ');
+    });
+    return SchoolHttpResponse(
+      statusCode: res.statusCode,
+      headers: headerMap,
+      body: bodyText,
+      cookies: res.cookies,
+    );
   }
 
   /// GET with manual redirect following.
@@ -319,8 +373,7 @@ class _SchoolHttpClient {
   }) async {
     final uri = _buildUri(url, queryParams);
     final res = await _followRedirects('GET', uri, maxRedirects: maxRedirects);
-    final body = await res.transform(utf8.decoder).join();
-    return _HttpResponse(statusCode: res.statusCode, body: body);
+    return _HttpResponse(statusCode: res.statusCode, body: res.body);
   }
 
   /// POST with manual redirect following.
@@ -355,12 +408,11 @@ class _SchoolHttpClient {
       body: bodyBytes,
       maxRedirects: maxRedirects,
     );
-    final body = await res.transform(utf8.decoder).join();
-    return _HttpResponse(statusCode: res.statusCode, body: body);
+    return _HttpResponse(statusCode: res.statusCode, body: res.body);
   }
 
   /// Follow redirects manually, switching POST → GET on 301/302/303.
-  Future<HttpClientResponse> _followRedirects(
+  Future<SchoolHttpResponse> _followRedirects(
     String method,
     Uri uri, {
     Map<String, String>? headers,
@@ -381,7 +433,7 @@ class _SchoolHttpClient {
       );
 
       final status = res.statusCode;
-      final location = res.headers.value(HttpHeaders.locationHeader);
+      final location = res.headerValue('location');
       final isRedirect = status == 301 ||
           status == 302 ||
           status == 303 ||
@@ -399,7 +451,6 @@ class _SchoolHttpClient {
         return res;
       }
 
-      await res.drain();
       final nextUri = currentUri.resolve(location);
 
       // 301/302/303 → switch to GET and drop body
@@ -1749,11 +1800,14 @@ class DirectSchoolCampusGateway implements CampusGateway {
   DirectSchoolCampusGateway({
     SchoolSystemConfig? config,
     SelfHostedSessionStore? sessionStore,
+    SchoolHttpTransport? transport,
   })  : _config = config ?? const SchoolSystemConfig(),
-        _sessionStore = sessionStore;
+        _sessionStore = sessionStore,
+        _transport = transport;
 
   final SchoolSystemConfig _config;
   final SelfHostedSessionStore? _sessionStore;
+  final SchoolHttpTransport? _transport;
 
   // Lazy-initialized per-user state
   final Map<String, _UserSession> _sessions = {};
@@ -1761,7 +1815,7 @@ class DirectSchoolCampusGateway implements CampusGateway {
   _UserSession _session(String username) {
     return _sessions.putIfAbsent(
       username,
-      () => _UserSession(_config, _sessionStore),
+      () => _UserSession(_config, _sessionStore, _transport),
     );
   }
 
@@ -2292,13 +2346,14 @@ class DirectSchoolCampusGateway implements CampusGateway {
 
 /// Holds the HTTP client, authenticator, and auth state for one user.
 class _UserSession {
-  _UserSession(this._config, this._sessionStore) {
-    _httpClient = _SchoolHttpClient();
+  _UserSession(this._config, this._sessionStore, this._transport) {
+    _httpClient = _SchoolHttpClient(transport: _transport);
     _authenticator = _CasAuthenticator(_httpClient, _config);
   }
 
   final SchoolSystemConfig _config;
   final SelfHostedSessionStore? _sessionStore;
+  final SchoolHttpTransport? _transport;
   late final _SchoolHttpClient _httpClient;
   late final _CasAuthenticator _authenticator;
   bool _authenticated = false;
