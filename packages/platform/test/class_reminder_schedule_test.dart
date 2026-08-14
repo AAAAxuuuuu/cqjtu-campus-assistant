@@ -4,7 +4,60 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('buildClassReminders', () {
-    test('builds current and next week reminders within seven days', () {
+    test('defaults to a fourteen-day look-ahead window', () {
+      final reminders = buildClassReminders(
+        courses: const [
+          Course(
+            name: '高等数学',
+            teacher: '张老师',
+            timeStr: '',
+            classroom: 'A101',
+            dayOfWeek: DateTime.wednesday,
+            timeSlot: 6,
+            weekList: [1],
+          ),
+          Course(
+            name: '大学英语',
+            teacher: '李老师',
+            timeStr: '',
+            classroom: 'B202',
+            dayOfWeek: DateTime.tuesday,
+            timeSlot: 1,
+            weekList: [2],
+          ),
+          // Week 2 Thursday is 8 days out: inside the 14-day window.
+          Course(
+            name: '第八天的课',
+            teacher: '',
+            timeStr: '',
+            classroom: 'C303',
+            dayOfWeek: DateTime.thursday,
+            timeSlot: 1,
+            weekList: [2],
+          ),
+          // Week 4 Monday is 19 days out: outside the 14-day window.
+          Course(
+            name: '超过十四天的课',
+            teacher: '',
+            timeStr: '',
+            classroom: 'D404',
+            dayOfWeek: DateTime.monday,
+            timeSlot: 1,
+            weekList: [4],
+          ),
+        ],
+        semesterStart: DateTime(2026, 6, 1),
+        now: DateTime(2026, 6, 3, 12),
+        reminderMinutes: 15,
+      );
+
+      expect(reminders.map((r) => r.courseName), ['高等数学', '大学英语', '第八天的课']);
+      expect(reminders.first.remindAt, DateTime(2026, 6, 3, 13, 45));
+      expect(reminders.first.classStartAt, DateTime(2026, 6, 3, 14));
+      expect(reminders.last.remindAt, DateTime(2026, 6, 11, 8, 5));
+    });
+
+    test('respects an explicit lookAheadDays', () {
       final reminders = buildClassReminders(
         courses: const [
           Course(
@@ -38,11 +91,11 @@ void main() {
         semesterStart: DateTime(2026, 6, 1),
         now: DateTime(2026, 6, 3, 12),
         reminderMinutes: 15,
+        lookAheadDays: 7,
       );
 
       expect(reminders.map((r) => r.courseName), ['高等数学', '大学英语']);
       expect(reminders.first.remindAt, DateTime(2026, 6, 3, 13, 45));
-      expect(reminders.first.classStartAt, DateTime(2026, 6, 3, 14));
       expect(reminders.last.remindAt, DateTime(2026, 6, 9, 8, 5));
     });
 

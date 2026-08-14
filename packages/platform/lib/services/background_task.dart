@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:core/models/dorm_room.dart';
+import 'package:core/utils/resource_cache_key.dart';
 import 'package:core/utils/polling_utils.dart';
 import 'package:data/data.dart';
 import 'package:dio/dio.dart';
@@ -8,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'app_update_service.dart';
+import 'notification_service.dart';
 
 const kBgTaskName = 'balanceMonitor';
 const kBgTaskTag = 'com.axu.schedule.balanceMonitor';
@@ -153,6 +157,19 @@ void backgroundCallbackDispatcher() {
         );
       }
 
+      // Keep class reminders alive even when the app stays closed: replay
+      // the persisted reminder seed when the coverage window is about to end.
+      try {
+        final replenished = await NotificationService.replenishFromSeedIfNeeded(
+          username: username,
+        );
+        if (replenished) {
+          debugPrint('[BG] class reminders replenished from seed');
+        }
+      } catch (error) {
+        debugPrint('[BG] reminder replenish failed: $error');
+      }
+
       await prefs.setInt('bg_last_run', DateTime.now().millisecondsSinceEpoch);
       return true;
     } catch (e) {
@@ -186,8 +203,10 @@ Future<void> _runSelfHostedBalanceChecks({
   var sessionId = await _ensureSessionId(storage, dio, username);
   await _restoreLoginState(storage, dio, username, sessionId);
 
+  String? elecBalance;
+  String? cardBalance;
   try {
-    await _checkSelfHostedElec(
+    elecBalance = await _checkSelfHostedElec(
       dio,
       plugin,
       prefs,
@@ -200,7 +219,7 @@ Future<void> _runSelfHostedBalanceChecks({
   } on _BgSessionExpiredException {
     sessionId = await _refreshSessionId(storage, dio, username);
     await _restoreLoginState(storage, dio, username, sessionId);
-    await _checkSelfHostedElec(
+    elecBalance = await _checkSelfHostedElec(
       dio,
       plugin,
       prefs,
@@ -213,7 +232,7 @@ Future<void> _runSelfHostedBalanceChecks({
   }
 
   try {
-    await _checkSelfHostedCard(
+    cardBalance = await _checkSelfHostedCard(
       dio,
       plugin,
       prefs,
@@ -225,7 +244,7 @@ Future<void> _runSelfHostedBalanceChecks({
   } on _BgSessionExpiredException {
     sessionId = await _refreshSessionId(storage, dio, username);
     await _restoreLoginState(storage, dio, username, sessionId);
-    await _checkSelfHostedCard(
+    cardBalance = await _checkSelfHostedCard(
       dio,
       plugin,
       prefs,
@@ -235,6 +254,14 @@ Future<void> _runSelfHostedBalanceChecks({
       cardThreshold,
     );
   }
+
+  await backfillBalanceCaches(
+    prefs: prefs,
+    username: username,
+    elecBalance: elecBalance,
+    cardBalance: cardBalance,
+    dormParams: dormParams,
+  );
 }
 
 Future<void> _runLocalAndroidBalanceChecks({
@@ -247,15 +274,17 @@ Future<void> _runLocalAndroidBalanceChecks({
   required Map<String, String>? dormParams,
 }) async {
   final gateway = DirectSchoolCampusGateway();
+  String? elecBalance;
+  String? cardBalance;
 
   if (dormParams != null) {
     try {
-      final balance = await gateway.getElecBalance(
+      elecBalance = await gateway.getElecBalance(
         username,
         password,
         dormParams: dormParams,
       );
-      await _notifyElecIfNeeded(plugin, prefs, balance, elecThreshold);
+      await _notifyElecIfNeeded(plugin, prefs, elecBalance, elecThreshold);
     } catch (error) {
       debugPrint('[BG] local elec check failed: ${error.runtimeType}');
     }
@@ -264,11 +293,19 @@ Future<void> _runLocalAndroidBalanceChecks({
   }
 
   try {
-    final balance = await gateway.getCampusCardBalance(username, password);
-    await _notifyCardIfNeeded(plugin, prefs, balance, cardThreshold);
+    cardBalance = await gateway.getCampusCardBalance(username, password);
+    await _notifyCardIfNeeded(plugin, prefs, cardBalance, cardThreshold);
   } catch (error) {
     debugPrint('[BG] local card check failed: ${error.runtimeType}');
   }
+
+  await backfillBalanceCaches(
+    prefs: prefs,
+    username: username,
+    elecBalance: elecBalance,
+    cardBalance: cardBalance,
+    dormParams: dormParams,
+  );
 }
 
 Map<String, String>? _readDormParams(
@@ -291,7 +328,7 @@ Map<String, String>? _readDormParams(
   return DormRoom.fromPrefsMap(legacyMap)?.toQueryParams();
 }
 
-Future<void> _checkSelfHostedElec(
+Future<String?> _checkSelfHostedElec(
   Dio dio,
   FlutterLocalNotificationsPlugin plugin,
   SharedPreferences prefs,
@@ -327,15 +364,16 @@ Future<void> _checkSelfHostedElec(
       debugPrint(
         '[BG] elec retry failed code=${res.data['code']} msg=${res.data['msg']}',
       );
-      return;
+      return null;
     }
   }
 
   final balStr = res.data['data'] as String? ?? '';
   await _notifyElecIfNeeded(plugin, prefs, balStr, threshold);
+  return balStr;
 }
 
-Future<void> _checkSelfHostedCard(
+Future<String?> _checkSelfHostedCard(
   Dio dio,
   FlutterLocalNotificationsPlugin plugin,
   SharedPreferences prefs,
@@ -375,12 +413,45 @@ Future<void> _checkSelfHostedCard(
       debugPrint(
         '[BG] card retry failed code=${res.data['code']} msg=${res.data['msg']}',
       );
-      return;
+      return null;
     }
   }
 
   final balStr = res.data['data'] as String? ?? '';
   await _notifyCardIfNeeded(plugin, prefs, balStr, threshold);
+  return balStr;
+}
+
+/// Writes background-fetched balances into the foreground resource caches
+/// so the app can show the latest known values on the next restore, and
+/// records check timestamps for front/back overlap analysis.
+@visibleForTesting
+Future<void> backfillBalanceCaches({
+  required SharedPreferences prefs,
+  required String username,
+  required String? elecBalance,
+  required String? cardBalance,
+  required Map<String, String>? dormParams,
+}) async {
+  final now = DateTime.now().millisecondsSinceEpoch;
+
+  if (elecBalance != null && dormParams != null) {
+    final scope =
+        "${dormParams['buildid'] ?? ''}:${dormParams['roomid'] ?? ''}";
+    await prefs.setString(
+      resourceCacheKey('electricity_balance', username: username, scope: scope),
+      jsonEncode({'updatedAtMs': now, 'data': elecBalance}),
+    );
+    await prefs.setInt('bg_elec_checked_at_ms', now);
+  }
+
+  if (cardBalance != null) {
+    await prefs.setString(
+      resourceCacheKey('campus_card_balance', username: username, scope: null),
+      jsonEncode({'updatedAtMs': now, 'data': cardBalance}),
+    );
+    await prefs.setInt('bg_card_checked_at_ms', now);
+  }
 }
 
 Future<void> _notifyElecIfNeeded(

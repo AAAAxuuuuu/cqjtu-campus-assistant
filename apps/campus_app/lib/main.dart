@@ -28,21 +28,9 @@ import 'widgets/silent_zove_token_bootstrapper.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb) {
-    await NotificationService.init();
-    await Workmanager().initialize(
-      backgroundCallbackDispatcher,
-      //isInDebugMode: false,
-    );
-    await Workmanager().registerPeriodicTask(
-      kBgTaskTag,
-      kBgTaskName,
-      frequency: const Duration(minutes: 15),
-      constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-    );
-  }
-
+  // Critical path: only what the first frame needs. Plugin-heavy background
+  // services (notifications, WorkManager) are deferred behind the first
+  // frame so they never delay first paint.
   final signedInUsernameHint = await CredentialService()
       .loadSignedInUsernameHint();
   final semesterSnapshot = await SemesterService.restoreSnapshot(
@@ -63,6 +51,51 @@ void main() async {
       child: const CampusApp(),
     ),
   );
+
+  unawaited(initializeBackgroundServices());
+}
+
+/// Deferred platform initialization for notifications and WorkManager.
+///
+/// Runs after the first frame so plugin initialization never delays first
+/// paint. ExistingPeriodicWorkPolicy.keep makes the periodic registration a
+/// no-op on warm starts where the task is already registered.
+/// Completes when the next frame is painted.
+///
+/// Exposed for tests: it is the deferral point that keeps plugin
+/// initialization off the first-paint critical path.
+@visibleForTesting
+Future<void> awaitFirstFrame() {
+  final firstFrame = Completer<void>();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!firstFrame.isCompleted) firstFrame.complete();
+  });
+  return firstFrame.future;
+}
+
+/// Deferred platform initialization for notifications and WorkManager.
+@visibleForTesting
+Future<void> initializeBackgroundServices() async {
+  if (kIsWeb) return;
+
+  await awaitFirstFrame();
+
+  try {
+    await NotificationService.init();
+    await Workmanager().initialize(
+      backgroundCallbackDispatcher,
+      //isInDebugMode: false,
+    );
+    await Workmanager().registerPeriodicTask(
+      kBgTaskTag,
+      kBgTaskName,
+      frequency: const Duration(minutes: 15),
+      constraints: Constraints(networkType: NetworkType.connected),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    );
+  } catch (error) {
+    debugPrint('[main] background services init failed: $error');
+  }
 }
 
 class CampusApp extends StatelessWidget {

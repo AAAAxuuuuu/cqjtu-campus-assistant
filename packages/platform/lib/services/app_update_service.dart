@@ -155,10 +155,18 @@ class AppUpdateService {
   static const _updateFeedCacheKey = 'app_update_feed_cache_v1';
   static const _updateFeedCacheTtl = Duration(hours: 6);
 
+  /// Test-only override for [feedUrl]; enables offline HTTP tests against a
+  /// local server. Null in production.
+  @visibleForTesting
+  static String? debugFeedUrlOverride;
+
   static String get defaultReleasePageUrl =>
       'https://github.com/${_githubRepo.trim()}/releases/latest';
 
   static String? get feedUrl {
+    final debugOverride = debugFeedUrlOverride;
+    if (debugOverride != null) return debugOverride;
+
     final explicit = _updateUrl.trim();
     if (explicit.isNotEmpty) return explicit;
 
@@ -363,7 +371,7 @@ class AppUpdateService {
     AppUpdateInfo latest,
     InstalledAppVersion current,
   ) {
-    if (_isNewerThanCurrent(latest, current)) {
+    if (isNewerThanCurrent(latest, current)) {
       return AppUpdateCheckResult(
         status: AppUpdateCheckStatus.updateAvailable,
         current: current,
@@ -378,7 +386,11 @@ class AppUpdateService {
     );
   }
 
-  static bool _isNewerThanCurrent(
+  /// True when [latest] is strictly newer than [current].
+  ///
+  /// Public for offline tests; the comparison is deterministic and has no
+  /// side effects.
+  static bool isNewerThanCurrent(
     AppUpdateInfo latest,
     InstalledAppVersion current,
   ) {
