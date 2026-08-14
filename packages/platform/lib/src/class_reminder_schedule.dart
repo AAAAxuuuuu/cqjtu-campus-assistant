@@ -67,6 +67,7 @@ List<ClassReminder> buildClassReminders({
   int totalWeeks = 20,
   ScheduleCalendarRules calendarRules = ScheduleCalendarRules.empty,
   bool includeActiveReminders = false,
+  int lookAheadDays = 14,
 }) {
   final today = DateTime(now.year, now.month, now.day);
   final reminders = <ClassReminder>[];
@@ -80,7 +81,7 @@ List<ClassReminder> buildClassReminders({
     final course = occurrence.course;
     final classDate = occurrence.scheduledDate;
     final daysFromToday = classDate.difference(today).inDays;
-    if (daysFromToday < 0 || daysFromToday > 7) continue;
+    if (daysFromToday < 0 || daysFromToday > lookAheadDays) continue;
 
     final timeText = _startTimeTextForCourse(course);
     if (timeText == null) continue;
