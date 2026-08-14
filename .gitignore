@@ -36,3 +36,6 @@ release/
 *.apk
 logo_showcase.html
 assets/
+
+# Test coverage traces
+coverage/
