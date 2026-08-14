@@ -6,6 +6,8 @@ import 'package:core/models/grade.dart';
 import 'package:core/models/study_progress.dart';
 import 'package:dio/dio.dart';
 
+import 'session_api.dart';
+
 String _redactIdentifier(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) return '<empty>';
@@ -13,7 +15,7 @@ String _redactIdentifier(String value) {
   return 'user_${trimmed.substring(0, 2)}****${trimmed.substring(trimmed.length - 2)}';
 }
 
-class ApiService {
+class ApiService implements CampusSessionApi {
   ApiService({required String baseUrl, Dio? dio})
       : _dio = dio ??
             Dio(
