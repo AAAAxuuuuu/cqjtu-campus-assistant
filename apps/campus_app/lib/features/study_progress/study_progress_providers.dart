@@ -291,6 +291,9 @@ class StudyProgressNotifier
   String get cacheNamespace => 'study_progress';
 
   @override
+  Duration get cacheFreshness => const Duration(hours: 6);
+
+  @override
   Object? encode(StudyProgressViewData data) => data.toJson();
 
   @override
