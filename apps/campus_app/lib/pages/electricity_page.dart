@@ -80,6 +80,7 @@ class ElectricityPage extends ConsumerWidget {
                 if (context.mounted) {
                   AppSnackBar.error(context, '刷新失败，请检查网络');
                 }
+                rethrow;
               }
             },
           ),
