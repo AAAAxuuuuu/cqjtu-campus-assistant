@@ -34,6 +34,12 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
 
   bool _booting = true;
   bool _loadingPage = true;
+  bool _canGoBack = false;
+
+  /// 见 build() 中的说明：防止重定向链把用户困在页面里。
+  int _backAttempts = 0;
+  String? _urlAtLastBackAttempt;
+  static const _maxBackAttempts = 2;
   String? _error;
 
   @override
@@ -73,7 +79,19 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
             if (_shouldAutofillKnownCredentials(url)) {
               await _autofillKnownCredentials();
             }
-            if (mounted) setState(() => _loadingPage = false);
+            final canGoBack = await _controller.canGoBack();
+            if (mounted) {
+              setState(() {
+                _loadingPage = false;
+                _canGoBack = canGoBack;
+                // Reached a new page: restore the back budget so ordinary
+                // navigation never spends it.
+                if (url != _urlAtLastBackAttempt) {
+                  _backAttempts = 0;
+                  _urlAtLastBackAttempt = null;
+                }
+              });
+            }
           },
         ),
       );
@@ -388,8 +406,45 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     return text.isEmpty ? null : text;
   }
 
+  Future<void> _handleBackGesture() async {
+    final currentUrl = await _controller.currentUrl();
+    if (currentUrl != null && currentUrl == _urlAtLastBackAttempt) {
+      _backAttempts++;
+    } else {
+      _backAttempts = 1;
+      _urlAtLastBackAttempt = currentUrl;
+    }
+
+    if (_backAttempts >= _maxBackAttempts) {
+      // pop(), not maybePop(): maybePop would re-enter this same PopScope
+      // callback before `canPop` rebuilds, recursing forever.
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    await _controller.goBack();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Let the back gesture walk the embedded site's own history first, so
+    // navigating into a leave form and swiping back returns to the list
+    // instead of leaving the feature entirely.
+    //
+    // The attempt budget is the escape hatch: this site is behind CAS, and a
+    // redirect chain can bounce goBack() straight back to where it started,
+    // which would otherwise make the page impossible to leave.
+    return PopScope(
+      canPop: !_canGoBack || _backAttempts >= _maxBackAttempts,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackGesture();
+      },
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       appBar: GlassAppBar(
         title: const Text('请假申请'),
