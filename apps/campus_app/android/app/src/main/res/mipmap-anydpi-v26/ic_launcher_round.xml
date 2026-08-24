@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标（Android 8.0+）。
+
+  没有这个文件时，系统会把传统 PNG 图标整张塞进各家启动器的形状里，
+  猫耳和四角星这类靠近边缘的元素会被裁掉。分层之后：
+  - background 是纯品牌底色，铺满 108dp
+  - foreground 只放图形，且内容收缩在中心 72dp 安全圆内
+
+  前景/背景各 108dp，系统只保证中心 72dp 直径的圆形区域可见，
+  外圈 18dp 供视差与缩放动画使用。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
