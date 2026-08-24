@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      自适应图标的背景层颜色。
+
+      与 AppColors.primaryInk (#983E62) 一致 —— 图标底色和界面里承载文字的
+      主色同源，桌面图标与 app 内部读作同一个品牌。
+    -->
+    <color name="ic_launcher_background">#983E62</color>
+</resources>
