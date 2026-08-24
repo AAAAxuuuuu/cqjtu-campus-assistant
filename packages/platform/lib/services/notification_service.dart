@@ -12,8 +12,24 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../src/class_reminder_schedule.dart';
 
+/// Notification payload targets.
+///
+/// These deliberately reuse the vocabulary the home-screen widget deep links
+/// already speak (see `WidgetNavigationService` and `_handleWidgetTarget`), so a
+/// tap from either source lands on the same routing switch.
+const String notificationTargetSchedule = 'schedule';
+const String notificationTargetElectricity = 'electricity';
+const String notificationTargetCampusCard = 'campus_card';
+const String notificationTargetAppUpdate = 'app_update';
+
+/// Called with a payload target when the user taps a notification.
+typedef NotificationTapHandler = void Function(String target);
+
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
+
+  static NotificationTapHandler? _tapHandler;
+  static String? _pendingTapTarget;
   static const _classReminderChannel = MethodChannel(
     'campus_app/class_reminder',
   );
@@ -76,8 +92,61 @@ class NotificationService {
       '@mipmap/ic_launcher',
     );
     const settings = InitializationSettings(android: androidSettings);
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+    );
     _pluginReady = true;
+  }
+
+  static void _handleNotificationResponse(NotificationResponse response) {
+    final target = response.payload?.trim();
+    if (target == null || target.isEmpty) return;
+    _dispatchTap(target);
+  }
+
+  static void _dispatchTap(String target) {
+    final handler = _tapHandler;
+    if (handler == null) {
+      // Tapped before the UI installed its handler (cold start from a
+      // notification). Hold the target and replay it on registration.
+      _pendingTapTarget = target;
+      return;
+    }
+    handler(target);
+  }
+
+  /// Registers the UI-side router for notification taps.
+  ///
+  /// Replays a target captured before registration, which is the cold-start
+  /// case: Android delivers the tap while Flutter is still booting.
+  static void setTapHandler(NotificationTapHandler handler) {
+    _tapHandler = handler;
+    final pending = _pendingTapTarget;
+    if (pending == null) return;
+    _pendingTapTarget = null;
+    handler(pending);
+  }
+
+  /// Reads the target of a notification that launched the app from terminated.
+  ///
+  /// `onDidReceiveNotificationResponse` does not fire for the launch tap, so
+  /// this must be consulted during startup.
+  static Future<String?> consumeLaunchTapTarget() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp != true) return null;
+    final target = details?.notificationResponse?.payload?.trim();
+    if (target == null || target.isEmpty) return null;
+    return target;
+  }
+
+  @visibleForTesting
+  static void debugSimulateTap(String target) => _dispatchTap(target);
+
+  @visibleForTesting
+  static void debugResetTapHandler() {
+    _tapHandler = null;
+    _pendingTapTarget = null;
   }
 
   static Future<void> init() async {
@@ -269,6 +338,9 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        // Routed by the tap handler installed in [setTapHandler]; a class or
+        // exam reminder that cannot take you to your timetable is a dead end.
+        payload: notificationTargetSchedule,
       );
     }
   }
@@ -324,6 +396,7 @@ class NotificationService {
           enableVibration: true,
         ),
       ),
+      payload: notificationTargetElectricity,
     );
   }
 
