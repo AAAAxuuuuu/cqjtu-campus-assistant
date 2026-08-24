@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/study_progress/study_progress_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/providers.dart';
+import '../widgets/app_card.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/spinning_refresh_button.dart';
@@ -139,27 +140,19 @@ class _OverviewCard extends StatelessWidget {
       stats.weightedAverage?.toStringAsFixed(1),
     );
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    // AppCard 自带圆角裁切与品牌色阴影，所以这里 padding 交给内层 Container
+    // 承担（左侧强调色条需要贴到卡片边缘，不能被 padding 推开）。
+    return AppCard(
+      padding: EdgeInsets.zero,
       child: Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: Theme.of(context).colorScheme.primary,
-              width: 4,
-            ),
-          ),
+        decoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: AppColors.primary, width: 4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '学业概览',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
+            Text('学业概览', style: AppType.sectionTitle),
             const SizedBox(height: 16),
             GridView.count(
               crossAxisCount: 2,
@@ -207,60 +200,53 @@ class _CreditCard extends StatelessWidget {
         .where((bucket) => bucket.category == category)
         .fold<double>(0, (total, bucket) => total + bucket.earnedCredits);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '学分进度',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 14),
-            GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 2.8,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              children: [
-                _MetricTile(
-                  label: '总学分',
-                  value: _formatNumber(summary.requiredCredits),
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('学分进度', style: AppType.sectionTitle),
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 2,
+            childAspectRatio: 2.8,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            children: [
+              _MetricTile(
+                label: '总学分',
+                value: _formatNumber(summary.requiredCredits),
+              ),
+              _MetricTile(
+                label: '已修必修',
+                value: _formatNumber(
+                  earnedCreditsFor(StudyCreditCategory.compulsory),
                 ),
-                _MetricTile(
-                  label: '已修必修',
-                  value: _formatNumber(
-                    earnedCreditsFor(StudyCreditCategory.compulsory),
-                  ),
+              ),
+              _MetricTile(
+                label: '已修选修',
+                value: _formatNumber(
+                  earnedCreditsFor(StudyCreditCategory.elective),
                 ),
-                _MetricTile(
-                  label: '已修选修',
-                  value: _formatNumber(
-                    earnedCreditsFor(StudyCreditCategory.elective),
-                  ),
+              ),
+              _MetricTile(
+                label: '已修校选',
+                value: _formatNumber(
+                  earnedCreditsFor(StudyCreditCategory.schoolElective),
                 ),
-                _MetricTile(
-                  label: '已修校选',
-                  value: _formatNumber(
-                    earnedCreditsFor(StudyCreditCategory.schoolElective),
-                  ),
-                ),
-              ],
-            ),
-            if (stats.failedCourses > 0) ...[
-              const SizedBox(height: 12),
-              Text(
-                '成绩单中有 ${stats.failedCourses} 门课程待关注',
-                style: TextStyle(color: AppColors.danger, fontSize: 12),
               ),
             ],
+          ),
+          if (stats.failedCourses > 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              '成绩单中有 ${stats.failedCourses} 门课程待关注',
+              style: TextStyle(color: AppColors.danger, fontSize: 12),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

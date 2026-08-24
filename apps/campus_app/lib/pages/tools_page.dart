@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/models/grade.dart';
 import '../features/study_progress/study_progress_providers.dart';
 import '../theme/app_theme.dart';
+import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_entrance.dart';
 import '../widgets/background_refresh_banner.dart';
+import '../widgets/error_view.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/grade_item.dart';
 import '../widgets/app_list_tile.dart';
@@ -153,7 +156,10 @@ class ToolsPage extends ConsumerWidget {
       backgroundColor: AppColors.surface,
       appBar: GlassAppBar(title: const Text('服务'), centerTitle: false),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: AppInsets.withNavBarClearanceOf(
+          context,
+          const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        ),
         children: [
           AppEntrance(
             index: 0,
@@ -354,11 +360,9 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             '学业情况',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
+                            style: AppType.sectionTitle.copyWith(
                               color: AppColors.textPrimary,
                             ),
                           ),
@@ -367,8 +371,7 @@ class _AcademicProgressServiceCard extends StatelessWidget {
                             _academicCardSubtitle(summary, hasData),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
+                            style: AppType.caption.copyWith(
                               color: AppColors.textMuted,
                             ),
                           ),
@@ -477,11 +480,11 @@ class _RequiredCreditRing extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   hasData ? _formatCredit(summary.requiredCredits) : '--',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    height: 1,
-                    color: AppColors.textPrimary,
+                  // 环形图中心的学分数：metric 的字重与紧行高，字号按环径收小。
+                  style: AppType.metric.copyWith(
                     fontSize: 24,
+                    letterSpacing: -0.5,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -556,7 +559,7 @@ class _RequiredCreditLegendRow extends StatelessWidget {
             '应修${bucket.label}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: AppType.body.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.textSecondary,
             ),
@@ -581,7 +584,7 @@ class _RequiredCreditLegendRow extends StatelessWidget {
           child: Text(
             hasData ? '${_formatCredit(bucket.requiredCredits)}分' : '--',
             textAlign: TextAlign.end,
-            style: const TextStyle(
+            style: AppType.body.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
@@ -653,7 +656,7 @@ class _EarnedCreditProgressTile extends StatelessWidget {
             Expanded(
               child: Text(
                 '已修${bucket.label}',
-                style: const TextStyle(
+                style: AppType.body.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
@@ -762,11 +765,7 @@ class _ServiceSection extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+            style: AppType.sectionTitle.copyWith(color: AppColors.textPrimary),
           ),
         ),
         Container(
