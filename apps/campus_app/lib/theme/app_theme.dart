@@ -3,16 +3,52 @@ import 'package:flutter/material.dart';
 
 /// 品牌色板 —— CQJTU Hub
 ///
-/// 四个主体色：
-/// - [primary] `#BB6688` 玫瑰粉（主品牌色）
-/// - [secondary] `#8888CC` 薰衣草紫（次色）
-/// - [accent] `#CCAA88` 暖沙金（强调色）
-/// - [tint] `#DDAACC` 淡粉（表面氛围色，常以低透明度使用）
+/// ## 角色分配（2026-08-22 重排）
+///
+/// 四个品牌色原本饱和度全部挤在 38–43%、亮度 57–77%，权重几乎相同，
+/// 被平级当作四个语义色使用。两个后果：
+///
+/// 1. **没有主次。** 四个色一样重，视线没有落点。尤其 [tint] `#DDAACC` 与
+///    [primary] `#BB6688` 只差 16° 色相，环形图里两者相邻时几乎分不出来。
+/// 2. **没有一个色能承载白底小字。** WCAG AA 正文要求 4.5:1，四色实测
+///    3.91 / 3.26 / 2.17 / 1.96，全部不达标——彩色小字看起来发虚。
+///
+/// 所以颜色本身不换（柔和玫紫的气质要保留），改的是**角色**：
+///
+/// | 角色 | 色值 | 用途 |
+/// |------|------|------|
+/// | [primary] | `#BB6688` | 唯一主色。渐变、大色块、按钮底、选中态 |
+/// | [primaryInk] | `#983E62` | 主色的文字/图标版本，白底 6.56:1 |
+/// | [secondary] | `#8888CC` | 唯一辅色。仅用于需要区分的第二数据序列 |
+/// | [secondaryInk] | `#4D4D9D` | 辅色的文字版本，白底 7.33:1 |
+/// | [accent] | `#CCAA88` | 仅「提示/待办」一个语义（唯一暖色） |
+/// | [accentInk] | `#8C6136` | 暖色文字版本，白底 5.41:1 |
+/// | [tint] | `#DDAACC` | **纯装饰**：渐变尾色、tint 底、选中态背景 |
+///
+/// ## 使用规则
+///
+/// - **白底上的文字与小图标一律用 `*Ink`**，不要用填充色——填充色对比度
+///   在 1.96–3.91 之间，做正文必然发虚。
+/// - **[tint] 不再承载语义。** 它和 [primary] 色相太近，一旦用来表示某个
+///   数据维度就会和主色混淆。只做氛围。
+/// - **[accent] 不要当第四个平级色用。** 它是唯一暖色（30°，与 [secondary]
+///   240° 接近补色），当强调色比当平级色有价值得多。
 abstract final class AppColors {
+  // ── 填充色（色块、渐变、按钮底；其上放白色大字）──────────
   static const Color primary = Color(0xFFBB6688);
   static const Color secondary = Color(0xFF8888CC);
   static const Color accent = Color(0xFFCCAA88);
   static const Color tint = Color(0xFFDDAACC);
+
+  // ── Ink 系列（白底上的文字与小图标，均 >= 4.5:1）───────────
+  /// 主色的文字版本（336° 同色相压暗），白底 6.56:1。
+  static const Color primaryInk = Color(0xFF983E62);
+
+  /// 辅色的文字版本（240° 同色相压暗），白底 7.33:1。
+  static const Color secondaryInk = Color(0xFF4D4D9D);
+
+  /// 暖色的文字版本（30° 同色相压暗），白底 5.41:1。
+  static const Color accentInk = Color(0xFF8C6136);
 
   /// 品牌色渐变
   static const LinearGradient primaryGradient = LinearGradient(
@@ -21,9 +57,14 @@ abstract final class AppColors {
     end: Alignment.bottomRight,
   );
 
-  /// 暖色渐变
+  /// 暖色渐变（电费卡片）
+  ///
+  /// 原为 `[primary, accent]`，即 336° → 30°：跨 54° 色相，玫红直接过渡到
+  /// 驼色，两端在同一个卡片上互相打架。改为经 [tint] 320° 中转到 [accent]，
+  /// 336° → 320° → 30° 逐段推进，暖意保留但过渡连续。
   static const LinearGradient warmGradient = LinearGradient(
-    colors: [primary, accent],
+    colors: [primary, tint, accent],
+    stops: [0.0, 0.45, 1.0],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -120,6 +161,48 @@ abstract final class AppRadius {
   static const double hero = 24;
 }
 
+/// 布局令牌
+abstract final class AppInsets {
+  /// 主 Tab 页滚动内容的底部避让高度。
+  ///
+  /// 主壳的 Scaffold 使用 `extendBody: true`，且导航栏是浮在内容之上的胶囊
+  /// （见 `FloatingGlassNavBar`），所以每个可滚动内容都必须自己预留这段高度，
+  /// 否则最后一项会被胶囊永久遮住。
+  ///
+  /// = 胶囊高度 62 + 底部间隙 12 + 呼吸空间。安全区不计入这里，由
+  /// [navBarClearanceOf] 另加。二级页面（全屏路由、没有底部栏）不需要。
+  static const double navBarClearance = 82.0;
+
+  /// 扩展型 FloatingActionButton 的高度 + 与胶囊之间的间隙。
+  ///
+  /// 课表页的 FAB 浮在胶囊之上，所以那一页的滚动内容要在胶囊之外**再**让出
+  /// 这一段，否则备注行会被 FAB 压住。
+  static const double fabClearance = 60.0;
+
+  /// 给滚动容器追加底部避让。
+  ///
+  /// 用法：`padding: AppInsets.withNavBarClearance(const EdgeInsets.all(16))`
+  ///
+  /// 注意这个重载不含系统安全区。浮动胶囊会把自己抬到安全区之上，所以在有
+  /// BuildContext 的地方优先用 [navBarClearanceOf]，它把安全区一起算进去。
+  static EdgeInsets withNavBarClearance(EdgeInsets base) {
+    return base.copyWith(bottom: base.bottom + navBarClearance);
+  }
+
+  /// 含系统安全区的底部避让（推荐）。
+  static double navBarClearanceOf(BuildContext context) {
+    return navBarClearance + MediaQuery.viewPaddingOf(context).bottom;
+  }
+
+  /// 含系统安全区的 padding 追加。
+  static EdgeInsets withNavBarClearanceOf(
+    BuildContext context,
+    EdgeInsets base,
+  ) {
+    return base.copyWith(bottom: base.bottom + navBarClearanceOf(context));
+  }
+}
+
 /// 排版阶梯 —— Apple 式光学尺寸（Typography: tracking & leading）
 ///
 /// - 大标题：**负字距**（越大越紧）+ 紧行高（h1.05 ~ 1.15）
@@ -142,6 +225,17 @@ abstract final class AppType {
     letterSpacing: -0.3,
   );
 
+  /// 列表行标题（成绩行、服务项等）
+  ///
+  /// 介于 [body] 与 [sectionTitle] 之间。补这一档是因为页面里大量列表行原本
+  /// 手写 `fontSize: 14.5 / 15 / 15.5 + w500/w600`，缺一个可复用的中间层级。
+  static const TextStyle rowTitle = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    height: 1.3,
+    letterSpacing: -0.1,
+  );
+
   /// 数据大数字（余额、GPA）
   static const TextStyle metric = TextStyle(
     fontSize: 36,
@@ -158,12 +252,33 @@ abstract final class AppType {
     letterSpacing: 0,
   );
 
+  /// 说明文字（列表副标题、卡片描述）
+  ///
+  /// 实测页面里 `fontSize: 13` 出现 23 次，是仅次于 12 的高频档，多用于
+  /// 「副标题 / 一句话说明」。补这一档避免它们退回内联写法。
+  static const TextStyle subtitle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    height: 1.45,
+    letterSpacing: 0,
+  );
+
   /// 次要文字
   static const TextStyle caption = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     height: 1.4,
     letterSpacing: 0.2,
+  );
+
+  /// 最小号标注（徽章、角标、表格内标签）
+  ///
+  /// 11px 是可读下限，只用于短标签，不要用于成句文本。
+  static const TextStyle label = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    height: 1.25,
+    letterSpacing: 0.1,
   );
 }
 
@@ -396,13 +511,15 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          // 文字按钮是白底上的纯文字，用 Ink 版本才够对比度。
+          foregroundColor: AppColors.primaryInk,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          // 文字用 Ink，描边保留填充色（描边不承载可读性）。
+          foregroundColor: AppColors.primaryInk,
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           shape: RoundedRectangleBorder(
@@ -420,7 +537,8 @@ class AppTheme {
         titleTextStyle: AppType.pageTitle,
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: AppColors.primary,
+        // 标签是文字，用 Ink；指示器是色块，用填充色。
+        labelColor: AppColors.primaryInk,
         unselectedLabelColor: AppColors.textMuted,
         indicatorColor: AppColors.primary,
         indicatorSize: TabBarIndicatorSize.label,
@@ -437,9 +555,10 @@ class AppTheme {
         linearTrackColor: AppColors.tint.withValues(alpha: 0.25),
       ),
       navigationRailTheme: NavigationRailThemeData(
-        selectedIconTheme: const IconThemeData(color: AppColors.primary),
+        // 导航项是小图标 + 小字，是最需要 Ink 的地方。
+        selectedIconTheme: const IconThemeData(color: AppColors.primaryInk),
         selectedLabelTextStyle: const TextStyle(
-          color: AppColors.primary,
+          color: AppColors.primaryInk,
           fontWeight: FontWeight.bold,
         ),
         unselectedIconTheme: const IconThemeData(color: AppColors.textMuted),
@@ -447,19 +566,28 @@ class AppTheme {
         backgroundColor: Colors.white,
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: AppColors.primaryInk,
         unselectedItemColor: AppColors.textMuted,
         backgroundColor: Colors.white,
         elevation: 8,
       ),
       navigationBarTheme: NavigationBarThemeData(
         indicatorColor: AppColors.primary.withValues(alpha: 0.16),
-        backgroundColor: Colors.white,
-        elevation: 2,
+        // 底部栏由 GlassSurface 提供毛玻璃材质，这里必须透明，
+        // 否则不透明白底会盖掉玻璃。
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primaryInk
+                : AppColors.textMuted,
+          ),
+        ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             color: states.contains(WidgetState.selected)
-                ? AppColors.primary
+                ? AppColors.primaryInk
                 : AppColors.textMuted,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.bold
