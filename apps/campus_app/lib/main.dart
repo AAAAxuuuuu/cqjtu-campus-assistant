@@ -175,9 +175,22 @@ class _MainShellState extends ConsumerState<_MainShell>
         if (mounted) _handleWidgetTarget(target);
       });
     });
+    // Notification taps speak the same target vocabulary as widget deep links,
+    // so they route through the same handler. Without this, tapping a class
+    // reminder or a low-balance alert just cold-opened the first tab.
+    NotificationService.setTapHandler((target) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handleWidgetTarget(target);
+      });
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final target = await WidgetNavigationService.consumePendingTarget();
       if (target != null && mounted) _handleWidgetTarget(target);
+      // A tap that launched the app from terminated is not delivered to the
+      // response callback, so it has to be read explicitly.
+      final launchTarget = await NotificationService.consumeLaunchTapTarget();
+      if (launchTarget != null && mounted) _handleWidgetTarget(launchTarget);
       unawaited(_trySchedule());
       await _showBatteryGuideIfNeeded();
       if (!mounted) return;
@@ -275,8 +288,16 @@ class _MainShellState extends ConsumerState<_MainShell>
   }
 
   void _handleWidgetTarget(String target) {
-    final navigator = Navigator.of(context);
-    navigator.popUntil((route) => route.isFirst);
+    // 'app_update' is informational: the update card lives in 我的, and there is
+    // no flow to jump into. Route it to that tab rather than the timetable,
+    // which the `default` arm below would otherwise pick.
+    if (target == notificationTargetAppUpdate) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() => _index = 3);
+      return;
+    }
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
 
     switch (target) {
       case 'campus_card_qr':

@@ -479,6 +479,7 @@ Future<void> _notifyElecIfNeeded(
         enableVibration: true,
       ),
     ),
+    payload: notificationTargetElectricity,
   );
   await prefs.setInt('elec_last_notif', _nowMs());
 }
@@ -508,6 +509,7 @@ Future<void> _notifyCardIfNeeded(
         enableVibration: true,
       ),
     ),
+    payload: notificationTargetCampusCard,
   );
   await prefs.setInt('card_last_notif', _nowMs());
 }
