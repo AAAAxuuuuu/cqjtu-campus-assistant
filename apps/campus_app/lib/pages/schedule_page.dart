@@ -14,6 +14,7 @@ import 'package:core/utils/course_text_parser.dart';
 import '../theme/app_theme.dart';
 import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
+import '../widgets/app_badge.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/course_cell.dart';
@@ -278,6 +279,7 @@ class _ScheduleBody extends ConsumerWidget {
               child: const Text('回本周'),
             ),
           IconButton(
+            tooltip: '刷新课表',
             icon: const Icon(Icons.refresh),
             // ✅ 将右上角的刷新也指向通用的 _doRefresh
             onPressed: () => _doRefresh(context, ref),
@@ -299,31 +301,37 @@ class _ScheduleBody extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text('新增课程'),
-        onPressed: () => _showAddCustomCourseSheet(
-          context,
-          ref,
-          selectedSemester,
-          totalWeeks,
+      // 这个 Scaffold 在主壳的浮动胶囊导航之内，它并不知道胶囊的存在，
+      // 默认位置会被胶囊压住。手动抬到胶囊之上。
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(
+          bottom: AppInsets.navBarClearanceOf(context) - 12,
+        ),
+        child: FloatingActionButton.extended(
+          icon: const Icon(Icons.add),
+          label: const Text('新增课程'),
+          onPressed: () => _showAddCustomCourseSheet(
+            context,
+            ref,
+            selectedSemester,
+            totalWeeks,
+          ),
         ),
       ),
       body: scheduleAsync.when(
-        skipError: true,
         skipLoadingOnRefresh: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
-          String errMsg = e.toString();
-          // ✅ 错误提示美化：去掉乱码，转换为直观提示
-          if (errMsg.contains('449') ||
-              errMsg.contains('验证码') ||
-              errMsg.contains('HTML') ||
-              errMsg.contains('CAS')) {
-            errMsg = '系统会话已过期或需要安全验证\n请点击下方重试按钮进行验证';
-          } else {
-            errMsg = errMsg.replaceAll('Exception: ', '');
-          }
+          final raw = e.toString();
+          // 会话过期/安全验证需要用户去点重试触发 WebView 验证，
+          // 这条指引比 formatCampusError 的通用文案更可操作，故优先。
+          final errMsg =
+              (raw.contains('449') ||
+                  raw.contains('验证码') ||
+                  raw.contains('HTML') ||
+                  raw.contains('CAS'))
+              ? '系统会话已过期或需要安全验证\n请点击下方重试按钮进行验证'
+              : formatCampusError(e);
 
           return ErrorView(
             message: errMsg,

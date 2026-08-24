@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:data/data.dart';
 import '../theme/app_theme.dart';
+import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
 import 'package:campus_platform/services/notification_service.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_entrance.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
@@ -97,12 +100,11 @@ class ElectricityPage extends ConsumerWidget {
             ),
           AppEntrance(
             child: balanceAsync.when(
-              skipError: true,
               skipLoadingOnRefresh: true,
               skipLoadingOnReload: true,
               loading: () => const _BalanceSkeleton(),
               error: (e, _) => ErrorView(
-                message: e.toString(),
+                message: formatCampusError(e),
                 onRetry: () => ref
                     .read(electricityProvider.notifier)
                     .refresh(forceRefresh: true),
@@ -168,11 +170,10 @@ class _BalanceCard extends StatelessWidget {
                   child: const Icon(Icons.bolt, size: 40, color: Colors.white),
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   '当前剩余电量',
-                  style: TextStyle(
+                  style: AppType.body.copyWith(
                     color: Colors.white70,
-                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -182,8 +183,8 @@ class _BalanceCard extends StatelessWidget {
                   style: AppType.metric.copyWith(color: Colors.white),
                 ),
                 if (isUpdating)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -198,7 +199,10 @@ class _BalanceCard extends StatelessWidget {
                         SizedBox(width: 6),
                         Text(
                           '静默更新中...',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                          style: AppType.label.copyWith(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ],
                     ),
@@ -216,9 +220,11 @@ class _BalanceSkeleton extends StatelessWidget {
   const _BalanceSkeleton();
 
   @override
-  Widget build(BuildContext context) => const Card(
+  // 高度对齐加载完成后的 _BalanceCard，避免数据到达时布局跳动。
+  Widget build(BuildContext context) => const AppCard(
+    padding: EdgeInsets.zero,
     child: SizedBox(
-      height: 180,
+      height: 200,
       child: Center(child: CircularProgressIndicator()),
     ),
   );
@@ -301,66 +307,49 @@ class _RechargeCardState extends ConsumerState<_RechargeCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.electric_bolt, color: AppColors.warning),
-                SizedBox(width: 8),
-                Text(
-                  '电费充值（校园卡扣款）',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.electric_bolt, color: AppColors.warning),
+              SizedBox(width: 8),
+              Text('电费充值（校园卡扣款）', style: AppType.sectionTitle),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            children: _quickAmounts
+                .map(
+                  (a) => ActionChip(
+                    label: Text('¥${a.toInt()}'),
+                    onPressed: () => _ctrl.text = a.toStringAsFixed(0),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: '充值金额（元）',
+              prefixText: '¥ ',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: _quickAmounts
-                  .map(
-                    (a) => ActionChip(
-                      label: Text('¥${a.toInt()}'),
-                      onPressed: () => _ctrl.text = a.toStringAsFixed(0),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _ctrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: '充值金额（元）',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                icon: const Icon(Icons.payment, size: 18),
-                label: _loading
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('立即充值'),
-                onPressed: _loading ? null : _recharge,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          // AppButton 自带 loading 态与按压反馈，不必手写 spinner。
+          AppButton(
+            label: '立即充值',
+            icon: Icons.payment,
+            isLoading: _loading,
+            width: double.infinity,
+            onPressed: _recharge,
+          ),
+        ],
       ),
     );
   }
@@ -404,15 +393,18 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // 电费阈值
-                const Row(
+                Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.electric_bolt,
                       size: 16,
                       color: AppColors.warning,
                     ),
-                    SizedBox(width: 6),
-                    Text('电费预警', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 6),
+                    Text(
+                      '电费预警',
+                      style: AppType.rowTitle.copyWith(fontSize: 14),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -420,10 +412,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _elecValue == 0
                       ? '预警已关闭'
                       : '低于 ${_elecValue.toStringAsFixed(0)} 块时发送提醒',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: AppType.subtitle.copyWith(color: AppColors.textMuted),
                 ),
                 Slider(
                   value: _elecValue,
@@ -450,10 +439,7 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
                   _cardValue == 0
                       ? '预警已关闭'
                       : '低于 ¥${_cardValue.toStringAsFixed(0)} 时发送提醒',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: AppType.subtitle.copyWith(color: AppColors.textMuted),
                 ),
                 Slider(
                   value: _cardValue,

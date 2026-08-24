@@ -47,11 +47,15 @@ class _ExamsPageState extends ConsumerState<ExamsPage> {
         ],
       ),
       body: examsAsync.when(
-        skipError: true,
         skipLoadingOnRefresh: true,
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
+        error: (e, _) => ErrorView(
+          message: formatCampusError(e),
+          onRetry: () => ref
+              .read(examsProvider(_semester).notifier)
+              .refresh(forceRefresh: true),
+        ),
         data: (exams) {
           if (exams.isEmpty) {
             return ListView(
@@ -88,33 +92,25 @@ class _ExamsPageState extends ConsumerState<ExamsPage> {
               final examIndex =
                   i - (examsAsync.shouldOfferManualRefresh ? 1 : 0);
               final exam = exams[examIndex];
-              return Card(
+              return AppCard(
                 margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        exam.courseName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const Divider(),
-                      _ExamRow(Icons.access_time_outlined, exam.examTime),
-                      _ExamRow(Icons.room_outlined, exam.examRoom),
-                      _ExamRow(
-                        Icons.event_seat_outlined,
-                        '座位号：${exam.seatNumber}',
-                      ),
-                      _ExamRow(
-                        Icons.confirmation_number_outlined,
-                        '准考证：${exam.ticketNumber}',
-                      ),
-                    ],
-                  ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(exam.courseName, style: AppType.rowTitle),
+                    const Divider(),
+                    _ExamRow(Icons.access_time_outlined, exam.examTime),
+                    _ExamRow(Icons.room_outlined, exam.examRoom),
+                    _ExamRow(
+                      Icons.event_seat_outlined,
+                      '座位号：${exam.seatNumber}',
+                    ),
+                    _ExamRow(
+                      Icons.confirmation_number_outlined,
+                      '准考证：${exam.ticketNumber}',
+                    ),
+                  ],
                 ),
               );
             },

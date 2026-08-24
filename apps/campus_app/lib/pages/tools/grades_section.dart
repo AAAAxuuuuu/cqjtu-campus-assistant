@@ -25,11 +25,11 @@ class _GradesPageState extends ConsumerState<GradesPage> {
 
     return Scaffold(
       appBar: GlassAppBar(
-        title: const Text('成绩查询'),
+        title: Text('成绩查询'),
         actions: [
           // 学期筛选入口：显示当前选中学期
           TextButton.icon(
-            icon: const Icon(Icons.filter_list, size: 18),
+            icon: Icon(Icons.filter_list, size: 18),
             label: Text(_semesterLabel, style: const TextStyle(fontSize: 13)),
             onPressed: () async {
               final result = await showSemesterPicker(
@@ -45,24 +45,14 @@ class _GradesPageState extends ConsumerState<GradesPage> {
         ],
       ),
       body: gradesAsync.when(
-        skipError: true,
         skipLoadingOnRefresh: true,
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(e.toString()),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref
-                    .read(gradesProvider(_semester).notifier)
-                    .refresh(forceRefresh: true),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => ErrorView(
+          message: formatCampusError(e),
+          onRetry: () => ref
+              .read(gradesProvider(_semester).notifier)
+              .refresh(forceRefresh: true),
         ),
         data: (result) => ListView(
           padding: const EdgeInsets.all(16),
@@ -75,7 +65,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
               ),
             if (result.summary.isNotEmpty || result.grades.isNotEmpty)
               _SummaryCard(summary: result.summary, grades: result.grades),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             ...result.grades.map(
               (g) => GradeItem(
                 grade: g,
@@ -90,12 +80,12 @@ class _GradesPageState extends ConsumerState<GradesPage> {
               ),
             ),
             if (result.grades.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(32),
                   child: Text(
                     '暂无成绩数据',
-                    style: TextStyle(color: AppColors.textMuted),
+                    style: AppType.body.copyWith(color: AppColors.textMuted),
                   ),
                 ),
               ),
@@ -131,29 +121,24 @@ class _SummaryCard extends StatelessWidget {
       stats?.weightedAverage?.toStringAsFixed(1),
     );
 
-    return Card(
-      color: AppColors.tint.withValues(alpha: 0.1),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '学业汇总',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _Item('GPA', gpaVal),
-                _Item('均分', avgVal),
-                _Item('班级排名', _resolveValue(summary['classRank'], null)),
-                _Item('专业排名', _resolveValue(summary['majorRank'], null)),
-              ],
-            ),
-          ],
-        ),
+    return AppCard(
+      backgroundColor: AppColors.tint.withValues(alpha: 0.1),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('学业汇总', style: AppType.rowTitle),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _Item('GPA', gpaVal),
+              _Item('均分', avgVal),
+              _Item('班级排名', _resolveValue(summary['classRank'], null)),
+              _Item('专业排名', _resolveValue(summary['majorRank'], null)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -169,16 +154,13 @@ class _Item extends StatelessWidget {
     children: [
       Text(
         value,
-        style: const TextStyle(
+        style: AppType.metric.copyWith(
           fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.primary,
+          letterSpacing: -0.4,
+          color: AppColors.primaryInk,
         ),
       ),
-      Text(
-        label,
-        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-      ),
+      Text(label, style: AppType.caption.copyWith(color: AppColors.textMuted)),
     ],
   );
 }
@@ -207,7 +189,6 @@ class GradeDetailPage extends ConsumerWidget {
         ],
       ),
       body: detailAsync.when(
-        skipError: true,
         skipLoadingOnRefresh: true,
         skipLoadingOnReload: true,
         loading: () => _GradeDetailContent(
@@ -217,7 +198,7 @@ class GradeDetailPage extends ConsumerWidget {
         ),
         error: (error, _) => _GradeDetailError(
           grade: grade,
-          message: error.toString(),
+          message: formatCampusError(error),
           onRetry: () => ref
               .read(gradeDetailProvider(arg).notifier)
               .refresh(forceRefresh: true),
@@ -291,8 +272,9 @@ class _GradeHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _scoreColor(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    // padding 交给内层：左侧分数色条要贴到卡片边缘。
+    return AppCard(
+      padding: EdgeInsets.zero,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
@@ -304,16 +286,13 @@ class _GradeHeroCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    grade.courseName,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  Text(grade.courseName, style: AppType.sectionTitle),
                   const SizedBox(height: 8),
                   Text(
                     '${grade.semester}  ${grade.credits} 学分  绩点 ${grade.gradePoint}',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: AppType.body.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   if (grade.courseAttribute.isNotEmpty ||
                       grade.courseNature.isNotEmpty)
@@ -324,9 +303,8 @@ class _GradeHeroCard extends StatelessWidget {
                           grade.courseAttribute,
                           grade.courseNature,
                         ].where((text) => text.trim().isNotEmpty).join(' · '),
-                        style: TextStyle(
+                        style: AppType.caption.copyWith(
                           color: AppColors.textMuted,
-                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -338,17 +316,16 @@ class _GradeHeroCard extends StatelessWidget {
               children: [
                 Text(
                   totalScore,
-                  style: TextStyle(
-                    color: color,
+                  style: AppType.metric.copyWith(
                     fontSize: 34,
-                    fontWeight: FontWeight.w800,
+                    color: color,
                     height: 1,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '总成绩',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  style: AppType.caption.copyWith(color: AppColors.textMuted),
                 ),
               ],
             ),
@@ -368,31 +345,24 @@ class _BreakdownCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final segments = _buildBreakdownSegments(items);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '成绩构成',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('成绩构成', style: AppType.sectionTitle),
+          const SizedBox(height: 14),
+          if (segments.isEmpty)
+            Text('暂无可展示的成绩构成', style: TextStyle(color: AppColors.textMuted))
+          else ...[
+            _SegmentedBreakdownBar(segments: segments),
             const SizedBox(height: 14),
-            if (segments.isEmpty)
-              Text('暂无可展示的成绩构成', style: TextStyle(color: AppColors.textMuted))
-            else ...[
-              _SegmentedBreakdownBar(segments: segments),
-              const SizedBox(height: 14),
-              for (var i = 0; i < segments.length; i++) ...[
-                _BreakdownRow(segment: segments[i]),
-                if (i != segments.length - 1) const Divider(height: 24),
-              ],
+            for (var i = 0; i < segments.length; i++) ...[
+              _BreakdownRow(segment: segments[i]),
+              if (i != segments.length - 1) const Divider(height: 24),
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -528,7 +498,10 @@ class _BreakdownRow extends StatelessWidget {
             ),
             Text(
               item.score.isEmpty ? '-' : item.score,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: AppType.sectionTitle.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),
@@ -537,12 +510,12 @@ class _BreakdownRow extends StatelessWidget {
           children: [
             Text(
               '占比 ${item.ratio.isEmpty ? '-' : item.ratio}',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              style: AppType.caption.copyWith(color: AppColors.textMuted),
             ),
             const Spacer(),
             Text(
               weighted == null ? '折算 -' : '折算 ${weighted.toStringAsFixed(1)}',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              style: AppType.caption.copyWith(color: AppColors.textMuted),
             ),
           ],
         ),
@@ -571,7 +544,7 @@ class _DetailEmptyState extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               isFetching ? '正在后台获取成绩明细' : '该课程暂无可展示的明细',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: AppType.body.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),

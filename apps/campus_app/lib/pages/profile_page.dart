@@ -55,7 +55,11 @@ class ProfilePage extends ConsumerWidget {
         centerTitle: false,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        // extendBody 让内容滚到玻璃导航栏之下，所以要自己让出栏高。
+        padding: AppInsets.withNavBarClearanceOf(
+          context,
+          const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        ),
         children: [
           AppEntrance(child: _buildUserInfoCard(creds?.username ?? '未登录')),
           const SizedBox(height: 20),
@@ -118,11 +122,7 @@ class ProfilePage extends ConsumerWidget {
     padding: const EdgeInsets.only(left: 4, bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
+      style: AppType.sectionTitle.copyWith(color: AppColors.textPrimary),
     ),
   );
 
@@ -180,11 +180,12 @@ class ProfilePage extends ConsumerWidget {
                     children: [
                       Text(
                         username,
-                        style: const TextStyle(
+                        // 学号是数字串，保留正字距（数字疏排更易读），
+                        // 这是有意偏离「大字号负字距」的通则。
+                        style: AppType.metric.copyWith(
                           fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
                           letterSpacing: 0.5,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -202,18 +203,18 @@ class ProfilePage extends ConsumerWidget {
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.school,
                                   size: 13,
                                   color: Colors.white,
                                 ),
-                                SizedBox(width: 4),
+                                const SizedBox(width: 4),
                                 Text(
                                   '重庆交通大学',
-                                  style: TextStyle(
+                                  style: AppType.label.copyWith(
                                     fontSize: 11.5,
                                     color: Colors.white,
                                     fontWeight: FontWeight.w500,
@@ -241,9 +242,9 @@ class ProfilePage extends ConsumerWidget {
       height: 50,
       child: OutlinedButton.icon(
         icon: const Icon(Icons.logout, size: 18),
-        label: const Text(
+        label: Text(
           '退出登录',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          style: AppType.rowTitle.copyWith(fontWeight: FontWeight.bold),
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
@@ -274,9 +275,9 @@ class ProfilePage extends ConsumerWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
+                  child: Text(
                     '取消',
-                    style: TextStyle(color: AppColors.textMuted),
+                    style: AppType.body.copyWith(color: AppColors.textMuted),
                   ),
                 ),
                 FilledButton(
@@ -353,9 +354,8 @@ class _ElectricityCardWidget extends ConsumerWidget {
                         final dorm = ref.watch(dormRoomProvider).valueOrNull;
                         return Text(
                           dorm == null ? '宿舍电费' : dorm.displayName,
-                          style: const TextStyle(
+                          style: AppType.rowTitle.copyWith(
                             color: Colors.white70,
-                            fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
                         );
@@ -363,15 +363,14 @@ class _ElectricityCardWidget extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const Text(
+                Text(
                   '点击去充值',
-                  style: TextStyle(color: Colors.white38, fontSize: 13),
+                  style: AppType.subtitle.copyWith(color: Colors.white38),
                 ),
               ],
             ),
             const SizedBox(height: 24),
             balanceAsync.when(
-              skipError: true,
               skipLoadingOnRefresh: true,
               skipLoadingOnReload: true,
               loading: () => const SizedBox(
@@ -390,30 +389,28 @@ class _ElectricityCardWidget extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               '未设置宿舍',
-                              style: TextStyle(
-                                color: Colors.white70,
+                              style: AppType.sectionTitle.copyWith(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.white70,
                               ),
                             ),
                             const SizedBox(height: 6),
-                            const Text(
+                            Text(
                               '请在下方「宿舍设置」中选择你的宿舍',
-                              style: TextStyle(
+                              style: AppType.caption.copyWith(
                                 color: Colors.white38,
-                                fontSize: 12,
                               ),
                             ),
                           ],
                         )
-                      : const Text(
+                      : Text(
                           '获取失败',
-                          style: TextStyle(
-                            color: AppColors.danger,
+                          style: AppType.metric.copyWith(
                             fontSize: 24,
-                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                            color: AppColors.danger,
                           ),
                         ),
                 ),
@@ -443,10 +440,10 @@ class _ElectricityCardWidget extends ConsumerWidget {
                               padding: const EdgeInsets.only(bottom: 6.0),
                               child: Text(
                                 isNegative ? '-¥' : '¥',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: AppType.metric.copyWith(
                                   fontSize: 24,
-                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.5,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),

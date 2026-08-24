@@ -46,6 +46,22 @@ class CachedResource<T> {
   bool get hasValue => hasData;
   T? get valueOrNull => hasData ? data : null;
 
+  /// Selects the branch that matches the current resource state.
+  ///
+  /// Resolution order is deliberate:
+  /// 1. Cached data wins over everything (stale-while-revalidate). A failed
+  ///    background refresh must never blank out data the user can still read;
+  ///    [BackgroundRefreshBanner] plus [shouldOfferManualRefresh] is how that
+  ///    staleness gets disclosed instead.
+  /// 2. With no data yet, an in-flight fetch is [loading] — never an empty
+  ///    [data] payload, which would render "暂无数据" while the request is
+  ///    still running and then jump when it lands.
+  /// 3. With no data and no in-flight fetch, a recorded failure is [error]
+  ///    from the very first failure, so the user gets a retry affordance
+  ///    without having to fail three times first.
+  ///
+  /// [skipError] keeps showing [data] instead of [error] on a cold failure.
+  /// It only applies to the no-data case, since cached data already wins.
   R when<R>({
     required R Function(T data) data,
     required R Function() loading,
@@ -54,10 +70,11 @@ class CachedResource<T> {
     bool skipLoadingOnRefresh = false,
     bool skipLoadingOnReload = false,
   }) {
-    if (hasData || !shouldOfferManualRefresh || skipError) {
-      return data(this.data);
+    if (hasData) return data(this.data);
+    if (isRefreshing) return loading();
+    if (hasError && !skipError) {
+      return error(this.error!, stackTrace ?? StackTrace.current);
     }
-    if (hasError) return error(this.error!, stackTrace ?? StackTrace.current);
     return data(this.data);
   }
 
