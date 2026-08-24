@@ -64,6 +64,17 @@ android {
             )
         }
     }
+
+    // NOTE on APK size: a universal APK bundles libflutter.so + libapp.so for
+    // all three ABIs — 67MB of the former 82.8MB release, i.e. every user
+    // downloaded two native runtimes their device can never execute.
+    //
+    // Do NOT add a `splits { abi { ... } }` block here: the Flutter Gradle
+    // plugin already sets ndk.abiFilters, and Gradle rejects the combination
+    // ("Conflicting configuration ... in ndk abiFilters cannot be present when
+    // splits abi filters are set"). Use the documented flag instead:
+    //     flutter build apk --release --split-per-abi
+    // which produces one ~25MB APK per ABI. See docs/release-build.md.
 }
 
 flutter {
