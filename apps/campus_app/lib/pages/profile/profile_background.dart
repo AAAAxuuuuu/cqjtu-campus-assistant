@@ -2,14 +2,14 @@ part of '../profile_page.dart';
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-class _AppUpdateCard extends StatefulWidget {
+class _AppUpdateCard extends ConsumerStatefulWidget {
   const _AppUpdateCard();
 
   @override
-  State<_AppUpdateCard> createState() => _AppUpdateCardState();
+  ConsumerState<_AppUpdateCard> createState() => _AppUpdateCardState();
 }
 
-class _AppUpdateCardState extends State<_AppUpdateCard> {
+class _AppUpdateCardState extends ConsumerState<_AppUpdateCard> {
   String _versionLabel = '读取中...';
   bool _checking = false;
 
@@ -42,6 +42,11 @@ class _AppUpdateCardState extends State<_AppUpdateCard> {
     }
   }
 
+  void _handleVersionTap() {
+    // 检查更新或版本信息
+    AppSnackBar.status(context, '当前版本：v1.0.0+4 (Release)');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -56,16 +61,19 @@ class _AppUpdateCardState extends State<_AppUpdateCard> {
           ),
           child: const Icon(Icons.system_update_alt, color: AppColors.info),
         ),
-        title: const Text(
+        title: Text(
           '检查更新',
-          style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          style: AppType.rowTitle.copyWith(
+            fontWeight: FontWeight.w400,
+            color: AppColors.textPrimary,
+          ),
         ),
-        subtitle: Text(
-          '当前版本：$_versionLabel\n发现新版本后可直接打开下载链接',
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textMuted,
-            height: 1.45,
+        subtitle: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleVersionTap,
+          child: Text(
+            '当前版本：$_versionLabel\n发现新版本后可直接打开下载链接',
+            style: AppType.caption.copyWith(color: AppColors.textMuted),
           ),
         ),
         trailing: _checking

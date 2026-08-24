@@ -112,9 +112,8 @@ class _SchedulePreferenceCard extends ConsumerWidget {
                     ],
                     child: Text(
                       '$totalWeeks 周',
-                      style: const TextStyle(
+                      style: AppType.subtitle.copyWith(
                         color: AppColors.info,
-                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -141,7 +140,7 @@ class _CacheSettingsCard extends ConsumerWidget {
         iconColor: AppColors.warning,
         title: '清空缓存',
         subtitle: '清理当前账号的学业、课表与本地配置缓存',
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+        trailing: Icon(Icons.chevron_right, color: AppColors.textMuted),
         onTap: () {
           showDialog(
             context: context,
@@ -149,14 +148,14 @@ class _CacheSettingsCard extends ConsumerWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Text('确认清空缓存'),
-              content: const Text('确定要清空当前账号的本地缓存与设置吗？'),
+              title: Text('确认清空缓存'),
+              content: Text('确定要清空当前账号的本地缓存与设置吗？'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
+                  child: Text(
                     '取消',
-                    style: TextStyle(color: AppColors.textMuted),
+                    style: AppType.body.copyWith(color: AppColors.textMuted),
                   ),
                 ),
                 TextButton(
@@ -166,9 +165,9 @@ class _CacheSettingsCard extends ConsumerWidget {
                     if (!context.mounted) return;
                     AppSnackBar.success(context, '当前账号缓存已成功清空');
                   },
-                  child: const Text(
+                  child: Text(
                     '确认清空',
-                    style: TextStyle(color: AppColors.warning),
+                    style: AppType.body.copyWith(color: AppColors.warning),
                   ),
                 ),
               ],
@@ -200,25 +199,27 @@ class _DormSettingsCard extends ConsumerWidget {
             color: AppColors.warning.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: const Icon(Icons.home_outlined, color: AppColors.warning),
+          child: Icon(Icons.home_outlined, color: AppColors.warning),
         ),
-        title: const Text(
+        title: Text(
           '我的宿舍',
-          style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          style: AppType.rowTitle.copyWith(
+            fontWeight: FontWeight.w400,
+            color: AppColors.textPrimary,
+          ),
         ),
         subtitle: dormAsync.when(
-          loading: () => const Text(
+          loading: () => Text(
             '加载中...',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+            style: AppType.caption.copyWith(color: AppColors.textMuted),
           ),
-          error: (_, _) => const Text(
+          error: (_, _) => Text(
             '加载失败',
-            style: TextStyle(fontSize: 12, color: AppColors.danger),
+            style: AppType.caption.copyWith(color: AppColors.danger),
           ),
           data: (dorm) => Text(
             dorm == null ? '未设置，请先选择后使用电费服务' : dorm.displayName,
-            style: TextStyle(
-              fontSize: 12,
+            style: AppType.caption.copyWith(
               color: dorm == null ? AppColors.warning : AppColors.textMuted,
             ),
           ),
@@ -230,7 +231,7 @@ class _DormSettingsCard extends ConsumerWidget {
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text('选择', style: TextStyle(fontSize: 13)),
+          child: Text('选择', style: TextStyle(fontSize: 13)),
         ),
         onTap: () => _showDormPicker(context, ref),
       ),
@@ -421,28 +422,21 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                       color: AppColors.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.home_outlined,
                       color: AppColors.accent,
                       size: 20,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '选择我的宿舍',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        const Text('选择我的宿舍', style: AppType.sectionTitle),
                         Text(
                           '支持科学城校区与南岸校区学生宿舍',
-                          style: TextStyle(
-                            fontSize: 12,
+                          style: AppType.caption.copyWith(
                             color: AppColors.textMuted,
                           ),
                         ),
@@ -483,10 +477,9 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
                           ? '已选：${_selectedSouthBuilding.label}'
                           : '已选：${_selectedGarden.label}$_selectedNumber舍',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: AppType.rowTitle.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.accent.withValues(alpha: 0.95),
-                        fontSize: 15,
                       ),
                     ),
                   ),
@@ -599,10 +592,9 @@ class _DormPickerSheetState extends State<_DormPickerSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     '房间号',
-                    style: TextStyle(
-                      fontSize: 13,
+                    style: AppType.subtitle.copyWith(
                       fontWeight: FontWeight.w600,
                       color: AppColors.textMuted,
                     ),

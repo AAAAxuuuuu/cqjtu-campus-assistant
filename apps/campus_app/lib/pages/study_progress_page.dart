@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/study_progress/study_progress_providers.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_badge.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/spinning_refresh_button.dart';
@@ -160,18 +161,14 @@ class _SummaryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '课程分类总览',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+            style: AppType.pageTitle.copyWith(color: AppColors.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
             currentSemester.isEmpty ? '当前学期未识别' : '当前学期 $currentSemester',
-            style: const TextStyle(color: AppColors.textMuted),
+            style: AppType.body.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 16),
           Row(
@@ -236,17 +233,17 @@ class _MetricChip extends StatelessWidget {
         children: [
           Text(
             value,
-            style: TextStyle(
+            style: AppType.metric.copyWith(
               fontSize: 22,
               fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
               color: foreground,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
+            style: AppType.caption.copyWith(
               fontWeight: FontWeight.w600,
               color: foreground,
             ),
@@ -393,9 +390,7 @@ class _SectionBlock extends StatelessWidget {
               children: [
                 Text(
                   section.title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
+                  style: AppType.sectionTitle.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
@@ -403,10 +398,7 @@ class _SectionBlock extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     progressText,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
+                    style: AppType.caption.copyWith(color: AppColors.textMuted),
                   ),
                 ],
               ],
@@ -451,8 +443,7 @@ class _CourseRow extends StatelessWidget {
                 children: [
                   Text(
                     course.name,
-                    style: const TextStyle(
-                      fontSize: 15,
+                    style: AppType.rowTitle.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.textBody,
                     ),
@@ -462,11 +453,11 @@ class _CourseRow extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _SmallTag(label: '${course.credits} 学分'),
-                      _SmallTag(label: course.attribute),
-                      _StatusTag(
-                        status: course.status,
+                      AppBadge.neutral(label: '${course.credits} 学分'),
+                      AppBadge.neutral(label: course.attribute),
+                      AppBadge.status(
                         label: course.statusLabel,
+                        color: _statusColor(course.status),
                       ),
                     ],
                   ),
@@ -522,71 +513,12 @@ class _CourseRow extends StatelessWidget {
   }
 }
 
-class _SmallTag extends StatelessWidget {
-  const _SmallTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.outline.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textMuted,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusTag extends StatelessWidget {
-  const _StatusTag({required this.status, required this.label});
-
-  final StudyCourseStatus status;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final (background, foreground) = switch (status) {
-      StudyCourseStatus.completed => (
-        AppColors.success.withValues(alpha: 0.12),
-        AppColors.success,
-      ),
-      StudyCourseStatus.inProgress => (
-        AppColors.info.withValues(alpha: 0.12),
-        AppColors.info,
-      ),
-      StudyCourseStatus.pending => (
-        AppColors.danger.withValues(alpha: 0.12),
-        AppColors.danger,
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: foreground,
-        ),
-      ),
-    );
-  }
-}
+/// 课程状态 → 语义色。徽章外观本身由 [AppBadge.status] 负责。
+Color _statusColor(StudyCourseStatus status) => switch (status) {
+  StudyCourseStatus.completed => AppColors.success,
+  StudyCourseStatus.inProgress => AppColors.info,
+  StudyCourseStatus.pending => AppColors.danger,
+};
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
@@ -681,7 +613,7 @@ class _SheetRow extends StatelessWidget {
             width: 72,
             child: Text(
               label,
-              style: const TextStyle(color: AppColors.textMuted),
+              style: AppType.body.copyWith(color: AppColors.textMuted),
             ),
           ),
           Expanded(

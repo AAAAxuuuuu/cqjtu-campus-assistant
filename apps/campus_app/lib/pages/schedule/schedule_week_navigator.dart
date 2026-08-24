@@ -55,63 +55,65 @@ class _WeekNavigator extends ConsumerWidget {
       child: Row(
         children: [
           IconButton(
+            tooltip: '上一周',
             icon: const Icon(Icons.chevron_left),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            // 48dp is the Material / WCAG 2.5.5 minimum target; these were
+            // 36dp, i.e. 25% under, on the app's most-tapped control.
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: onLeft,
           ),
           Expanded(
-            child: GestureDetector(
-              onLongPress: () => _pickWeek(context, ref),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        isVacation ? '放假中' : '第 $selectedWeek 周',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: isCur && !isVacation
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                        ),
-                      ),
-                      if (isCur && !isVacation) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            '本周',
-                            style: TextStyle(fontSize: 10, color: Colors.white),
+            // Long-press is the only way to jump to an arbitrary week, and a
+            // bare GestureDetector announces nothing to TalkBack — the
+            // affordance was undiscoverable for screen-reader users.
+            child: Semantics(
+              button: true,
+              label: '选择周次',
+              hint: '长按选择要跳转的周次',
+              child: GestureDetector(
+                onLongPress: () => _pickWeek(context, ref),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          isVacation ? '放假中' : '第 $selectedWeek 周',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: isCur && !isVacation
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
                           ),
                         ),
+                        if (isCur && !isVacation) ...[
+                          const SizedBox(width: 6),
+                          const AppBadge.solid(label: '本周'),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${weekStart.month}/${weekStart.day} - '
-                    '${weekEnd.month}/${weekEnd.day}',
-                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${weekStart.month}/${weekStart.day} - '
+                      '${weekEnd.month}/${weekEnd.day}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           IconButton(
+            tooltip: '下一周',
             icon: const Icon(Icons.chevron_right),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: onRight,
           ),
         ],

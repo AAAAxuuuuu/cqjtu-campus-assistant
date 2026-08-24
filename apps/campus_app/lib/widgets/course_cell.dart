@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:core/models/course.dart';
 import 'package:campus_app/theme/app_theme.dart';
+import 'package:campus_app/widgets/app_badge.dart';
 
 class CourseCell extends StatelessWidget {
   final Course course;
@@ -141,49 +142,23 @@ class CourseCell extends StatelessWidget {
                   ),
                 ),
                 if (!isActive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.tintSoft,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '本周无课',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                  const AppBadge(
+                    label: '本周无课',
+                    color: AppColors.tint,
+                    textColor: AppColors.textMuted,
+                    backgroundColor: AppColors.tintSoft,
+                    fontSize: 11,
+                    bordered: false,
                   ),
                 if (course.isExam || course.isCustom) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          (course.isExam
-                                  ? AppColors.primary
-                                  : AppColors.secondary)
-                              .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      course.isExam ? '考试' : '自定义',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: course.isExam
-                            ? AppColors.primary
-                            : AppColors.secondary,
-                      ),
-                    ),
+                  AppBadge(
+                    label: course.isExam ? '考试' : '自定义',
+                    color: course.isExam
+                        ? AppColors.primary
+                        : AppColors.secondary,
+                    fontSize: 11,
+                    bordered: false,
                   ),
                 ],
               ],

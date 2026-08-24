@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:core/models/grade.dart';
 import 'package:campus_app/theme/app_theme.dart';
+import 'package:campus_app/widgets/app_card.dart';
 
 class GradeItem extends StatelessWidget {
   final Grade grade;
@@ -19,34 +20,42 @@ class GradeItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    // onTap 交给 AppCard，这样成绩行也有统一的按压缩放反馈
+    // （裸 Card + ListTile 只有涟漪，没有卡片整体的按压感）。
+    return AppCard(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        onTap: onTap,
-        title: Text(
-          grade.courseName,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: Text(
-          '${grade.semester}  ${grade.credits} 学分  绩点 ${grade.gradePoint}',
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              grade.score,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: _scoreColor,
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(grade.courseName, style: AppType.rowTitle),
+                const SizedBox(height: 4),
+                Text(
+                  '${grade.semester}  ${grade.credits} 学分  '
+                  '绩点 ${grade.gradePoint}',
+                  style: AppType.caption,
+                ),
+              ],
             ),
-            if (onTap != null) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right, color: _scoreColor, size: 20),
-            ],
+          ),
+          const SizedBox(width: 12),
+          Text(
+            grade.score,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: _scoreColor,
+            ),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, color: _scoreColor, size: 20),
           ],
-        ),
+        ],
       ),
     );
   }
