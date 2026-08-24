@@ -178,15 +178,24 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                       horizontal: 12,
                                       vertical: 10,
                                     ),
+                                    // accent 8% 在纯白底上刚够看，压在用户自定义
+                                    // 背景图上等于没有底——文字和图标直接叠在
+                                    // 图案上。有背景图时换成近实色白底。
                                     decoration: BoxDecoration(
-                                      color: AppColors.accent.withValues(
-                                        alpha: 0.08,
-                                      ),
+                                      color: hasCustomBackground
+                                          ? Colors.white.withValues(alpha: 0.92)
+                                          : AppColors.accent.withValues(
+                                              alpha: 0.08,
+                                            ),
                                       border: Border(
                                         top: BorderSide(
-                                          color: AppColors.accent.withValues(
-                                            alpha: 0.3,
-                                          ),
+                                          color: hasCustomBackground
+                                              ? AppColors.accent.withValues(
+                                                  alpha: 0.55,
+                                                )
+                                              : AppColors.accent.withValues(
+                                                  alpha: 0.3,
+                                                ),
                                           width: 1,
                                         ),
                                       ),
@@ -223,10 +232,11 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                         Expanded(
                                           child: Text(
                                             widget.remark,
-                                            style: const TextStyle(
+                                            style: AppType.label.copyWith(
                                               fontSize: 11.5,
-                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w400,
                                               height: 1.6,
+                                              color: AppColors.textPrimary,
                                             ),
                                           ),
                                         ),
@@ -235,7 +245,13 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
                                   ),
                                 SizedBox(
                                   width: contentWidth,
-                                  height: _kTimetableBottomInset,
+                                  // 含安全区：浮动胶囊会抬到安全区之上，
+                                  // 固定常量在带手势条的机型上不够。
+                                  // 再加 FAB 一段：本页「新增课程」按钮浮在
+                                  // 胶囊之上，不额外让出会压住备注行。
+                                  height:
+                                      AppInsets.navBarClearanceOf(context) +
+                                      AppInsets.fabClearance,
                                 ),
                               ],
                             ),

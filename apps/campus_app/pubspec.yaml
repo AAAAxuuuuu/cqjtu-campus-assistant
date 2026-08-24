@@ -66,6 +66,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  shaders:
+    # 液态玻璃：边缘折射 + 镜面拉伸。见 widgets/liquid_glass.dart。
+    - shaders/liquid_glass.frag
   assets:
     - assets/campus_app_mark.png
-    - assets/fonts/NotoSansSC-VF.ttf
+    # PDF-export-only CJK face (GB2312 subset, Regular). Not a UI font — see
+    # ScheduleExportService. Keep this out of `fonts:` so it is never loaded
+    # for on-screen text.
+    - assets/fonts/NotoSansSC-Subset.ttf

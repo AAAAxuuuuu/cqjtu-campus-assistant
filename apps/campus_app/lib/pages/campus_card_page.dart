@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:data/data.dart';
 import '../theme/app_theme.dart';
 import '../utils/providers.dart';
+import '../widgets/app_button.dart';
 import '../widgets/app_entrance.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
@@ -73,7 +74,10 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
       appBar: GlassAppBar(title: const Text('校园卡')),
       body: ListView(
         controller: _controller,
-        padding: const EdgeInsets.all(16),
+        padding: AppInsets.withNavBarClearanceOf(
+          context,
+          const EdgeInsets.all(16),
+        ),
         children: [
           if (balanceState.shouldOfferManualRefresh)
             BackgroundRefreshBanner(
@@ -154,11 +158,10 @@ class _BalanceCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
+                    Text(
                       '校园卡余额',
-                      style: TextStyle(
+                      style: AppType.body.copyWith(
                         color: Colors.white70,
-                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -210,12 +213,12 @@ class _BalanceCard extends ConsumerWidget {
                           ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   '获取失败',
-                                  style: TextStyle(
-                                    color: Colors.white,
+                                  style: AppType.metric.copyWith(
                                     fontSize: 24,
-                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.5,
+                                    color: Colors.white,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -223,9 +226,8 @@ class _BalanceCard extends ConsumerWidget {
                                   balanceAsync.error.toString(),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: AppType.caption.copyWith(
                                     color: Colors.white60,
-                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -267,12 +269,12 @@ class _BalanceCard extends ConsumerWidget {
                   ],
                 ),
                 if (isUpdating)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 12,
                           height: 12,
                           child: CircularProgressIndicator(
@@ -280,10 +282,13 @@ class _BalanceCard extends ConsumerWidget {
                             color: Colors.white70,
                           ),
                         ),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text(
                           '静默更新中...',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                          style: AppType.label.copyWith(
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white70,
+                          ),
                         ),
                       ],
                     ),
@@ -337,11 +342,9 @@ class _QrCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text(
+              Text(
                 '消费二维码',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                style: AppType.sectionTitle.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
@@ -375,7 +378,7 @@ class _QrCard extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text(
                   e.toString(),
-                  style: const TextStyle(color: AppColors.danger, fontSize: 13),
+                  style: AppType.subtitle.copyWith(color: AppColors.danger),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
@@ -435,16 +438,19 @@ class _QrCard extends ConsumerWidget {
                       color: AppColors.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.security, size: 14, color: AppColors.accent),
-                        SizedBox(width: 6),
+                        const Icon(
+                          Icons.security,
+                          size: 14,
+                          color: AppColors.accent,
+                        ),
+                        const SizedBox(width: 6),
                         Text(
                           '二维码仅用于当次消费，请勿截图保存',
-                          style: TextStyle(
-                            color: AppColors.accent,
-                            fontSize: 12,
+                          style: AppType.caption.copyWith(
+                            color: AppColors.accentInk,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -627,10 +633,7 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
                   color: AppColors.success,
                 ),
                 SizedBox(width: 8),
-                Text(
-                  '校园卡充值（支付宝）',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                Text('校园卡充值（支付宝）', style: AppType.sectionTitle),
               ],
             ),
             const SizedBox(height: 16),
@@ -658,22 +661,13 @@ class _RechargeCardState extends ConsumerState<_RechargeCard>
               ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
+            // AppButton 自带 loading 态与按压反馈。
+            AppButton(
+              label: '跳转支付宝充值',
+              icon: Icons.open_in_new,
+              isLoading: _loading,
               width: double.infinity,
-              child: FilledButton.icon(
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: _loading
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('跳转支付宝充值'),
-                onPressed: _loading ? null : _pay,
-              ),
+              onPressed: _pay,
             ),
           ],
         ),

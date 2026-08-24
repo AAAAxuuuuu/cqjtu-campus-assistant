@@ -14,9 +14,6 @@ const double _kTimeW = 52.0;
 /// 备注行高度
 const double _kRemarkH = 52.0;
 
-/// 课表底部避让浮动按钮和底部导航，防止备注被遮挡。
-const double _kTimetableBottomInset = 56.0;
-
 /// 每小节的时间区间（重庆交通大学作息时间表）
 const Map<int, (String, String)> _kSlotTimes = {
   1: ('08:20', '09:00'),
@@ -169,15 +166,19 @@ class _ScheduleGridPalette {
 
   factory _ScheduleGridPalette.forBackground(bool hasCustomImage) {
     if (hasCustomImage) {
-      return const _ScheduleGridPalette(
+      // 课程格保持全透明让图片透出来，但**文字所在的区域必须有衬底**：
+      // 时间列和星期表头此前是 Colors.transparent，深紫文字直接压在用户
+      // 的背景图上，遇到浅色或高频细节的图就完全看不清。
+      // 分隔线同理，AppColors.outline 是为白底调的浅色，压在图上会消失。
+      return _ScheduleGridPalette(
         usesDirectImage: true,
-        header: Colors.transparent,
+        header: Colors.white.withValues(alpha: 0.82),
         surface: Colors.transparent,
-        timeColumn: Colors.transparent,
+        timeColumn: Colors.white.withValues(alpha: 0.78),
         morning: Colors.transparent,
         afternoon: Colors.transparent,
         evening: Colors.transparent,
-        divider: AppColors.outline,
+        divider: AppColors.textPrimary.withValues(alpha: 0.18),
         timeText: AppColors.textPrimary,
       );
     }
