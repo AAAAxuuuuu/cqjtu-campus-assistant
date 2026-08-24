@@ -13,7 +13,14 @@ import 'package:share_plus/share_plus.dart';
 
 /// Builds shareable schedule files from the locally loaded course data.
 class ScheduleExportService {
-  static const _fontAsset = 'assets/fonts/NotoSansSC-VF.ttf';
+  /// GB2312 subset of Noto Sans SC, pinned to Regular.
+  ///
+  /// This font exists only to embed Chinese glyphs in exported PDFs; the app UI
+  /// uses the system face. Shipping the full 17.8 MB variable font (31k glyphs,
+  /// an unused `wght` axis) made it 46.8% of the arm64 APK, so it is subset to
+  /// the ~7.6k characters a timetable can contain. See
+  /// test/features/schedule/schedule_pdf_font_test.dart for the coverage guard.
+  static const _fontAsset = 'assets/fonts/NotoSansSC-Subset.ttf';
 
   static Future<void> shareWeekPdf({
     required List<Course> courses,
