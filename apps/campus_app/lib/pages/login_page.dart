@@ -283,14 +283,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             AppColors.textSecondary,
                           ],
                         ).createShader(bounds),
-                        child: const Text(
+                        child: Text(
                           'CQJTU Hub',
-                          style: TextStyle(
+                          style: AppType.metric.copyWith(
                             fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
                             letterSpacing: -0.5,
                             height: 1.1,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -300,8 +299,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       index: 2,
                       child: Text(
                         '重庆交通大学 · 统一身份认证登录',
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: AppType.subtitle.copyWith(
                           color: AppColors.textMuted,
                           fontWeight: FontWeight.w500,
                         ),
@@ -314,6 +312,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         controller: _usernameCtrl,
                         keyboardType: TextInputType.number,
                         maxLength: 12,
+                        // Without autofillHints Android password managers do
+                        // not recognise this form and cannot fill it.
+                        autofillHints: const [AutofillHints.username],
+                        textInputAction: TextInputAction.next,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                         decoration: InputDecoration(
                           labelText: '学号',
@@ -334,6 +336,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         controller: _passwordCtrl,
                         obscureText: _obscure,
                         onSubmitted: (_) => _login(),
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                         decoration: InputDecoration(
                           labelText: '密码',
@@ -344,6 +348,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           filled: true,
                           fillColor: AppColors.tintSoft,
                           suffixIcon: IconButton(
+                            // The label has to track state: announcing
+                            // "显示密码" while the password is already visible
+                            // tells a screen-reader user the opposite of what
+                            // the button will do.
+                            tooltip: _obscure ? '显示密码' : '隐藏密码',
                             icon: Icon(
                               _obscure
                                   ? Icons.visibility_off
