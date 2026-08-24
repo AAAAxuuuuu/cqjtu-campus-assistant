@@ -1917,6 +1917,16 @@ class DirectSchoolCampusGateway implements CampusGateway {
 
     final normalizedSemester = semester.trim();
     if (normalizedSemester.isEmpty) {
+      // "All semesters" needs the summary page plus one page per recent
+      // semester. These were fetched strictly serially, so the wall time was
+      // the sum of 9 round trips — on the campus network (measured ~5.4s TTFB,
+      // dominated by TLS handshake) that is roughly 48s of staring at a
+      // spinner. The requests are independent reads, so fan them out.
+      //
+      // The summary request goes first and alone: it is the one that may
+      // trigger a re-login, and letting it settle means the per-semester
+      // requests start from an established session instead of 8 of them
+      // discovering the expiry at once.
       final summaryHtml = await _fetchGradesHtml(
         session,
         username,
@@ -1924,17 +1934,38 @@ class DirectSchoolCampusGateway implements CampusGateway {
         semester: '',
       );
       final summary = _GradeParser.parse(summaryHtml).summary;
-      final grades = <Grade>[];
 
-      for (final item in _recentSemesters()) {
-        final html = await _fetchGradesHtml(
-          session,
-          username,
-          password,
-          semester: item,
-        );
-        grades.addAll(_GradeParser.parse(html).grades);
-      }
+      final semesters = _recentSemesters();
+      final pages = await Future.wait(
+        semesters.map((item) async {
+          // A single unreachable semester must not discard the other eight:
+          // the serial loop would have thrown and lost everything, so this is
+          // strictly more robust. Failures degrade to "no rows for that term".
+          try {
+            return await _fetchGradesHtml(
+              session,
+              username,
+              password,
+              semester: item,
+            );
+          } catch (error, stackTrace) {
+            dev.log(
+              'Grades fetch failed for semester $item',
+              name: 'DirectSchool',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            return '';
+          }
+        }),
+      );
+
+      // Future.wait preserves input order, so dedupe sees the same sequence the
+      // serial loop produced and keeps picking the same winner per key.
+      final grades = <Grade>[
+        for (final html in pages)
+          if (html.isNotEmpty) ..._GradeParser.parse(html).grades,
+      ];
 
       return (summary: summary, grades: _dedupeGrades(grades));
     }
@@ -2358,6 +2389,10 @@ class _UserSession {
   late final _CasAuthenticator _authenticator;
   bool _authenticated = false;
 
+  /// Shared by concurrent [forceRelogin] callers so they never race each other
+  /// through `clearCookies()`.
+  Future<void>? _reloginInFlight;
+
   static const _casCookieUrl = 'https://ids.cqjtu.edu.cn/authserver/';
   static const _jwgCookieUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/';
   static const _ecardCookieUrl = 'https://ecard.cqjtu.edu.cn/epay/h5/';
@@ -2432,11 +2467,27 @@ class _UserSession {
   }
 
   /// Force a full re-login.
-  Future<void> forceRelogin(String username, String password) async {
-    _httpClient.clearCookies();
-    await _authenticator.login(username, password);
-    _authenticated = true;
-    await _persistCookies(username);
+  ///
+  /// Concurrent callers share one login. Without this, parallel requests that
+  /// all observe an expired session would each call `clearCookies()` and log in
+  /// again, wiping the jar another attempt had just populated — a relogin storm
+  /// that leaves every request unauthenticated. `getGrades` fans out across
+  /// semesters, so this is reachable in normal use.
+  Future<void> forceRelogin(String username, String password) {
+    final pending = _reloginInFlight;
+    if (pending != null) return pending;
+
+    final attempt = Future<void>(() async {
+      _httpClient.clearCookies();
+      await _authenticator.login(username, password);
+      _authenticated = true;
+      await _persistCookies(username);
+    });
+
+    _reloginInFlight = attempt;
+    return attempt.whenComplete(() {
+      if (identical(_reloginInFlight, attempt)) _reloginInFlight = null;
+    });
   }
 
   /// Ensure e-card SSO authorization.
