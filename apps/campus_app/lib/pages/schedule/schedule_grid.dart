@@ -490,7 +490,7 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
           ? _InactiveCourseSummaryCell(courses: placement.courses)
           : CourseCell(
               course: course,
-              isActive: course.isActiveInWeek(widget.selectedWeek),
+              isActive: course.isDisplayActive,
               color: courseColorMap[_courseColorKey(course)],
               onDelete: course.isCustom
                   ? () => _deleteCustomCourse(context, course)
@@ -536,14 +536,16 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
   }
 
   List<_CoursePlacement> _buildCoursePlacements(List<Course> dayCourses) {
+    // 展示状态由 _coursesForDisplayedWeek 算好（已计入假期与调休），
+    // 这里不能再用 weekList 反推，否则假期停课的课会被当成正常上课点亮。
     final activeCourses = dayCourses
-        .where((course) => course.isActiveInWeek(widget.selectedWeek))
+        .where((course) => course.isDisplayActive)
         .toList();
     final inactiveCourses = widget.showInactiveCourses
         ? (dayCourses
               .where(
                 (course) =>
-                    !course.isActiveInWeek(widget.selectedWeek) &&
+                    !course.isDisplayActive &&
                     !activeCourses.any(
                       (active) => _coursesOverlap(course, active),
                     ),
@@ -605,8 +607,9 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
     final endCompare = rangeA.end.compareTo(rangeB.end);
     if (endCompare != 0) return endCompare;
 
-    final activeCompare = (a.isActiveInWeek(widget.selectedWeek) ? 0 : 1)
-        .compareTo(b.isActiveInWeek(widget.selectedWeek) ? 0 : 1);
+    final activeCompare = (a.isDisplayActive ? 0 : 1).compareTo(
+      b.isDisplayActive ? 0 : 1,
+    );
     if (activeCompare != 0) return activeCompare;
 
     if (a.isExam != b.isExam) return a.isExam ? 1 : -1;
@@ -698,9 +701,11 @@ class _CoursePlacement {
 
   int get slotSpan => endSlot - startSlot + 1;
 
+  // 带上 displayStatus：调休时同一门课会在同一周出现「已调休」和点亮两格，
+  // 只用 name+timeStr 会撞 key。
   String get key => isSummary
-      ? 'inactive_summary_${courses.map((course) => '${course.name}_${course.timeStr}').join('|')}'
-      : '${course.name}_${course.timeStr}';
+      ? 'inactive_summary_${courses.map((course) => '${course.name}_${course.timeStr}_${course.displayStatus.name}').join('|')}'
+      : '${course.name}_${course.timeStr}_${course.displayStatus.name}';
 }
 
 class _InactiveCourseSummaryCell extends StatelessWidget {
@@ -708,11 +713,21 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
 
   const _InactiveCourseSummaryCell({required this.courses});
 
+  /// 多门课堆叠时，如果停课原因一致就直接报原因，否则退回中性的「本周停课」。
+  String get _groupLabel {
+    final statuses = courses.map((course) => course.displayStatus).toSet();
+    if (statuses.length == 1) {
+      final label = courses.first.displayStatusLabel;
+      if (label.isNotEmpty) return label;
+    }
+    return '本周停课';
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = courses.length == 1
         ? courses.first.name
-        : '本周无课 · ${courses.length} 门';
+        : '$_groupLabel · ${courses.length} 门';
     final subtitle = courses.length == 1
         ? courses.first.classroom
         : courses.take(2).map((course) => course.name).join('、');
@@ -770,13 +785,16 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.layers_outlined, color: AppColors.textMuted),
-                SizedBox(width: 10),
+                const Icon(Icons.layers_outlined, color: AppColors.textMuted),
+                const SizedBox(width: 10),
                 Text(
-                  '本周无课的重叠课程',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  '$_groupLabel的重叠课程',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -800,12 +818,29 @@ class _InactiveCourseSummaryCell extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            course.name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  course.name,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (course.displayStatusLabel.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(
+                                    course.displayStatusLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           if (course.classroom.trim().isNotEmpty)
                             Padding(

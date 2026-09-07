@@ -141,9 +141,9 @@ class CourseCell extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!isActive)
-                  const AppBadge(
-                    label: '本周无课',
+                if (!isActive && course.displayStatusLabel.isNotEmpty)
+                  AppBadge(
+                    label: course.displayStatusLabel,
                     color: AppColors.tint,
                     textColor: AppColors.textMuted,
                     backgroundColor: AppColors.tintSoft,
@@ -172,7 +172,10 @@ class CourseCell extends StatelessWidget {
               _InfoRow(Icons.event_seat_outlined, '座位号：${course.seatNumber}'),
             _InfoRow(
               Icons.calendar_month_outlined,
-              '共 ${course.weekList.length} 周 | 第 ${course.timeSlot}–${course.endTimeSlot} 节',
+              // weekList 是这门课整学期的上课周，不再被渲染改写成单周。
+              course.weekList.isEmpty
+                  ? '第 ${course.timeSlot}–${course.endTimeSlot} 节'
+                  : '共 ${course.weekList.length} 周 | 第 ${course.timeSlot}–${course.endTimeSlot} 节',
             ),
             if (onDelete != null) ...[
               const SizedBox(height: 20),
