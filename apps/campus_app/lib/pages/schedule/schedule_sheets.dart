@@ -237,6 +237,10 @@ class _ScheduleMoreSheet extends ConsumerWidget {
 
 enum _ScheduleExportType { allWeeksPdf, listPdf, ics }
 
+/// 组装某一周要渲染的课程，并为每一格标好 [CourseDisplayStatus]。
+///
+/// 三类灰色占位：教务本周不排课、本周排了课但放假、本周排了课但调休挪走。
+/// 调休补课的目标日期是正常上课，点亮显示。
 List<Course> _coursesForDisplayedWeek({
   required List<Course> courses,
   required DateTime semesterStart,
@@ -247,11 +251,13 @@ List<Course> _coursesForDisplayedWeek({
 }) {
   if (selectedWeek < 1 || selectedWeek > totalWeeks) return const [];
 
-  final activeOccurrences = calendarRules
+  // includeCancelled 让假期停课 / 调休源日期也回到这一周，而不是被静默丢弃。
+  final weekOccurrences = calendarRules
       .resolveOccurrences(
         courses: courses,
         semesterStart: semesterStart,
         totalWeeks: totalWeeks,
+        includeCancelled: includeInactiveCourses,
       )
       .where(
         (occurrence) =>
@@ -259,23 +265,30 @@ List<Course> _coursesForDisplayedWeek({
             selectedWeek,
       )
       .toList();
-  final activeCourses = activeOccurrences
-      .map((occurrence) => occurrence.asCourseForWeek(selectedWeek))
-      .toList();
-  if (!includeInactiveCourses) return activeCourses;
 
-  final coursesMovedIntoThisWeek = activeOccurrences
+  if (!includeInactiveCourses) {
+    return weekOccurrences
+        .where((occurrence) => occurrence.isScheduled)
+        .map((occurrence) => occurrence.asDisplayCourse())
+        .toList();
+  }
+
+  final placedCourses = weekOccurrences
       .map((occurrence) => occurrence.course)
       .toSet();
-  final inactiveCourses = courses
-      .where(
+  // 教务本周就没排这门课：既没有 active 也没有 cancelled 的 occurrence。
+  final noClassCourses = courses
+      .where((course) => !placedCourses.contains(course))
+      .map(
         (course) =>
-            !course.isActiveInWeek(selectedWeek) &&
-            !coursesMovedIntoThisWeek.contains(course),
+            course.copyWith(displayStatus: CourseDisplayStatus.noClassThisWeek),
       )
-      .map((course) => course.copyWith(weekList: const []))
       .toList();
-  return [...inactiveCourses, ...activeCourses];
+
+  return [
+    ...noClassCourses,
+    ...weekOccurrences.map((occurrence) => occurrence.asDisplayCourse()),
+  ];
 }
 
 Future<void> _showScheduleCalendarRulesSheet(
@@ -292,6 +305,11 @@ class _ScheduleCalendarRulesSheet extends ConsumerWidget {
   const _ScheduleCalendarRulesSheet({required this.semesterStart});
 
   final DateTime semesterStart;
+
+  /// 只列出尚未过期的预设，学期结束后这一节自动消失。
+  List<SchedulePreset> get _availablePresets => SchedulePresetCatalog.all
+      .where((preset) => !preset.isExpiredAt(DateTime.now()))
+      .toList();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -326,6 +344,25 @@ class _ScheduleCalendarRulesSheet extends ConsumerWidget {
                         .read(scheduleCalendarRulesProvider.notifier)
                         .setSkipOfficialHolidays(value),
             ),
+            // 学校发布的整段调休打包成一个开关，过期后自动移除。
+            for (final preset in _availablePresets) ...[
+              const Divider(height: 32),
+              _sheetSectionLabel('学校调休安排'),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.school_outlined),
+                title: Text(preset.name),
+                subtitle: Text(preset.description),
+                value: rules.isPresetEnabled(preset.id),
+                onChanged: isLoading
+                    ? null
+                    : (value) => ref
+                          .read(scheduleCalendarRulesProvider.notifier)
+                          .setPresetEnabled(preset, value),
+              ),
+              if (rules.isPresetEnabled(preset.id))
+                _PresetDetailSection(preset: preset),
+            ],
             const Divider(height: 32),
             _sheetSectionLabel('额外停课日期'),
             ListTile(
@@ -427,6 +464,97 @@ class _ScheduleCalendarRulesSheet extends ConsumerWidget {
   }
 }
 
+/// 预设明细，默认折叠。展开后可与学校通知逐条核对。
+class _PresetDetailSection extends StatefulWidget {
+  const _PresetDetailSection({required this.preset});
+
+  final SchedulePreset preset;
+
+  @override
+  State<_PresetDetailSection> createState() => _PresetDetailSectionState();
+}
+
+class _PresetDetailSectionState extends State<_PresetDetailSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: AppColors.textMuted,
+            ),
+            icon: Icon(
+              _expanded ? Icons.expand_less : Icons.expand_more,
+              size: 18,
+            ),
+            label: Text(
+              _expanded ? '收起明细' : '查看明细',
+              style: const TextStyle(fontSize: 12),
+            ),
+            onPressed: () => setState(() => _expanded = !_expanded),
+          ),
+        ),
+        AnimatedSize(
+          duration: AppMotion.quick,
+          curve: AppMotion.easeOutStrong,
+          alignment: Alignment.topLeft,
+          child: _expanded
+              ? _PresetDetailList(preset: widget.preset)
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+/// 展开显示预设包含的调休与停课日期。
+class _PresetDetailList extends StatelessWidget {
+  const _PresetDetailList({required this.preset});
+
+  final SchedulePreset preset;
+
+  @override
+  Widget build(BuildContext context) {
+    // 只列真正的停课日；补课日归入上面的调休条目，不重复展示。
+    final pureNoClassDates = [...preset.noClassDates]..sort();
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final adjustment in preset.adjustments)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Text(
+                '${_scheduleDateLabelWithWeekday(adjustment.targetKey)} '
+                '上 ${_scheduleDateLabelWithWeekday(adjustment.sourceKey)} 的课',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ),
+          if (pureNoClassDates.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '停课：'
+                '${pureNoClassDates.map(_scheduleDateLabelWithWeekday).join('、')}',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<DateTime?> _pickScheduleRuleDate(
   BuildContext context,
   DateTime semesterStart, {
@@ -452,6 +580,16 @@ String _scheduleDateLabel(String value) {
   final date = DateTime.tryParse(value);
   if (date == null) return value;
   return '${date.year}年${date.month}月${date.day}日';
+}
+
+const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+/// 带星期的短日期，如 `9月20日（周日）`。调休条目靠星期才好和通知核对。
+String _scheduleDateLabelWithWeekday(String value) {
+  final date = DateTime.tryParse(value);
+  if (date == null) return value;
+  final weekday = _weekdayNames[date.weekday - 1];
+  return '${date.month}月${date.day}日（周$weekday）';
 }
 
 class _BackgroundThumbnail extends StatelessWidget {

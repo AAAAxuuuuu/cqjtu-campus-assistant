@@ -1,3 +1,22 @@
+/// 课程在“某一周的课表”里的展示状态。
+///
+/// 仅服务于课表渲染，不参与持久化：同一门课在不同周会得到不同的状态。
+/// 引入它是为了把「这一格该不该点亮」和 [Course.weekList] 解耦——此前靠把
+/// weekList 清空来表示“置灰”，导致假期停课的课两边都落不进去而整格消失。
+enum CourseDisplayStatus {
+  /// 本周正常上课，点亮显示。
+  active,
+
+  /// 教务数据里本周就不排这门课。
+  noClassThisWeek,
+
+  /// 本周排了课，但当天是法定节假日或额外停课日期。
+  holidayCancelled,
+
+  /// 本周排了课，但已被调休挪到其它日期上。
+  movedOut,
+}
+
 class Course {
   final String name;
   final String teacher;
@@ -7,6 +26,9 @@ class Course {
   final bool isExam;
   final bool isCustom;
   final String seatNumber;
+
+  /// 当前渲染周的展示状态，默认按正常上课处理。
+  final CourseDisplayStatus displayStatus;
 
   /// 起始小节（1-13，对应作息时间表中的第 N 小节）
   final int timeSlot;
@@ -37,10 +59,22 @@ class Course {
     this.seatNumber = '',
     this.exactStartMinutes,
     this.exactEndMinutes,
+    this.displayStatus = CourseDisplayStatus.active,
   }) : endTimeSlot = endTimeSlot ?? timeSlot;
 
   /// 该课程占据的小节数
   int get slotSpan => endTimeSlot - timeSlot + 1;
+
+  /// 本格是否点亮。调休补上来的课属于正常上课，同样点亮。
+  bool get isDisplayActive => displayStatus == CourseDisplayStatus.active;
+
+  /// 置灰格子上的角标文案。
+  String get displayStatusLabel => switch (displayStatus) {
+        CourseDisplayStatus.active => '',
+        CourseDisplayStatus.noClassThisWeek => '本周无课',
+        CourseDisplayStatus.holidayCancelled => '假期停课',
+        CourseDisplayStatus.movedOut => '已调休',
+      };
 
   /// 🎉 核心减负：极简的当前周判断逻辑！
   /// 因为后端已经把诸如单双周、跳跃周全都算好塞进了 weekList，
@@ -77,6 +111,7 @@ class Course {
     String? seatNumber,
     int? exactStartMinutes,
     int? exactEndMinutes,
+    CourseDisplayStatus? displayStatus,
   }) {
     return Course(
       name: name ?? this.name,
@@ -92,6 +127,7 @@ class Course {
       seatNumber: seatNumber ?? this.seatNumber,
       exactStartMinutes: exactStartMinutes ?? this.exactStartMinutes,
       exactEndMinutes: exactEndMinutes ?? this.exactEndMinutes,
+      displayStatus: displayStatus ?? this.displayStatus,
     );
   }
 

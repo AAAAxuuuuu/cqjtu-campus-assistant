@@ -781,7 +781,23 @@ class ScheduleCalendarRulesNotifier
     if (raw == null || raw.isEmpty) return ScheduleCalendarRules.empty;
 
     try {
-      return ScheduleCalendarRules.fromJson(jsonDecode(raw));
+      final decoded = jsonDecode(raw);
+      // fromJson 会丢弃已过期的预设；若确实丢了就把清理结果写回，
+      // 避免过期 id 一直留在本地。
+      final rules = ScheduleCalendarRules.fromJson(decoded);
+      final storedIds = decoded is Map
+          ? (decoded['enabledPresets'] as List? ?? const [])
+                .map((id) => id.toString())
+                .where((id) => id.isNotEmpty)
+                .toSet()
+          : <String>{};
+      final liveIds = rules.enabledPresets.map((preset) => preset.id).toSet();
+      if (storedIds.length != liveIds.length) {
+        final dropped = storedIds.difference(liveIds);
+        debugPrint('[Schedule] 已移除过期的课表预设: ${dropped.join(', ')}');
+        await prefs.setString(key, jsonEncode(rules.toJson()));
+      }
+      return rules;
     } catch (error) {
       debugPrint('[Schedule] 课表日期规则读取失败: $error');
       return ScheduleCalendarRules.empty;
@@ -791,6 +807,17 @@ class ScheduleCalendarRulesNotifier
   Future<void> setSkipOfficialHolidays(bool value) {
     final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
     return _save(current.copyWith(skipOfficialHolidays: value));
+  }
+
+  /// 启用/关闭内置预设。只改预设列表，手动停课与调休原样保留。
+  Future<void> setPresetEnabled(SchedulePreset preset, bool enabled) {
+    final current = state.valueOrNull ?? ScheduleCalendarRules.empty;
+    final next = current.enabledPresets
+        .where((item) => item.id != preset.id)
+        .toList();
+    if (enabled) next.add(preset);
+    next.sort((a, b) => a.id.compareTo(b.id));
+    return _save(current.copyWith(enabledPresets: next));
   }
 
   Future<void> addNoClassDate(DateTime date) {
