@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -31,7 +32,7 @@ class WebViewLoginPage extends StatefulWidget {
 
 class _WebViewLoginPageState extends State<WebViewLoginPage> {
   static const _loginUrl =
-      'https://ids.cqjtu.edu.cn/authserver/login?service=http%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp';
+      'https://ids.cqjtu.edu.cn/authserver/login?service=https%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp';
   static const _ecardEntryUrl = 'https://ecard.cqjtu.edu.cn/epay/h5/payele';
   static const _studentIndexUrl =
       'https://zhxg.cqjtu.edu.cn/mobile/stuhall/studentindex';
@@ -40,6 +41,7 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
   late final WebViewController _controller;
   bool _isHandled = false;
   bool _isLoading = true;
+  String? _statusMessage;
   String? _loadError;
   String? _latestTicket;
   String? _capturedPassword;
@@ -51,9 +53,9 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
   void initState() {
     super.initState();
     _controller = WebViewController()
-      ..setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      )
+      // Must match the Dart HTTP client and the silent bootstrapper: the WAF
+      // binds its access cookie to the UA that solved the challenge.
+      ..setUserAgent(campusWebUserAgent)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
         'LoginCredential',
@@ -195,6 +197,7 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
     setState(() {
       _isHandled = false;
       _isLoading = true;
+      _statusMessage = null;
       _loadError = null;
       _latestTicket = null;
     });
@@ -203,21 +206,41 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
 
   Future<void> _extractAndReturnArtifacts() async {
     try {
-      final casCookies = await _readCookiesWithRetry(
-        'https://ids.cqjtu.edu.cn/authserver/',
-      );
       String jwgCookies = '';
       String ecardCookies = '';
+
       if (widget.mode == WebViewLoginMode.jwgSession) {
-        // The CAS callback can finish before Chromium commits the JSESSIONID.
-        // Do not return a CAS-only session while that write is still pending.
-        jwgCookies = await _readCookiesWithRetry(
-          'https://jwgln.cqjtu.edu.cn/jsxsd/',
-        );
+        if (mounted) {
+          setState(() {
+            _isLoading = true;
+            _statusMessage = '正在进行教务人机安全验证...';
+          });
+        }
+
+        // Wait on jwgln.cqjtu.edu.cn for the Ruishu challenge to execute and
+        // reload until the academic backend issues JSESSIONID.
+        jwgCookies = await _waitForJwgSession();
+        if (!_containsSessionCookie(jwgCookies)) {
+          _isHandled = false;
+          _fail('未能通过教务系统人机验证，请稍候重试');
+          return;
+        }
+
+        if (mounted) {
+          setState(() {
+            _statusMessage = '正在同步一卡通授权...';
+          });
+        }
+        // Only after the jwgln session is confirmed do we navigate to ecard.
         ecardCookies = await _captureEcardCookies();
       }
 
+      final casCookies = await _readCookiesWithRetry(
+        'https://ids.cqjtu.edu.cn/authserver/',
+      );
+
       if (casCookies.isEmpty) {
+        _isHandled = false;
         _fail('未能获取到统一认证 Cookie，请重试');
         return;
       }
@@ -229,19 +252,18 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           ? (_latestTicket ?? '')
           : '';
 
-      if (widget.mode == WebViewLoginMode.jwgSession &&
-          jwgCookies.isEmpty &&
-          ticket.isEmpty) {
-        _fail('未能获取教务系统会话，请在验证完成后稍候重试');
-        return;
-      }
-
       if (mounted) {
         await WebViewSessionScope.markAuthenticated(widget.username);
       }
       if (mounted) {
         debugPrint(
-          '[WebViewLoginPage] return result mode=${widget.mode} ticketLen=${ticket.length} casCookieLen=${casCookies.length} jwgCookieLen=${jwgCookies.length} ecardCookieLen=${ecardCookies.length} zoveTokenLen=${zoveToken.length} passwordLen=${(_capturedPassword ?? widget.password).length}',
+          '[WebViewLoginPage] return result mode=${widget.mode} '
+          'ticketLen=${ticket.length} '
+          'casCookieLen=${casCookies.length} '
+          'jwgCookieLen=${jwgCookies.length} '
+          'ecardCookieLen=${ecardCookies.length} '
+          'zoveTokenLen=${zoveToken.length} '
+          'passwordLen=${(_capturedPassword ?? widget.password).length}',
         );
         Navigator.of(context).pop({
           'ticket': ticket,
@@ -253,8 +275,48 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
         });
       }
     } catch (e) {
+      _isHandled = false;
       _fail('WebView 会话提取异常: $e');
     }
+  }
+
+  /// Wait for the 瑞数 WAF JS challenge to finish and for the backend to issue
+  /// JSESSIONID or SESSION.
+  Future<String> _waitForJwgSession() async {
+    const jwgUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/';
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    var reloadAttempted = false;
+    final startTime = DateTime.now();
+
+    while (DateTime.now().isBefore(deadline) && mounted) {
+      final cookies = await _cookieChannel.invokeMethod<String>('getCookies', {
+            'url': jwgUrl,
+          }) ??
+          '';
+
+      if (_containsSessionCookie(cookies)) {
+        return cookies;
+      }
+
+      // If Ruishu computed its cookie but hasn't triggered reload after 4 seconds
+      // on sso.jsp, trigger a reload to help it through.
+      if (!reloadAttempted &&
+          DateTime.now().difference(startTime) > const Duration(seconds: 4)) {
+        try {
+          final currentUrl = await _controller.currentUrl() ?? '';
+          if (currentUrl.contains('sso.jsp') && !currentUrl.contains('xsMain')) {
+            reloadAttempted = true;
+            debugPrint(
+              '[WebViewLoginPage] Ruishu challenge pending on sso.jsp, triggering reload',
+            );
+            await _controller.reload();
+          }
+        } catch (_) {}
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return '';
   }
 
   Future<String> _captureZoveToken() async {
@@ -285,21 +347,74 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
     }
   }
 
+  /// Read cookies for [url], retrying until they arrive.
+  ///
+  /// When [requiredNames] is given, a non-empty result is not enough: the
+  /// header must actually carry one of those cookies. The 瑞数 WAF sets its own
+  /// cookie on the challenge page, so "non-empty" no longer implies "session
+  /// established". The last read is returned on timeout so the caller can still
+  /// inspect whatever was there.
   Future<String> _readCookiesWithRetry(
     String url, {
     Duration timeout = const Duration(seconds: 4),
+    List<String> requiredNames = const [],
   }) async {
     final deadline = DateTime.now().add(timeout);
+    var latest = '';
     do {
       final cookies =
           await _cookieChannel.invokeMethod<String>('getCookies', {
             'url': url,
           }) ??
           '';
-      if (cookies.trim().isNotEmpty) return cookies;
-      if (DateTime.now().isAfter(deadline)) return '';
+      if (cookies.trim().isNotEmpty) {
+        latest = cookies;
+        if (requiredNames.isEmpty ||
+            _containsAnyCookie(cookies, requiredNames)) {
+          return cookies;
+        }
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        return (requiredNames.isEmpty ||
+                _containsAnyCookie(latest, requiredNames))
+            ? latest
+            : '';
+      }
       await Future<void>.delayed(const Duration(milliseconds: 250));
     } while (true);
+  }
+
+  /// Whether [cookieHeader] carries any of [names] as an actual cookie name.
+  bool _containsAnyCookie(String cookieHeader, List<String> names) {
+    final present = cookieHeader
+        .split(';')
+        .map((pair) {
+          final separator = pair.indexOf('=');
+          return separator <= 0 ? '' : pair.substring(0, separator).trim();
+        })
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return names.any((name) => present.contains(name.toLowerCase()));
+  }
+
+  bool _containsSessionCookie(String cookieHeader) {
+    final names = cookieHeader
+        .split(';')
+        .map((pair) {
+          final separator = pair.indexOf('=');
+          return separator <= 0 ? '' : pair.substring(0, separator).trim();
+        })
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return names.any(
+      (name) =>
+          name == 'jsessionid' ||
+          name == 'session' ||
+          name.startsWith('bzb_') ||
+          name.contains('jsxsd'),
+    );
   }
 
   Future<String?> _waitTokenFromChannel({required Duration timeout}) async {
@@ -399,7 +514,30 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
                 ),
               ),
             ),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          if (_isLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: AppColors.surface.withValues(alpha: 0.8),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      if (_statusMessage != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _statusMessage!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

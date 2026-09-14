@@ -9,6 +9,7 @@ import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:core/utils/schedule_time_utils.dart';
 import 'package:campus_platform/services/notification_service.dart';
 import 'package:campus_platform/services/schedule_widget_service.dart';
+import 'package:data/data.dart';
 import '../features/schedule/schedule_export_service.dart';
 import 'package:core/utils/course_text_parser.dart';
 import '../theme/app_theme.dart';
@@ -190,7 +191,8 @@ class _ScheduleBody extends ConsumerWidget {
     } catch (e) {
       final errorStr = e.toString();
       // 如果报错内容提示需要验证码，唤起 WebView
-      if (errorStr.contains('449') ||
+      if (e is BotChallengeFailure ||
+          errorStr.contains('449') ||
           errorStr.contains('验证码') ||
           errorStr.contains('HTML') ||
           errorStr.contains('CAS')) {
@@ -210,6 +212,31 @@ class _ScheduleBody extends ConsumerWidget {
               await ref
                   .read(webLoginBinderProvider)
                   .bind(username: creds.username, result: result);
+              final updated = (await ref
+                      .read(scheduleProvider(selectedSemester).notifier)
+                      .refresh(forceRefresh: true, throwOnError: true))
+                  .data;
+              final calendarRules = await ref.read(
+                scheduleCalendarRulesProvider.future,
+              );
+              await NotificationService.scheduleClassReminders(
+                updated.courses,
+                semesterStart,
+                totalWeeks: totalWeeks,
+                calendarRules: calendarRules,
+                accountId: creds.username,
+              );
+              await ScheduleWidgetService.updateScheduleWidgets(
+                courses: updated.courses,
+                semesterStart: semesterStart,
+                selectedSemester: selectedSemester,
+                remark: updated.remark,
+                totalWeeks: totalWeeks,
+                calendarRules: calendarRules,
+              );
+              if (context.mounted) {
+                AppSnackBar.success(context, '验证通过，课表已更新');
+              }
             } catch (injectErr) {
               if (context.mounted) {
                 AppSnackBar.error(context, '会话恢复失败: $injectErr');
@@ -321,12 +348,14 @@ class _ScheduleBody extends ConsumerWidget {
       body: scheduleAsync.when(
         skipLoadingOnRefresh: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) {
+        error: (e, stack) {
           final raw = e.toString();
+          debugPrint('[SchedulePage] scheduleAsync error: $e\n$stack');
           // 会话过期/安全验证需要用户去点重试触发 WebView 验证，
           // 这条指引比 formatCampusError 的通用文案更可操作，故优先。
           final errMsg =
-              (raw.contains('449') ||
+              (e is BotChallengeFailure ||
+                  raw.contains('449') ||
                   raw.contains('验证码') ||
                   raw.contains('HTML') ||
                   raw.contains('CAS'))
@@ -361,6 +390,7 @@ class _ScheduleBody extends ConsumerWidget {
                   totalWeeks: totalWeeks,
                   calendarRules: calendarRules,
                   includeInactiveCourses: showInactiveCourses,
+                  sundayFirst: sundayFirst,
                 ),
                 remark: result.remark,
                 semesterStart: semesterStart,

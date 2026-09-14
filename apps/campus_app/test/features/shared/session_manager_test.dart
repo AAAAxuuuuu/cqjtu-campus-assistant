@@ -226,6 +226,19 @@ void main() {
       );
     });
 
+    test('classifies a WAF bot challenge as security verification', () {
+      // The 瑞数 challenge can only be cleared by the WebView, so it must be
+      // routed to manual verification rather than retried over HTTP.
+      expect(
+        manager.isSecurityVerificationError(const BotChallengeFailure()),
+        isTrue,
+      );
+      expect(
+        manager.isTransientNetworkError(const BotChallengeFailure()),
+        isFalse,
+      );
+    });
+
     test('classifies timeouts as transient network', () {
       expect(manager.isTransientNetworkError(TimeoutException('t')), isTrue);
       expect(

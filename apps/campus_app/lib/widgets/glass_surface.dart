@@ -15,6 +15,7 @@ import 'package:campus_app/theme/app_theme.dart';
 class GlassAppBar extends StatefulWidget implements PreferredSizeWidget {
   final Widget? title;
   final Widget? leading;
+  final double? leadingWidth;
   final List<Widget>? actions;
   final bool centerTitle;
   final PreferredSizeWidget? bottom;
@@ -23,6 +24,7 @@ class GlassAppBar extends StatefulWidget implements PreferredSizeWidget {
     super.key,
     this.title,
     this.leading,
+    this.leadingWidth,
     this.actions,
     this.centerTitle = true,
     this.bottom,
@@ -92,6 +94,7 @@ class _GlassAppBarState extends State<GlassAppBar> {
     final toolbar = AppBar(
       title: widget.title,
       leading: widget.leading,
+      leadingWidth: widget.leadingWidth,
       actions: widget.actions,
       centerTitle: widget.centerTitle,
       bottom: widget.bottom,

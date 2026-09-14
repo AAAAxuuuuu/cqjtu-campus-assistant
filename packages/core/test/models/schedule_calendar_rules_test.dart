@@ -203,4 +203,36 @@ void main() {
       );
     });
   });
+
+  group('weekOf 计算', () {
+    test('周一为第一天 vs 周日为第一天', () {
+      const rules = ScheduleCalendarRules();
+      // 2026-09-07 是周一
+      final semStart = DateTime(2026, 9, 7);
+
+      // 周一为第一天：9/7(一) - 9/13(日) 为第 1 周
+      expect(rules.weekOf(DateTime(2026, 9, 7), semStart, sundayFirst: false), 1);
+      expect(rules.weekOf(DateTime(2026, 9, 13), semStart, sundayFirst: false), 1);
+      // 9/14(一) - 9/20(日) 为第 2 周
+      expect(rules.weekOf(DateTime(2026, 9, 14), semStart, sundayFirst: false), 2);
+      expect(rules.weekOf(DateTime(2026, 9, 20), semStart, sundayFirst: false), 2);
+      // 9/21(一) - 9/27(日) 为第 3 周
+      expect(rules.weekOf(DateTime(2026, 9, 21), semStart, sundayFirst: false), 3);
+      expect(rules.weekOf(DateTime(2026, 9, 27), semStart, sundayFirst: false), 3);
+
+      // 周日为第一天：
+      // 第 1 周：9/6(日) - 9/12(六)
+      expect(rules.weekOf(DateTime(2026, 9, 7), semStart, sundayFirst: true), 1);
+      expect(rules.weekOf(DateTime(2026, 9, 12), semStart, sundayFirst: true), 1);
+      // 第 2 周：9/13(日) - 9/19(六)
+      expect(rules.weekOf(DateTime(2026, 9, 13), semStart, sundayFirst: true), 2);
+      expect(rules.weekOf(DateTime(2026, 9, 19), semStart, sundayFirst: true), 2);
+      // 第 3 周：9/20(日) - 9/26(六)
+      expect(rules.weekOf(DateTime(2026, 9, 20), semStart, sundayFirst: true), 3);
+      expect(rules.weekOf(DateTime(2026, 9, 26), semStart, sundayFirst: true), 3);
+      // 第 4 周：9/27(日) - 10/3(六)
+      expect(rules.weekOf(DateTime(2026, 9, 27), semStart, sundayFirst: true), 4);
+      expect(rules.weekOf(DateTime(2026, 10, 3), semStart, sundayFirst: true), 4);
+    });
+  });
 }

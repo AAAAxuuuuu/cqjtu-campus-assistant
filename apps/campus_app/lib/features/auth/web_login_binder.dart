@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/runtime_mode.dart';
 import '../../providers/session.dart';
 import '../../providers/shared.dart';
+import '../../services/academic_web_bridge.dart';
 import 'package:campus_platform/services/session_service.dart';
 
 class WebLoginBinder {
@@ -50,26 +51,62 @@ class WebLoginBinder {
           zoveToken: artifacts.zoveToken,
         );
 
-    if (artifacts.ticket.isNotEmpty) {
-      try {
-        await gateway.loginWithTicket(username, artifacts.ticket);
-        return;
-      } catch (e) {
-        // Ticket may have already been consumed by SSO redirect in WebView
-      }
-    }
+    final hasCookies =
+        artifacts.jwgCookies.isNotEmpty || artifacts.casCookies.isNotEmpty;
 
-    if (artifacts.jwgCookies.isNotEmpty || artifacts.casCookies.isNotEmpty) {
+    // Import the cookies BEFORE touching the ticket. The 瑞数 WAF cookie exists
+    // only in the WebView's jar, and redeeming a ticket is itself a request to
+    // the protected host — without that cookie the ticket call is a guaranteed
+    // 412 whose failure we would silently swallow.
+    if (hasCookies) {
       await gateway.loginWithCookies(
         username,
         casCookies: artifacts.casCookies,
         jwgCookies: artifacts.jwgCookies,
         ecardCookies: artifacts.ecardCookies,
       );
-      return;
     }
 
-    throw const AuthInvalidFailure('未获取到有效的网页登录凭证（ticket 或 Cookie），请重新尝试网页登录');
+    // A ticket is only still needed when the WebView never got a service
+    // session cookie of its own.
+    final hasSession = _hasServiceSession(artifacts.jwgCookies);
+    if (!hasSession) {
+      if (artifacts.ticket.isNotEmpty) {
+        try {
+          await gateway.loginWithTicket(username, artifacts.ticket);
+          return;
+        } catch (_) {
+          throw const AuthInvalidFailure('教务系统人机验证未通过，未能获取会话，请重试');
+        }
+      }
+      throw const AuthInvalidFailure('未获取到有效的教务系统会话，请重新尝试网页登录');
+    }
+
+    // Refresh the academic background bridge so it immediately navigates to jwgln with the new cookies.
+    await ref.read(academicWebBridgeProvider).reloadWithNewSession();
+  }
+
+  /// Whether a raw cookie header already carries an academic-system session.
+  ///
+  /// The 瑞数 WAF sets its own random-named cookie on the challenge page, so a
+  /// non-empty header does not imply a usable session — only these names do.
+  bool _hasServiceSession(String cookieHeader) {
+    final names = cookieHeader
+        .split(';')
+        .map((pair) {
+          final separator = pair.indexOf('=');
+          return separator <= 0 ? '' : pair.substring(0, separator).trim();
+        })
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return names.any(
+      (name) =>
+          name == 'jsessionid' ||
+          name == 'session' ||
+          name.startsWith('bzb_') ||
+          name.contains('jsxsd'),
+    );
   }
 
   Future<String> _bindSelfHosted({

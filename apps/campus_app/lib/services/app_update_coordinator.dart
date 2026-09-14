@@ -143,28 +143,27 @@ class AppUpdateCoordinator {
   ) async {
     if (!context.mounted) return;
 
-    showDialog<void>(
+    // 进度经 ValueNotifier 推给对话框，避免每个数据块都重建整棵子树。
+    final progress = ValueNotifier<AppUpdateDownloadProgress?>(null);
+
+    final dialogFuture = showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        content: const Row(
-          children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Expanded(child: Text('正在下载更新包...')),
-          ],
-        ),
-      ),
+      builder: (_) => _UpdateDownloadDialog(progress: progress),
     );
 
-    final result = await AppUpdateInstaller.downloadAndLaunch(latest);
-
-    if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+    AppUpdateLaunchResult? result;
+    try {
+      result = await AppUpdateInstaller.downloadAndLaunch(
+        latest,
+        onProgress: (value) => progress.value = value,
+      );
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        await dialogFuture;
+      }
+      progress.dispose();
     }
     if (!context.mounted) return;
 
@@ -186,5 +185,67 @@ class AppUpdateCoordinator {
 
   static void _showSnackBar(BuildContext context, String message) {
     AppSnackBar.status(context, message);
+  }
+}
+
+/// 下载更新包时的进度对话框。
+///
+/// 服务端未返回 Content-Length 时进度未知，退回不确定态进度条并只显示已下载
+/// 大小，不谎报百分比。
+class _UpdateDownloadDialog extends StatelessWidget {
+  const _UpdateDownloadDialog({required this.progress});
+
+  final ValueNotifier<AppUpdateDownloadProgress?> progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      content: ValueListenableBuilder<AppUpdateDownloadProgress?>(
+        valueListenable: progress,
+        builder: (context, value, _) {
+          final percent = value?.percent;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(child: Text('正在下载更新包...')),
+                  if (percent != null)
+                    Text(
+                      '$percent%',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textBody,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  // fraction 为 null 时交给不确定态动画。
+                  value: value?.fraction,
+                  minHeight: 6,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.tint.withValues(alpha: 0.2),
+                ),
+              ),
+              if (value != null && value.receivedBytes > 0) ...[
+                const SizedBox(height: 10),
+                Text(
+                  value.sizeLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
   }
 }

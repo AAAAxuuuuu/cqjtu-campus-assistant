@@ -38,6 +38,14 @@ class SchoolSystemChangedFailure extends CampusFailure {
   const SchoolSystemChangedFailure([super.message = '学校系统页面结构已变化']);
 }
 
+/// 目标站点启用了人机验证 / 动态反爬防护（瑞数 WAF）。
+///
+/// 该防护要求浏览器执行混淆 JavaScript 才能换取访问 Cookie，纯 HTTP 客户端
+/// 无法通过，必须改用 WebView 完成挑战后再复用其 Cookie。
+class BotChallengeFailure extends CampusFailure {
+  const BotChallengeFailure([super.message = '教务系统开启了人机验证，请使用网页登录完成验证']);
+}
+
 /// 访问频率受限。
 class RateLimitedFailure extends CampusFailure {
   const RateLimitedFailure([super.message = '访问频率受限，请稍后再试']);

@@ -1,6 +1,9 @@
 import 'package:data/data.dart';
 
 bool isCampusNetworkError(Object error) {
+  // 人机验证不是网络故障：提示"检查网络"会把用户引向错误的排查方向。
+  if (error is BotChallengeFailure) return false;
+
   final message = error.toString().toLowerCase();
   return message.contains('socket') ||
       message.contains('host lookup') ||
@@ -21,6 +24,10 @@ bool isCampusDnsError(Object error) {
 }
 
 String formatCampusError(Object error) {
+  // 先判类型再做字符串启发式匹配。下面的 contains 判断早于类型判断，
+  // 一旦异常文案里出现 connection/timeout 之类的词就会被误归类为网络错误。
+  if (error is BotChallengeFailure) return error.message;
+
   if (isCampusDnsError(error)) {
     return '无法解析统一认证服务器地址，请检查网络或 DNS 设置后重试';
   }

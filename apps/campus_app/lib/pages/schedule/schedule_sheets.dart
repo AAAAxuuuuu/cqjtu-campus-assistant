@@ -248,6 +248,7 @@ List<Course> _coursesForDisplayedWeek({
   required int totalWeeks,
   required ScheduleCalendarRules calendarRules,
   required bool includeInactiveCourses,
+  bool sundayFirst = false,
 }) {
   if (selectedWeek < 1 || selectedWeek > totalWeeks) return const [];
 
@@ -261,7 +262,11 @@ List<Course> _coursesForDisplayedWeek({
       )
       .where(
         (occurrence) =>
-            calendarRules.weekOf(occurrence.scheduledDate, semesterStart) ==
+            calendarRules.weekOf(
+              occurrence.scheduledDate,
+              semesterStart,
+              sundayFirst: sundayFirst,
+            ) ==
             selectedWeek,
       )
       .toList();
