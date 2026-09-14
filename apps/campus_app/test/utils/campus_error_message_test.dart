@@ -1,3 +1,4 @@
+import 'package:data/data.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:campus_app/utils/campus_error_message.dart';
 
@@ -19,5 +20,13 @@ void main() {
 
   test('keeps authentication failures user-readable', () {
     expect(formatCampusError(Exception('账号或密码错误')), '账号或密码错误');
+  });
+
+  test('reports a WAF bot challenge as itself, not as a network fault', () {
+    const error = BotChallengeFailure();
+
+    expect(isCampusNetworkError(error), isFalse);
+    expect(isCampusDnsError(error), isFalse);
+    expect(formatCampusError(error), error.message);
   });
 }

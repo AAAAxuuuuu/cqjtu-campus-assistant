@@ -44,6 +44,7 @@ class _CampusServiceWebViewPageState
   /// 连续消费次数，超过就放行让路由关闭——任何情况下都必须有退路。
   var _consecutiveBackAttempts = 0;
   String? _lastUrlAtBackAttempt;
+  DateTime? _lastBackAttemptTime;
 
   static const _maxConsecutiveBackAttempts = 2;
 
@@ -205,11 +206,15 @@ class _CampusServiceWebViewPageState
       _consecutiveBackAttempts >= _maxConsecutiveBackAttempts;
 
   Future<void> _handleBackGesture() async {
+    final now = DateTime.now();
+    final isRapid = _lastBackAttemptTime != null &&
+        now.difference(_lastBackAttemptTime!) < const Duration(milliseconds: 1500);
+    _lastBackAttemptTime = now;
+
     final currentUrl = await _controller.currentUrl();
 
-    // Same URL as the previous attempt means the last goBack() did not get us
-    // anywhere — the site bounced us straight back.
-    if (currentUrl != null && currentUrl == _lastUrlAtBackAttempt) {
+    // 连续在同一 URL 重定向跳回，或者短时间内（1.5秒内）快速连续返回，计入预算
+    if (isRapid || (currentUrl != null && currentUrl == _lastUrlAtBackAttempt)) {
       _consecutiveBackAttempts++;
     } else {
       _consecutiveBackAttempts = 1;
@@ -217,11 +222,7 @@ class _CampusServiceWebViewPageState
     }
 
     if (_isBackBudgetExhausted) {
-      // Budget spent: close the page instead of fighting the redirects.
-      //
-      // Must be `pop()`, not `maybePop()`: maybePop re-consults this same
-      // PopScope, whose `canPop` has not rebuilt yet, so the callback would
-      // re-enter itself forever.
+      // 连续返回或遭遇重定向死循环时，果断退出页面，不再困在 WebView 中
       if (mounted) Navigator.of(context).pop();
       return;
     }
@@ -229,21 +230,49 @@ class _CampusServiceWebViewPageState
     await _controller.goBack();
   }
 
+  Widget _buildLeading(BuildContext context) {
+    if (!_canGoBack) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '退出',
+        onPressed: () => Navigator.of(context).pop(),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: '后退',
+          padding: const EdgeInsets.only(left: 12, right: 4),
+          constraints: const BoxConstraints(minWidth: 36),
+          onPressed: _handleBackGesture,
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: '退出',
+          padding: const EdgeInsets.only(left: 4, right: 8),
+          constraints: const BoxConstraints(minWidth: 36),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       appBar: GlassAppBar(
         title: Text(widget.title),
+        leading: _buildLeading(context),
+        leadingWidth: _canGoBack ? 88.0 : null,
         actions: [
-          IconButton(
-            tooltip: '后退',
-            icon: const Icon(Icons.arrow_back),
-            onPressed: _canGoBack ? () => _controller.goBack() : null,
-          ),
-          IconButton(
-            tooltip: '前进',
-            icon: const Icon(Icons.arrow_forward),
-            onPressed: _canGoForward ? () => _controller.goForward() : null,
-          ),
+          if (_canGoForward)
+            IconButton(
+              tooltip: '前进',
+              icon: const Icon(Icons.arrow_forward),
+              onPressed: () => _controller.goForward(),
+            ),
           IconButton(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),

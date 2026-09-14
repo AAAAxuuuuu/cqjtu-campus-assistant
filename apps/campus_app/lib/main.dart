@@ -24,6 +24,7 @@ import 'pages/tools_page.dart';
 import 'theme/app_theme.dart';
 import 'widgets/responsive_scaffold.dart';
 import 'widgets/silent_zove_token_bootstrapper.dart';
+import 'widgets/academic_web_bridge_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -410,15 +411,21 @@ class _MainShellState extends ConsumerState<_MainShell>
     ref.watch(semesterTotalWeeksProvider(selectedSemester));
 
     ref.listen(scheduleProvider(selectedSemester), (prev, next) {
-      if (next.hasValue) unawaited(_trySchedule());
+      if (next.hasValue) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+      }
     });
 
     ref.listen(activeSemesterStartProvider, (prev, next) {
-      if (next.hasValue) unawaited(_trySchedule());
+      if (next.hasValue) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+      }
     });
 
     ref.listen(semesterTotalWeeksProvider(selectedSemester), (prev, next) {
-      if (next.hasValue) unawaited(_trySchedule());
+      if (next.hasValue) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+      }
     });
 
     return Stack(
@@ -434,6 +441,7 @@ class _MainShellState extends ConsumerState<_MainShell>
           railDestinations: _railDestinations,
         ),
         if (!kIsWeb) const SilentZoveTokenBootstrapper(),
+        if (!kIsWeb) const AcademicWebBridgeWidget(),
       ],
     );
   }

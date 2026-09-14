@@ -60,6 +60,16 @@ List<String> _recentSemesters({DateTime? now, int count = 8}) {
   return semesters;
 }
 
+/// The single User-Agent every campus request must present.
+///
+/// The 瑞数 WAF binds its access cookie to the User-Agent that solved the
+/// challenge. A WebView that mints the cookie under one UA and a Dart client
+/// that replays it under another will be re-challenged, so the WebViews and
+/// [_SchoolHttpClient] have to agree on exactly this string.
+const String campusWebUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/120.0.0.0 Safari/537.36';
+
 // ---------------------------------------------------------------------------
 // School system URL configuration
 // ---------------------------------------------------------------------------
@@ -87,7 +97,7 @@ class SchoolSystemConfig {
 
   const SchoolSystemConfig({
     this.casLoginUrl =
-        'https://ids.cqjtu.edu.cn/authserver/login?service=http%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp',
+        'https://ids.cqjtu.edu.cn/authserver/login?service=https%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp',
     this.scheduleUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/xskb/xskb_list.do',
     this.gradesUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/kscj/cjcx_list',
     this.gradeDetailUrl = 'https://jwgln.cqjtu.edu.cn/jsxsd/kscj/pscj_list.do',
@@ -188,7 +198,15 @@ class ManualCookieJar {
       final value = trimmed.substring(separator + 1).trim();
       if (name.isEmpty || _isCookieAttribute(name)) continue;
 
-      cookies.add(Cookie(name, value)..path = '/');
+      // `Cookie()` validates characters and throws on illegal ones. Without
+      // this guard a single malformed pair would abort the whole import and
+      // silently drop every remaining cookie — including JSESSIONID and the
+      // WAF cookie, which only a WebView can mint.
+      try {
+        cookies.add(Cookie(name, value)..path = '/');
+      } on FormatException {
+        continue;
+      }
     }
     saveFromResponse(uri, cookies);
   }
@@ -201,14 +219,53 @@ class ManualCookieJar {
 
   bool hasCookieForHost(String host, String name) {
     host = host.toLowerCase();
+    final lowerName = name.toLowerCase();
     return _store.values.any(
       (entry) =>
-          entry.cookie.name == name &&
+          entry.cookie.name.toLowerCase() == lowerName &&
+          (host == entry.domain || host.endsWith('.${entry.domain}')),
+    );
+  }
+
+  /// Whether the jar holds a valid academic system session cookie for [host].
+  ///
+  /// CQJTU uses Qingguo Educational Administration (青果系统) which sets
+  /// `bzb_jsxsd` and `bzb_njw` as session cookies instead of standard `JSESSIONID`.
+  bool hasJwgSessionCookieForHost(String host) {
+    host = host.toLowerCase();
+    return _store.values.any(
+      (entry) =>
+          _isJwgSessionCookieName(entry.cookie.name) &&
           (host == entry.domain || host.endsWith('.${entry.domain}')),
     );
   }
 
   void clear() => _store.clear();
+
+  /// Drop the session/ticket-granting cookies that make CAS skip its login
+  /// form, while keeping everything else.
+  ///
+  /// A leftover `CASTGC` makes `GET /authserver/login` single-sign-on straight
+  /// through to the service instead of rendering the form, so no `execution`
+  /// token is ever issued. Clearing the whole jar instead would also throw away
+  /// the 瑞数 WAF cookie, which only a WebView can mint — so this is surgical.
+  void clearAuthArtifacts() {
+    const authCookieNames = {
+      'castgc',
+      'jsessionid',
+      'session',
+      'bzb_jsxsd',
+      'bzb_njw',
+      'route',
+      'happyvoyage',
+      'platformmultilingual',
+    };
+    _store.removeWhere(
+      (_, entry) =>
+          authCookieNames.contains(entry.cookie.name.toLowerCase()) ||
+          entry.cookie.name.toLowerCase().startsWith('bzb_'),
+    );
+  }
 
   bool _isCookieAttribute(String name) {
     switch (name.toLowerCase()) {
@@ -226,9 +283,98 @@ class ManualCookieJar {
   }
 }
 
+/// Whether [name] identifies an academic-system session cookie.
+///
+/// Traditional Tomcat backends issue `JSESSIONID` or `SESSION`. CQJTU's
+/// Qingguo Kingosoft system (青果教务系统) issues `bzb_jsxsd` and `bzb_njw`.
+bool _isJwgSessionCookieName(String name) {
+  final lower = name.toLowerCase();
+  return lower == 'jsessionid' ||
+      lower == 'session' ||
+      lower.startsWith('bzb_') ||
+      lower.contains('jsxsd');
+}
+
 // ---------------------------------------------------------------------------
 // HTTP client wrapper with manual cookie + redirect handling
 // ---------------------------------------------------------------------------
+
+/// Statuses the 瑞数 WAF uses to serve its challenge instead of content.
+const Set<int> _botChallengeStatuses = {412, 202};
+
+/// Recognizes a 瑞数 (Ruishu) dynamic anti-bot challenge response.
+///
+/// The school placed `jwgln.cqjtu.edu.cn` behind this WAF. Every request —
+/// even with no session — is answered with `412 Precondition Failed` and a
+/// tiny HTML page whose obfuscated JavaScript must run in a real browser to
+/// mint the access cookie. A plain HTTP client can never satisfy it, so the
+/// challenge must be reported as itself instead of being parsed as if it were
+/// real content.
+///
+/// Detection rests on the body markers, which were measured to be invariant
+/// across deployments. The `server` header is NOT a reliable test: it is
+/// deployment-configurable and observed as `rums/b`, `******`, and a
+/// site-specific string on different installations, so it only ever acts as a
+/// hint that strengthens an already anomalous status.
+bool _isBotChallengeResponse(
+  int statusCode,
+  Map<String, String> headers,
+  String body,
+) {
+  // Real school system content or large HTML is NEVER a bot challenge.
+  if (body.contains('timetable') ||
+      body.contains('kbcontent') ||
+      body.contains('kbtable') ||
+      body.contains('dataList') ||
+      body.contains('xsMain') ||
+      body.contains('framework') ||
+      body.contains('所修门数') ||
+      body.contains('平均学分绩点') ||
+      body.contains('casLoginForm') ||
+      body.length > 20000) {
+    return false;
+  }
+
+  // Invariant across every observed deployment.
+  final hasTsObject = body.contains(r'$_ts');
+  final hasObfuscatedTag = body.contains("r='m'") || body.contains('r="m"');
+  // Per-deployment random symbol names — extra weight only, never required.
+  final hasSelfCall = body.contains(r'_$oK');
+  final hasWindowIndex = body.contains(r'window[');
+
+  final markers = (hasTsObject ? 1 : 0) +
+      (hasObfuscatedTag ? 1 : 0) +
+      (hasSelfCall ? 1 : 0) +
+      (hasWindowIndex ? 1 : 0);
+
+  final isChallengeStatus = _botChallengeStatuses.contains(statusCode);
+
+  // Primary test: the challenge status paired with an invariant marker.
+  if (isChallengeStatus && (hasTsObject || hasObfuscatedTag)) return true;
+
+  // 412 is also a legitimate HTTP answer to a failed precondition, and 202 is
+  // nominally a success. Beyond the marker test above, only a small HTML body
+  // may be treated as a challenge.
+  final looksLikeChallengePage = body.length < 10000 &&
+      (headers['content-type']?.toLowerCase().contains('text/html') ?? false);
+
+  // A bodyless challenge status (e.g. the WAF's answer to HEAD) plus the
+  // vendor's default Server header is still decisive enough to act on.
+  final serverHint = (headers['server']?.toLowerCase() ?? '').startsWith(
+    'rums',
+  );
+  if (isChallengeStatus && serverHint) return true;
+
+  // Some deployments answer 200 with the same challenge payload.
+  if (serverHint && markers > 0 && looksLikeChallengePage) return true;
+
+  // Both invariants together are decisive at any status.
+  if (hasTsObject && hasObfuscatedTag && looksLikeChallengePage) return true;
+
+  // Weakest path: only the per-deployment symbol names matched, so also require
+  // the response to have the shape of a challenge page.
+  return markers >= 3 && looksLikeChallengePage;
+}
 
 /// A raw HTTP response produced by [_SchoolHttpClient] or a fake transport.
 ///
@@ -253,7 +399,7 @@ class SchoolHttpResponse {
 ///
 /// Tests inject a fake to drive CAS/redirect/cookie flows offline; production
 /// uses the default dart:io client.
-typedef SchoolHttpTransport = Future<SchoolHttpResponse> Function(
+typedef SchoolHttpTransport = Future<SchoolHttpResponse?> Function(
   String method,
   Uri uri, {
   Map<String, String>? headers,
@@ -275,9 +421,8 @@ class _SchoolHttpClient {
   final HttpClient _client = HttpClient();
   final ManualCookieJar _jar = ManualCookieJar();
 
-  static const String _ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-      'AppleWebKit/537.36 (KHTML, like Gecko) '
-      'Chrome/120.0.0.0 Safari/537.36';
+  /// Must stay identical to the WebViews' UA — see [campusWebUserAgent].
+  static const String _ua = campusWebUserAgent;
 
   static String _redactUri(Uri uri) {
     const sensitiveKeys = {
@@ -327,8 +472,10 @@ class _SchoolHttpClient {
         headers: headers,
         body: body,
       );
-      _jar.saveFromResponse(uri, response.cookies);
-      return response;
+      if (response != null) {
+        _jar.saveFromResponse(uri, response.cookies);
+        return response;
+      }
     }
 
     final req = await _client.openUrl(method, uri);
@@ -366,23 +513,50 @@ class _SchoolHttpClient {
   }
 
   /// GET with manual redirect following.
+  ///
+  /// Throws [BotChallengeFailure] when the WAF answers with its JS challenge,
+  /// so callers can never parse a challenge page as if it were real content.
+  /// Auth probes that classify the challenge themselves pass
+  /// `allowChallenge: true`.
   Future<_HttpResponse> get(
     String url, {
     Map<String, String>? queryParams,
     int maxRedirects = 10,
+    bool allowChallenge = false,
   }) async {
     final uri = _buildUri(url, queryParams);
     final res = await _followRedirects('GET', uri, maxRedirects: maxRedirects);
-    return _HttpResponse(statusCode: res.statusCode, body: res.body);
+    final response = _HttpResponse(
+      statusCode: res.statusCode,
+      body: res.body,
+      headers: res.headers,
+    );
+    if (!allowChallenge) _guardBotChallenge(uri, response);
+    return response;
+  }
+
+  /// Raise [BotChallengeFailure] instead of returning challenge HTML.
+  void _guardBotChallenge(Uri uri, _HttpResponse response) {
+    if (!response.isBotChallenge) return;
+    dev.log(
+      '[HTTP] Bot challenge from ${uri.host}${uri.path} '
+      '(status=${response.statusCode})',
+      name: 'DirectSchool',
+    );
+    throw const BotChallengeFailure();
   }
 
   /// POST with manual redirect following.
+  ///
+  /// Throws [BotChallengeFailure] on a WAF challenge unless
+  /// `allowChallenge: true`.
   Future<_HttpResponse> post(
     String url, {
     Map<String, String>? formBody,
     Map<String, String>? queryParams,
     Map<String, String>? extraHeaders,
     int maxRedirects = 10,
+    bool allowChallenge = false,
   }) async {
     final uri = _buildUri(url, queryParams);
     final encoded = formBody?.entries
@@ -408,7 +582,13 @@ class _SchoolHttpClient {
       body: bodyBytes,
       maxRedirects: maxRedirects,
     );
-    return _HttpResponse(statusCode: res.statusCode, body: res.body);
+    final response = _HttpResponse(
+      statusCode: res.statusCode,
+      body: res.body,
+      headers: res.headers,
+    );
+    if (!allowChallenge) _guardBotChallenge(uri, response);
+    return response;
   }
 
   /// Follow redirects manually, switching POST → GET on 301/302/303.
@@ -468,6 +648,9 @@ class _SchoolHttpClient {
 
   void clearCookies() => _jar.clear();
 
+  /// Drop CAS session/ticket cookies but keep the WAF cookie.
+  void clearAuthArtifacts() => _jar.clearAuthArtifacts();
+
   void importCookieHeader(String url, String cookieHeader) {
     final trimmed = cookieHeader.trim();
     if (trimmed.isEmpty) return;
@@ -501,8 +684,16 @@ class _SchoolHttpClient {
 class _HttpResponse {
   final int statusCode;
   final String body;
+  final Map<String, String> headers;
 
-  const _HttpResponse({required this.statusCode, required this.body});
+  const _HttpResponse({
+    required this.statusCode,
+    required this.body,
+    this.headers = const {},
+  });
+
+  /// True when this response is a 瑞数 anti-bot challenge rather than content.
+  bool get isBotChallenge => _isBotChallengeResponse(statusCode, headers, body);
 }
 
 // ---------------------------------------------------------------------------
@@ -594,22 +785,50 @@ class _CasAuthenticator {
       name: 'DirectSchool',
     );
 
+    // Step 0: Drop any ticket-granting cookie before asking for the form.
+    //
+    // With a live CASTGC in the jar, CAS single-signs-on immediately and
+    // answers this GET with a 302 to the service instead of rendering the
+    // form — leaving no `execution` token to read. The WAF cookie is kept.
+    _httpClient.clearAuthArtifacts();
+
     // Step 1: GET the CAS login page
-    final loginPage = await _httpClient.get(_config.casLoginUrl);
+    final loginPage = await _httpClient.get(
+      _config.casLoginUrl,
+      allowChallenge: true,
+    );
     final html = loginPage.body;
 
-    // Step 2: Check for CAPTCHA requirement (only if server explicitly says so)
+    // Step 2: A WAF challenge means we never reached the IDP at all.
+    if (loginPage.isBotChallenge) {
+      dev.log(
+        '[_CasAuth] Bot challenge served instead of the login page '
+        '(status=${loginPage.statusCode})',
+        name: 'DirectSchool',
+      );
+      throw const BotChallengeFailure();
+    }
+
+    // Step 3: Check for CAPTCHA requirement (only if server explicitly says so)
     if (_containsCaptcha(html)) {
       throw const CaptchaRequiredFailure();
     }
 
-    // Step 3: Extract execution token and encryption salt
+    // Step 4: Extract execution token and encryption salt
     final execution = _extractInputValue(html, 'execution');
     if (execution == null || execution.isEmpty) {
       dev.log(
-        '[_CasAuth] No execution token found in login page',
+        '[_CasAuth] No execution token found in login page '
+        '(status=${loginPage.statusCode}, length=${html.length})',
         name: 'DirectSchool',
       );
+      // Distinguish "the IDP changed its form" from "we were redirected away
+      // from the form", which is a session problem, not a schema problem.
+      if (!_looksLikeCasLoginForm(html)) {
+        throw const SessionExpiredFailure(
+          '未能取得统一认证登录表单，请重新登录',
+        );
+      }
       throw const SchoolSystemChangedFailure('登录页面缺少 execution 参数');
     }
 
@@ -656,14 +875,38 @@ class _CasAuthenticator {
       throw const AuthInvalidFailure('账号或密码错误，请重新输入');
     }
 
-    // Check if we got jwgln cookies (real success signal)
-    if (_httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'JSESSIONID') ||
-        _httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'SESSION') ||
-        _httpClient._jar.hasCookieForHost('ids.cqjtu.edu.cn', 'CASTGC')) {
+    final hasServiceSession =
+        _httpClient._jar.hasJwgSessionCookieForHost('jwgln.cqjtu.edu.cn');
+
+    // Credentials were accepted (CAS issued a ticket-granting cookie) but the
+    // academic system never handed out a session, because the WAF intercepted
+    // the SSO callback. Report the real cause: the password is fine, the
+    // challenge is what blocks us, and only a WebView can clear it.
+    if (loginResult.isBotChallenge) {
+      final casAccepted =
+          _httpClient._jar.hasCookieForHost('ids.cqjtu.edu.cn', 'CASTGC');
+      dev.log(
+        '[_CasAuth] Bot challenge on the SSO callback '
+        '(status=${loginResult.statusCode}, casAccepted=$casAccepted)',
+        name: 'DirectSchool',
+      );
+      if (casAccepted) {
+        _cachedPassword = password;
+      }
+      throw const BotChallengeFailure();
+    }
+
+    // Check if we got a real academic-system session.
+    //
+    // A CASTGC on the IDP host alone is NOT success: it only proves CAS
+    // accepted the credentials, not that the academic system issued a session.
+    // Treating it as success used to mask a blocked SSO callback and surface
+    // later as a bogus "missing execution parameter" error.
+    if (hasServiceSession) {
       _cachedPassword = password;
       dev.log(
         '[_CasAuth] Login successful for ${_redactIdentifier(username)} '
-        '(cookie found)',
+        '(service session cookie found)',
         name: 'DirectSchool',
       );
       return username;
@@ -679,10 +922,7 @@ class _CasAuthenticator {
     }
 
     // Fallback: check body for academic system content
-    if (resultBody.contains('timetable') ||
-        resultBody.contains('kbcontent') ||
-        resultBody.contains('xsMain') ||
-        resultBody.contains('framework')) {
+    if (_isAcademicSystemBody(resultBody)) {
       _cachedPassword = password;
       dev.log(
         '[_CasAuth] Login successful for ${_redactIdentifier(username)} '
@@ -690,6 +930,13 @@ class _CasAuthenticator {
         name: 'DirectSchool',
       );
       return username;
+    }
+
+    if (_httpClient._jar.hasCookieForHost('ids.cqjtu.edu.cn', 'CASTGC')) {
+      _cachedPassword = password;
+      throw const SessionExpiredFailure(
+        '统一认证已通过，但教务系统未下发会话，请使用网页登录完成验证',
+      );
     }
 
     throw const NetworkFailure('登录失败，未能获取教务系统会话');
@@ -707,11 +954,20 @@ class _CasAuthenticator {
     final result = await _httpClient.get(
       _config.casLoginUrl,
       queryParams: {'ticket': ticket},
+      allowChallenge: true,
     );
     final resultBody = result.body;
 
-    if (_httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'JSESSIONID') ||
-        _httpClient._jar.hasCookieForHost('jwgln.cqjtu.edu.cn', 'SESSION') ||
+    if (result.isBotChallenge) {
+      dev.log(
+        '[_CasAuth] Bot challenge during ticket login '
+        '(status=${result.statusCode})',
+        name: 'DirectSchool',
+      );
+      throw const BotChallengeFailure();
+    }
+
+    if (_httpClient._jar.hasJwgSessionCookieForHost('jwgln.cqjtu.edu.cn') ||
         _isAcademicSystemBody(resultBody)) {
       _cachedPassword = null; // No password cached for ticket login.
       dev.log(
@@ -755,6 +1011,24 @@ class _CasAuthenticator {
         formBody: {'xnxq01id': ''},
       );
       final body = resp.body;
+      // A WAF challenge is not a session verdict — we never reached the app.
+      if (resp.isBotChallenge) return false;
+      // If we see valid academic schedule content, session is valid!
+      if (body.contains('timetable') ||
+          body.contains('kbcontent') ||
+          body.contains('kbtable')) {
+        return true;
+      }
+      if (body.length > 5000 &&
+          (body.contains('jsxsd') || body.contains('教学管理系统'))) {
+        return true;
+      }
+      // If we see the CAS login form, session is expired
+      if (body.contains('casLoginForm') ||
+          body.contains('pwdFromId') ||
+          body.contains('pwdEncryptSalt')) {
+        return false;
+      }
       // If we see the CAS login page, session is expired
       if (body.contains('authserver/login')) return false;
       if (body.contains('jsxsd') || body.contains('timetable')) return true;
@@ -789,23 +1063,13 @@ class _CasAuthenticator {
     }
   }
 
-  /// E-card authorization with retry and fallback re-login.
+  /// E-card authorization with retry.
   Future<bool> ensureEcardAuth(String username) async {
     for (int attempt = 0; attempt < 3; attempt++) {
       if (await authEcard()) return true;
       if (attempt < 2) {
         await Future.delayed(Duration(milliseconds: 500 + attempt * 500));
       }
-    }
-    // Fallback: re-login to CAS and retry
-    if (_cachedPassword != null) {
-      try {
-        await login(username, _cachedPassword!);
-      } catch (_) {
-        return false;
-      }
-      // Retry once more after re-login
-      return await authEcard();
     }
     return false;
   }
@@ -857,7 +1121,9 @@ class _CasAuthenticator {
         html.contains('captcha_code') ||
         html.contains('caja-captcha') ||
         html.contains('geetest') ||
-        html.contains('aliyunCaptcha')) {
+        html.contains('aliyunCaptcha') ||
+        html.contains('图形动态码') ||
+        html.contains('图形验证码')) {
       return true;
     }
     return false;
@@ -914,6 +1180,18 @@ class _CasAuthenticator {
         html.contains('kbcontent') ||
         html.contains('xsMain') ||
         html.contains('framework');
+  }
+
+  /// Whether this body really is the IDP's credential form.
+  ///
+  /// Used to tell a genuine schema change ("the form is here but the token
+  /// field is gone") apart from being redirected away from the form entirely.
+  bool _looksLikeCasLoginForm(String html) {
+    return html.contains('casLoginForm') ||
+        html.contains('pwdFromId') ||
+        html.contains('pwdEncryptSalt') ||
+        html.contains('passwordEncrypt') ||
+        html.contains('name="username"');
   }
 }
 
@@ -1855,6 +2133,11 @@ class DirectSchoolCampusGateway implements CampusGateway {
     if (session == null || !session.isAuthenticated) {
       throw const AuthInvalidFailure('网页登录会话未建立，请重新完成网页登录');
     }
+    final hasJwg = session.httpClient._jar
+        .hasJwgSessionCookieForHost('jwgln.cqjtu.edu.cn');
+    if (!hasJwg) {
+      throw const AuthInvalidFailure('未获取到教务系统会话，请重新完成网页登录');
+    }
   }
 
   Future<void> loginWithCookies(
@@ -2367,7 +2650,40 @@ class DirectSchoolCampusGateway implements CampusGateway {
   // ---- helpers ----
 
   bool _isSessionExpired(String body) {
-    return body.contains('authserver/login');
+    if (body.contains('timetable') ||
+        body.contains('kbcontent') ||
+        body.contains('kbtable') ||
+        body.contains('dataList') ||
+        body.contains('所修门数') ||
+        body.contains('平均学分绩点') ||
+        body.contains('学籍') ||
+        body.contains('培养方案') ||
+        body.contains('xsMain') ||
+        body.contains('framework') ||
+        body.contains('Nsb_r_list')) {
+      return false;
+    }
+
+    if (body.length > 5000 &&
+        (body.contains('jsxsd') || body.contains('教学管理系统'))) {
+      return false;
+    }
+
+    if (body.contains('casLoginForm') ||
+        body.contains('pwdFromId') ||
+        body.contains('pwdEncryptSalt') ||
+        body.contains('passwordEncrypt')) {
+      return true;
+    }
+
+    if (body.contains('authserver/login') ||
+        body.contains('请重新登录') ||
+        body.contains('会话超时') ||
+        body.contains('未登录')) {
+      return true;
+    }
+
+    return false;
   }
 }
 
@@ -2389,8 +2705,8 @@ class _UserSession {
   late final _CasAuthenticator _authenticator;
   bool _authenticated = false;
 
-  /// Shared by concurrent [forceRelogin] callers so they never race each other
-  /// through `clearCookies()`.
+  /// Shared by concurrent [forceRelogin] / [ensureAuth] callers so they never race
+  /// each other through CAS login.
   Future<void>? _reloginInFlight;
 
   static const _casCookieUrl = 'https://ids.cqjtu.edu.cn/authserver/';
@@ -2404,36 +2720,48 @@ class _UserSession {
   Future<bool> isSessionValid() => _authenticator.isSessionValid();
 
   /// Ensure the user is authenticated, performing login if needed.
-  Future<void> ensureAuth(String username, String password) async {
-    _authenticator.cachePassword(password);
+  Future<void> ensureAuth(String username, String password) {
+    final pending = _reloginInFlight;
+    if (pending != null) return pending;
 
-    if (_authenticated) {
-      // Quick session validity check
-      if (await _authenticator.isSessionValid()) return;
-      dev.log(
-        '[_Session] Session expired, re-logging in',
-        name: 'DirectSchool',
-      );
-    }
+    final attempt = Future<void>(() async {
+      _authenticator.cachePassword(password);
 
-    if (await _restoreStoredCookies(username) &&
-        await _authenticator.isSessionValid()) {
+      if (_authenticated) {
+        // Quick session validity check
+        if (await _authenticator.isSessionValid()) return;
+        dev.log(
+          '[_Session] Session expired, re-logging in',
+          name: 'DirectSchool',
+        );
+      }
+
+      if (await _restoreStoredCookies(username) &&
+          await _authenticator.isSessionValid()) {
+        _authenticated = true;
+        await _persistCookies(username);
+        dev.log(
+          '[_Session] Restored stored cookies for ${_redactIdentifier(username)}',
+          name: 'DirectSchool',
+        );
+        return;
+      }
+
+      await _authenticator.login(username, password);
       _authenticated = true;
       await _persistCookies(username);
-      dev.log(
-        '[_Session] Restored stored cookies for ${_redactIdentifier(username)}',
-        name: 'DirectSchool',
-      );
-      return;
-    }
+    });
 
-    await _authenticator.login(username, password);
-    _authenticated = true;
-    await _persistCookies(username);
+    _reloginInFlight = attempt;
+    return attempt.whenComplete(() {
+      if (identical(_reloginInFlight, attempt)) _reloginInFlight = null;
+    });
   }
 
   Future<void> loginWithTicket(String username, String ticket) async {
-    _httpClient.clearCookies();
+    // Keep the 瑞数 WAF cookie: redeeming a ticket is itself an HTTP request to
+    // the protected host, so wiping the whole jar here would guarantee a 412.
+    _httpClient.clearAuthArtifacts();
     _authenticated = false;
     await _authenticator.loginWithTicket(username, ticket);
     _authenticated = true;
@@ -2478,7 +2806,10 @@ class _UserSession {
     if (pending != null) return pending;
 
     final attempt = Future<void>(() async {
-      _httpClient.clearCookies();
+      // Only the CAS session/ticket cookies must go. A full `clearCookies()`
+      // would also discard the 瑞数 WAF cookie that a WebView minted, and no
+      // subsequent HTTP request could get past the challenge to replace it.
+      _httpClient.clearAuthArtifacts();
       await _authenticator.login(username, password);
       _authenticated = true;
       await _persistCookies(username);

@@ -1,4 +1,5 @@
 import 'package:campus_app/config/app_config.dart';
+import 'package:campus_app/services/academic_web_bridge.dart';
 import 'package:campus_platform/services/session_service.dart';
 import 'package:data/data.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +38,10 @@ final campusGatewayProvider = Provider<CampusGateway>((ref) {
       return SelfHostedCampusGateway(api, sessionManager);
     case CampusRuntimeMode.localAndroid:
       final sessionService = ref.read(sessionServiceProvider);
-      return DirectSchoolCampusGateway(sessionStore: sessionService);
+      final bridge = ref.read(academicWebBridgeProvider);
+      return DirectSchoolCampusGateway(
+        sessionStore: sessionService,
+        transport: bridge.dispatch,
+      );
   }
 });

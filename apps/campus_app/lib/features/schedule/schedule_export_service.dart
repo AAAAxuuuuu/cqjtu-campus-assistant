@@ -139,6 +139,7 @@ class ScheduleExportService {
         semesterStart: semesterStart,
         week: week,
         calendarRules: calendarRules,
+        sundayFirst: sundayFirst,
       );
 
       document.addPage(
@@ -405,10 +406,15 @@ class ScheduleExportService {
     required DateTime semesterStart,
     required int week,
     required ScheduleCalendarRules calendarRules,
+    bool sundayFirst = false,
   }) => occurrences
       .where(
         (occurrence) =>
-            calendarRules.weekOf(occurrence.scheduledDate, semesterStart) ==
+            calendarRules.weekOf(
+              occurrence.scheduledDate,
+              semesterStart,
+              sundayFirst: sundayFirst,
+            ) ==
             week,
       )
       .map((occurrence) => occurrence.asCourseForWeek(week))

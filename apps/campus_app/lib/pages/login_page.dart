@@ -138,6 +138,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _requiresSecurityVerification(Object error) {
     if (error is AuthInvalidFailure) return false;
     if (error is CaptchaRequiredFailure) return true;
+    // 瑞数 WAF 的人机验证只能由 WebView 执行 JS 通过，必须走网页登录。
+    if (error is BotChallengeFailure) return true;
 
     final sessionManager = ref.read(sessionManagerProvider);
     final errorText = error.toString();
@@ -159,7 +161,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         errorText.contains('449') ||
         lowerError.contains('captcha') ||
         lowerError.contains('needcaptcha') ||
-        lowerError.contains('security');
+        lowerError.contains('security') ||
+        lowerError.contains('failed to fetch') ||
+        lowerError.contains('typeerror') ||
+        lowerError.contains('botchallenge');
   }
 
   Future<void> _openWebViewLogin(String username, [String? password]) async {

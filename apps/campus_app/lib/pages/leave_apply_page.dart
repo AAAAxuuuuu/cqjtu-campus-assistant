@@ -39,6 +39,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   /// 见 build() 中的说明：防止重定向链把用户困在页面里。
   int _backAttempts = 0;
   String? _urlAtLastBackAttempt;
+  DateTime? _lastBackAttemptTime;
   static const _maxBackAttempts = 2;
   String? _error;
 
@@ -407,8 +408,13 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   }
 
   Future<void> _handleBackGesture() async {
+    final now = DateTime.now();
+    final isRapid = _lastBackAttemptTime != null &&
+        now.difference(_lastBackAttemptTime!) < const Duration(milliseconds: 1500);
+    _lastBackAttemptTime = now;
+
     final currentUrl = await _controller.currentUrl();
-    if (currentUrl != null && currentUrl == _urlAtLastBackAttempt) {
+    if (isRapid || (currentUrl != null && currentUrl == _urlAtLastBackAttempt)) {
       _backAttempts++;
     } else {
       _backAttempts = 1;
@@ -423,6 +429,36 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     }
 
     await _controller.goBack();
+  }
+
+  Widget _buildLeading(BuildContext context) {
+    if (!_canGoBack) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '退出',
+        onPressed: () => Navigator.of(context).pop(),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: '后退',
+          padding: const EdgeInsets.only(left: 12, right: 4),
+          constraints: const BoxConstraints(minWidth: 36),
+          onPressed: _handleBackGesture,
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: '退出',
+          padding: const EdgeInsets.only(left: 4, right: 8),
+          constraints: const BoxConstraints(minWidth: 36),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
   }
 
   @override
@@ -448,6 +484,8 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     return Scaffold(
       appBar: GlassAppBar(
         title: const Text('请假申请'),
+        leading: _buildLeading(context),
+        leadingWidth: _canGoBack ? 88.0 : null,
         actions: [
           SpinningRefreshButton(onPressed: _booting ? null : _openLeaveSite),
         ],

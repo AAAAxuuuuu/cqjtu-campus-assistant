@@ -76,6 +76,11 @@ void main() {
 Future<void> _runLiveStep(String step, Future<void> Function() body) async {
   try {
     await body();
+  } on BotChallengeFailure {
+    // The school put the academic system behind the 瑞数 WAF, which only a real
+    // browser can clear. A direct HTTP client cannot pass it by design, so this
+    // is an environment limitation rather than a regression in the gateway.
+    markTestSkipped('$step skipped: the host is behind a bot challenge (WAF).');
   } on CaptchaRequiredFailure {
     fail('$step requires captcha or manual security verification.');
   } on AuthInvalidFailure {

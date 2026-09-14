@@ -72,6 +72,10 @@ enum RecoveryFailureKind {
   securityVerificationRequired,
   authInvalid,
   transientNetwork,
+
+  /// 目标站点的人机验证（瑞数 WAF）。纯 HTTP 重试永远无法通过，
+  /// 必须由 WebView 执行 JS 换取 Cookie，因此不参与自动重试。
+  botChallenge,
   unknown,
 }
 
@@ -354,7 +358,8 @@ class SessionManager {
 
   bool isSecurityVerificationError(Object error) {
     final kind = _classifyFailure(error);
-    return kind == RecoveryFailureKind.securityVerificationRequired;
+    return kind == RecoveryFailureKind.securityVerificationRequired ||
+        kind == RecoveryFailureKind.botChallenge;
   }
 
   bool isTransientNetworkError(Object error) {
@@ -603,6 +608,9 @@ class SessionManager {
     if (error is CaptchaRequiredException) {
       return RecoveryFailureKind.securityVerificationRequired;
     }
+    if (error is BotChallengeFailure) {
+      return RecoveryFailureKind.botChallenge;
+    }
     if (error is ApiException) {
       final msg = error.message.toLowerCase();
       if (error.code == 403 && msg.contains('sessionid')) {
@@ -649,6 +657,8 @@ class SessionManager {
   }
 
   bool _isRecoverable(RecoveryFailureKind kind) {
+    // botChallenge 故意不在此列：瑞数挑战只能由 WebView 执行 JS 通过，
+    // 自动重试只会白跑几次注定失败的请求并触发退避。
     return kind == RecoveryFailureKind.sessionExpired ||
         kind == RecoveryFailureKind.securityVerificationRequired ||
         kind == RecoveryFailureKind.authInvalid ||
@@ -657,6 +667,7 @@ class SessionManager {
 
   bool _requiresManualVerification(RecoveryFailureKind kind) {
     return kind == RecoveryFailureKind.securityVerificationRequired ||
+        kind == RecoveryFailureKind.botChallenge ||
         kind == RecoveryFailureKind.authInvalid;
   }
 

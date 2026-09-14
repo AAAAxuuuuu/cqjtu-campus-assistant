@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:campus_platform/services/session_service.dart';
+import 'package:data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,7 +31,7 @@ class _SilentZoveTokenBootstrapperState
     extends ConsumerState<SilentZoveTokenBootstrapper>
     with WidgetsBindingObserver {
   static const _loginUrl =
-      'https://ids.cqjtu.edu.cn/authserver/login?service=http%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp';
+      'https://ids.cqjtu.edu.cn/authserver/login?service=https%3A%2F%2Fjwgln.cqjtu.edu.cn%2Fjsxsd%2Fsso.jsp';
   static const _ecardEntryUrl = 'https://ecard.cqjtu.edu.cn/epay/h5/payele';
   static const _studentIndexUrl =
       'https://zhxg.cqjtu.edu.cn/mobile/stuhall/studentindex';
@@ -48,6 +49,7 @@ class _SilentZoveTokenBootstrapperState
 
   bool _running = false;
   String? _lastSeenUser;
+  DateTime? _lastFailureCooldown;
 
   @override
   void initState() {
@@ -57,6 +59,11 @@ class _SilentZoveTokenBootstrapperState
       unawaited(_maybeStart(force: true));
     });
     _controller = WebViewController()
+      // Without this the WAF cookie would be minted under Android's default
+      // mobile UA while the Dart client replays it as desktop Chrome, and 瑞数
+      // binds its cookie to the solving UA — every silent refresh would be
+      // re-challenged.
+      ..setUserAgent(campusWebUserAgent)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
         'ZoveToken',
@@ -78,10 +85,13 @@ class _SilentZoveTokenBootstrapperState
             }
             await _controller.runJavaScript(_hookScript);
             if (url.contains('ids.cqjtu.edu.cn/authserver/login')) {
-              final creds = ref.read(credentialsProvider);
-              if (creds != null) {
-                await _autofillAndSubmit(creds.username, creds.password);
-              }
+              debugPrint(
+                '[SilentZoveToken] CAS login page reached; aborting background attempt to prevent CAS lock',
+              );
+              _lastFailureCooldown =
+                  DateTime.now().add(const Duration(minutes: 30));
+              _running = false;
+              return;
             }
             if (Uri.tryParse(url)?.host.toLowerCase() == 'zhxg.cqjtu.edu.cn') {
               final creds = ref.read(credentialsProvider);
@@ -119,6 +129,10 @@ class _SilentZoveTokenBootstrapperState
 
   Future<void> _maybeStart({bool force = false}) async {
     if (_running) return;
+    if (_lastFailureCooldown != null &&
+        DateTime.now().isBefore(_lastFailureCooldown!)) {
+      return;
+    }
     final creds = ref.read(credentialsProvider);
     if (creds == null) return;
 
@@ -222,7 +236,7 @@ class _SilentZoveTokenBootstrapperState
       );
     } finally {
       _running = false;
-      if (updated) {
+      if (mounted && updated) {
         ref.read(sessionUpdateProvider.notifier).triggerRefresh();
       }
     }
@@ -243,9 +257,13 @@ class _SilentZoveTokenBootstrapperState
       }
 
       final jwgCookies = await _readCookies(_jwgCookieUrl);
-      if (jwgCookies.isNotEmpty) {
+      if (jwgCookies.isNotEmpty && _hasServiceSession(jwgCookies)) {
         await sessionService.saveJwgCookies(username, jwgCookies);
         updated = true;
+      } else if (jwgCookies.isNotEmpty) {
+        debugPrint(
+          '[SilentZoveToken] skip saving jwgCookies: no service session in cookies',
+        );
       }
 
       await _loadAndWait(_ecardEntryUrl);
@@ -269,29 +287,25 @@ class _SilentZoveTokenBootstrapperState
     return cookies?.trim() ?? '';
   }
 
-  Future<void> _autofillAndSubmit(String username, String password) async {
-    final encodedUsername = jsonEncode(username);
-    final encodedPassword = jsonEncode(password);
-    await _controller.runJavaScript('''
-      (function () {
-        var u = document.getElementById('username');
-        var p = document.getElementById('password');
-        if (u && p) {
-          u.value = $encodedUsername;
-          p.value = $encodedPassword;
-          u.dispatchEvent(new Event('input', { bubbles: true }));
-          p.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        var btn =
-          document.querySelector('#login_submit') ||
-          document.querySelector('button[type="submit"]') ||
-          document.querySelector('input[type="submit"]');
-        if (btn && !btn.disabled) {
-          btn.click();
-        }
-      })();
-    ''');
+  bool _hasServiceSession(String cookieHeader) {
+    final names = cookieHeader
+        .split(';')
+        .map((pair) {
+          final separator = pair.indexOf('=');
+          return separator <= 0 ? '' : pair.substring(0, separator).trim();
+        })
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return names.any(
+      (name) =>
+          name == 'jsessionid' ||
+          name == 'session' ||
+          name.startsWith('bzb_') ||
+          name.contains('jsxsd'),
+    );
   }
+
 
   Future<void> _autofillZhxgAndSubmit(String username, String password) async {
     final encodedUsername = jsonEncode(username);

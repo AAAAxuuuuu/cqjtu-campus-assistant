@@ -269,11 +269,14 @@ class ScheduleCalendarRules {
     return occurrences;
   }
 
-  int weekOf(DateTime date, DateTime semesterStart) {
-    final days = _dateOnly(
-      date,
-    ).difference(_semesterMonday(semesterStart)).inDays;
-    return days ~/ 7 + 1;
+  int weekOf(
+    DateTime date,
+    DateTime semesterStart, {
+    bool sundayFirst = false,
+  }) {
+    final start = _semesterWeekStart(semesterStart, sundayFirst: sundayFirst);
+    final days = _dateOnly(date).difference(start).inDays;
+    return (days / 7).floor() + 1;
   }
 
   ScheduleCalendarRules copyWith({
@@ -343,6 +346,14 @@ String scheduleDateKey(DateTime date) {
 }
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
+
+DateTime _semesterWeekStart(DateTime semesterStart, {bool sundayFirst = false}) {
+  final start = _dateOnly(semesterStart);
+  final offset = sundayFirst
+      ? start.weekday % 7
+      : start.weekday - DateTime.monday;
+  return start.subtract(Duration(days: offset));
+}
 
 DateTime _semesterMonday(DateTime semesterStart) {
   final start = _dateOnly(semesterStart);
