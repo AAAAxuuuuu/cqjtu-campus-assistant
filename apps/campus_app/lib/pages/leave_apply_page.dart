@@ -409,12 +409,15 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
 
   Future<void> _handleBackGesture() async {
     final now = DateTime.now();
-    final isRapid = _lastBackAttemptTime != null &&
-        now.difference(_lastBackAttemptTime!) < const Duration(milliseconds: 1500);
+    final isRapid =
+        _lastBackAttemptTime != null &&
+        now.difference(_lastBackAttemptTime!) <
+            const Duration(milliseconds: 1500);
     _lastBackAttemptTime = now;
 
     final currentUrl = await _controller.currentUrl();
-    if (isRapid || (currentUrl != null && currentUrl == _urlAtLastBackAttempt)) {
+    if (isRapid ||
+        (currentUrl != null && currentUrl == _urlAtLastBackAttempt)) {
       _backAttempts++;
     } else {
       _backAttempts = 1;

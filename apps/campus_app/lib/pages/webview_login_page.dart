@@ -289,7 +289,8 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
     final startTime = DateTime.now();
 
     while (DateTime.now().isBefore(deadline) && mounted) {
-      final cookies = await _cookieChannel.invokeMethod<String>('getCookies', {
+      final cookies =
+          await _cookieChannel.invokeMethod<String>('getCookies', {
             'url': jwgUrl,
           }) ??
           '';
@@ -304,7 +305,8 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           DateTime.now().difference(startTime) > const Duration(seconds: 4)) {
         try {
           final currentUrl = await _controller.currentUrl() ?? '';
-          if (currentUrl.contains('sso.jsp') && !currentUrl.contains('xsMain')) {
+          if (currentUrl.contains('sso.jsp') &&
+              !currentUrl.contains('xsMain')) {
             reloadAttempted = true;
             debugPrint(
               '[WebViewLoginPage] Ruishu challenge pending on sso.jsp, triggering reload',

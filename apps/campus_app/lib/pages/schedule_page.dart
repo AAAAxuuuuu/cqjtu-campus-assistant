@@ -212,10 +212,11 @@ class _ScheduleBody extends ConsumerWidget {
               await ref
                   .read(webLoginBinderProvider)
                   .bind(username: creds.username, result: result);
-              final updated = (await ref
-                      .read(scheduleProvider(selectedSemester).notifier)
-                      .refresh(forceRefresh: true, throwOnError: true))
-                  .data;
+              final updated =
+                  (await ref
+                          .read(scheduleProvider(selectedSemester).notifier)
+                          .refresh(forceRefresh: true, throwOnError: true))
+                      .data;
               final calendarRules = await ref.read(
                 scheduleCalendarRulesProvider.future,
               );

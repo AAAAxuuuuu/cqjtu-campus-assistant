@@ -207,14 +207,17 @@ class _CampusServiceWebViewPageState
 
   Future<void> _handleBackGesture() async {
     final now = DateTime.now();
-    final isRapid = _lastBackAttemptTime != null &&
-        now.difference(_lastBackAttemptTime!) < const Duration(milliseconds: 1500);
+    final isRapid =
+        _lastBackAttemptTime != null &&
+        now.difference(_lastBackAttemptTime!) <
+            const Duration(milliseconds: 1500);
     _lastBackAttemptTime = now;
 
     final currentUrl = await _controller.currentUrl();
 
     // 连续在同一 URL 重定向跳回，或者短时间内（1.5秒内）快速连续返回，计入预算
-    if (isRapid || (currentUrl != null && currentUrl == _lastUrlAtBackAttempt)) {
+    if (isRapid ||
+        (currentUrl != null && currentUrl == _lastUrlAtBackAttempt)) {
       _consecutiveBackAttempts++;
     } else {
       _consecutiveBackAttempts = 1;

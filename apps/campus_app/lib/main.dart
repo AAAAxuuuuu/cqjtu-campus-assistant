@@ -412,19 +412,25 @@ class _MainShellState extends ConsumerState<_MainShell>
 
     ref.listen(scheduleProvider(selectedSemester), (prev, next) {
       if (next.hasValue) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_trySchedule()),
+        );
       }
     });
 
     ref.listen(activeSemesterStartProvider, (prev, next) {
       if (next.hasValue) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_trySchedule()),
+        );
       }
     });
 
     ref.listen(semesterTotalWeeksProvider(selectedSemester), (prev, next) {
       if (next.hasValue) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_trySchedule()));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_trySchedule()),
+        );
       }
     });
 
