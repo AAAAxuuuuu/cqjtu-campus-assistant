@@ -88,8 +88,9 @@ class _SilentZoveTokenBootstrapperState
               debugPrint(
                 '[SilentZoveToken] CAS login page reached; aborting background attempt to prevent CAS lock',
               );
-              _lastFailureCooldown =
-                  DateTime.now().add(const Duration(minutes: 30));
+              _lastFailureCooldown = DateTime.now().add(
+                const Duration(minutes: 30),
+              );
               _running = false;
               return;
             }
@@ -305,7 +306,6 @@ class _SilentZoveTokenBootstrapperState
           name.contains('jsxsd'),
     );
   }
-
 
   Future<void> _autofillZhxgAndSubmit(String username, String password) async {
     final encodedUsername = jsonEncode(username);

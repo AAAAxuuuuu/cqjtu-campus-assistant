@@ -36,7 +36,9 @@ class AcademicWebBridge {
             debugPrint('[AcademicBridge] page finished: $url');
             if (url.contains('jwgln.cqjtu.edu.cn')) {
               if (url.contains('authserver/login')) {
-                debugPrint('[AcademicBridge] landed on CAS login, session expired');
+                debugPrint(
+                  '[AcademicBridge] landed on CAS login, session expired',
+                );
                 _isReady = false;
                 if (!(_readyCompleter?.isCompleted ?? true)) {
                   _readyCompleter?.complete();
@@ -45,15 +47,21 @@ class AcademicWebBridge {
                 // If this is the initial Ruishu challenge page (very short body with $_ts),
                 // Chromium is about to auto-reload. Delay marking ready until the real page settles.
                 try {
-                  final checkResult = await _controller.runJavaScriptReturningResult(
-                    '(function() { return Boolean(document.body && document.body.innerHTML.length > 500); })()',
-                  );
-                  final isRealPage = checkResult == true || checkResult.toString() == 'true';
+                  final checkResult = await _controller
+                      .runJavaScriptReturningResult(
+                        '(function() { return Boolean(document.body && document.body.innerHTML.length > 500); })()',
+                      );
+                  final isRealPage =
+                      checkResult == true || checkResult.toString() == 'true';
                   if (isRealPage) {
-                    debugPrint('[AcademicBridge] jwgln page loaded & confirmed real content');
+                    debugPrint(
+                      '[AcademicBridge] jwgln page loaded & confirmed real content',
+                    );
                     _markReady();
                   } else {
-                    debugPrint('[AcademicBridge] jwgln page seems to be challenge interim, awaiting reload');
+                    debugPrint(
+                      '[AcademicBridge] jwgln page seems to be challenge interim, awaiting reload',
+                    );
                   }
                 } catch (_) {
                   _markReady();
@@ -104,7 +112,9 @@ class AcademicWebBridge {
     );
     try {
       await _readyCompleter!.future.timeout(timeout);
-      debugPrint('[AcademicBridge] reloadWithNewSession completed, isReady=$_isReady');
+      debugPrint(
+        '[AcademicBridge] reloadWithNewSession completed, isReady=$_isReady',
+      );
     } catch (_) {
       debugPrint('[AcademicBridge] reloadWithNewSession timed out');
     } finally {
@@ -152,7 +162,8 @@ class AcademicWebBridge {
     }
 
     final currentUrl = await _controller.currentUrl();
-    final onJwgln = currentUrl != null &&
+    final onJwgln =
+        currentUrl != null &&
         currentUrl.contains('jwgln.cqjtu.edu.cn') &&
         !currentUrl.contains('authserver/login');
 
@@ -161,7 +172,8 @@ class AcademicWebBridge {
     }
 
     final postWarmupUrl = await _controller.currentUrl();
-    final canFetch = postWarmupUrl != null &&
+    final canFetch =
+        postWarmupUrl != null &&
         postWarmupUrl.contains('jwgln.cqjtu.edu.cn') &&
         !postWarmupUrl.contains('authserver/login');
 
@@ -177,11 +189,10 @@ class AcademicWebBridge {
     final completer = Completer<SchoolHttpResponse>();
     _pendingRequests[id] = completer;
 
-    final bodyStr =
-        body != null ? utf8.decode(body, allowMalformed: true) : null;
-    final headersMap = <String, String>{
-      if (headers != null) ...headers,
-    };
+    final bodyStr = body != null
+        ? utf8.decode(body, allowMalformed: true)
+        : null;
+    final headersMap = <String, String>{if (headers != null) ...headers};
     if (bodyStr != null &&
         !headersMap.containsKey('content-type') &&
         !headersMap.containsKey('Content-Type')) {
@@ -189,8 +200,13 @@ class AcademicWebBridge {
     }
 
     debugPrint('[AcademicBridge] dispatching $method ${uri.path} (id=$id)');
-    final script =
-        _buildFetchScript(id, uri.toString(), method, headersMap, bodyStr);
+    final script = _buildFetchScript(
+      id,
+      uri.toString(),
+      method,
+      headersMap,
+      bodyStr,
+    );
 
     try {
       await _controller.runJavaScript(script);
@@ -226,17 +242,18 @@ class AcademicWebBridge {
         }
       } else {
         final status = data['status'] as int;
-        final headers = (data['headers'] as Map<String, dynamic>?)?.map(
+        final headers =
+            (data['headers'] as Map<String, dynamic>?)?.map(
               (k, v) => MapEntry(k.toLowerCase(), v.toString()),
             ) ??
             {};
         final body = data['body'] as String? ?? '';
-        debugPrint('[AcademicBridge] request $id completed with status=$status bodyLen=${body.length}');
-        completer.complete(SchoolHttpResponse(
-          statusCode: status,
-          headers: headers,
-          body: body,
-        ));
+        debugPrint(
+          '[AcademicBridge] request $id completed with status=$status bodyLen=${body.length}',
+        );
+        completer.complete(
+          SchoolHttpResponse(statusCode: status, headers: headers, body: body),
+        );
       }
     } catch (e) {
       debugPrint('[AcademicBridge] failed to parse message: $e');

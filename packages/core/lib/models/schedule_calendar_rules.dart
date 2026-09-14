@@ -347,11 +347,11 @@ String scheduleDateKey(DateTime date) {
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
-DateTime _semesterWeekStart(DateTime semesterStart, {bool sundayFirst = false}) {
+DateTime _semesterWeekStart(DateTime semesterStart,
+    {bool sundayFirst = false}) {
   final start = _dateOnly(semesterStart);
-  final offset = sundayFirst
-      ? start.weekday % 7
-      : start.weekday - DateTime.monday;
+  final offset =
+      sundayFirst ? start.weekday % 7 : start.weekday - DateTime.monday;
   return start.subtract(Duration(days: offset));
 }
 

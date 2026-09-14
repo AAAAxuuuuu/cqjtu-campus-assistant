@@ -525,7 +525,8 @@ $_timetableHtml
       );
     });
 
-    test('verifyImportedSession accepts cookies with JSESSIONID and WAF cookie', () async {
+    test('verifyImportedSession accepts cookies with JSESSIONID and WAF cookie',
+        () async {
       final gateway = DirectSchoolCampusGateway();
       await gateway.loginWithCookies(
         '123456789012',
@@ -539,7 +540,8 @@ $_timetableHtml
       );
     });
 
-    test('verifyImportedSession accepts CQJTU Qingguo bzb_jsxsd session cookie', () async {
+    test('verifyImportedSession accepts CQJTU Qingguo bzb_jsxsd session cookie',
+        () async {
       final gateway = DirectSchoolCampusGateway();
       await gateway.loginWithCookies(
         '123456789012',
