@@ -192,7 +192,7 @@ class AcademicWebBridge {
     final bodyStr = body != null
         ? utf8.decode(body, allowMalformed: true)
         : null;
-    final headersMap = <String, String>{if (headers != null) ...headers};
+    final headersMap = <String, String>{...?headers};
     if (bodyStr != null &&
         !headersMap.containsKey('content-type') &&
         !headersMap.containsKey('Content-Type')) {
