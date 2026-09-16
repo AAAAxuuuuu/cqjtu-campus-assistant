@@ -29,51 +29,60 @@ void main() {
     ).any((o) => scheduleDateKey(o.scheduledDate) == key);
   }
 
-  group('通知逐条核对：调休四组', () {
+  group('通知逐条核对：调休五组', () {
     // 9月20日（周日）上班，补上10月6日（周二）的课程
-    // 9月26日（周六）上班，补上9月29日（周二）的课程
-    // 9月27日（周日）上班，补上9月30日（周三）的课程
     // 10月10日（周六）上班，补上10月7日（周三）的课程
+    // 10月17日（周六）上班，补上9月28日（周一）的课程
+    // 10月24日（周六）上班，补上9月29日（周二）的课程
+    // 10月31日（周六）上班，补上9月30日（周三）的课程
     final expected = {
       '2026-09-20': '2026-10-06',
-      '2026-09-26': '2026-09-29',
-      '2026-09-27': '2026-09-30',
       '2026-10-10': '2026-10-07',
+      '2026-10-17': '2026-09-28',
+      '2026-10-24': '2026-09-29',
+      '2026-10-31': '2026-09-30',
     };
 
-    test('四组调休的源/目标日期与通知一致', () {
+    test('五组调休的源/目标日期与通知一致', () {
       final actual = {
         for (final a in preset.adjustments) a.targetKey: a.sourceKey,
       };
       expect(actual, expected);
     });
 
-    test('补课日星期与通知一致（周日/周六/周日/周六）', () {
+    test('补课日星期与通知一致（周日/周六/周六/周六/周六）', () {
       expect(DateTime(2026, 9, 20).weekday, DateTime.sunday);
-      expect(DateTime(2026, 9, 26).weekday, DateTime.saturday);
-      expect(DateTime(2026, 9, 27).weekday, DateTime.sunday);
       expect(DateTime(2026, 10, 10).weekday, DateTime.saturday);
+      expect(DateTime(2026, 10, 17).weekday, DateTime.saturday);
+      expect(DateTime(2026, 10, 24).weekday, DateTime.saturday);
+      expect(DateTime(2026, 10, 31).weekday, DateTime.saturday);
     });
 
-    test('被调休的原课日星期与通知一致（周二/周二/周三/周三）', () {
+    test('被调休的原课日星期与通知一致（周二/周三/周一/周二/周三）', () {
       expect(DateTime(2026, 10, 6).weekday, DateTime.tuesday);
+      expect(DateTime(2026, 10, 7).weekday, DateTime.wednesday);
+      expect(DateTime(2026, 9, 28).weekday, DateTime.monday);
       expect(DateTime(2026, 9, 29).weekday, DateTime.tuesday);
       expect(DateTime(2026, 9, 30).weekday, DateTime.wednesday);
-      expect(DateTime(2026, 10, 7).weekday, DateTime.wednesday);
     });
 
-    test('周二的课挪到 9/20 与 9/26 上，10/6 与 9/29 当天不上课', () {
+    test('周一的课挪到 10/17 上，9/28 当天不上课', () {
+      expect(hasClassOn(DateTime(2026, 10, 17), dayOfWeekOfCourse: 1), isTrue);
+      expect(hasClassOn(DateTime(2026, 9, 28), dayOfWeekOfCourse: 1), isFalse);
+    });
+
+    test('周二的课挪到 9/20 与 10/24 上，10/6 与 9/29 当天不上课', () {
       expect(hasClassOn(DateTime(2026, 9, 20), dayOfWeekOfCourse: 2), isTrue);
-      expect(hasClassOn(DateTime(2026, 9, 26), dayOfWeekOfCourse: 2), isTrue);
+      expect(hasClassOn(DateTime(2026, 10, 24), dayOfWeekOfCourse: 2), isTrue);
       expect(hasClassOn(DateTime(2026, 10, 6), dayOfWeekOfCourse: 2), isFalse);
       expect(hasClassOn(DateTime(2026, 9, 29), dayOfWeekOfCourse: 2), isFalse);
     });
 
-    test('周三的课挪到 9/27 与 10/10 上，9/30 与 10/7 当天不上课', () {
-      expect(hasClassOn(DateTime(2026, 9, 27), dayOfWeekOfCourse: 3), isTrue);
+    test('周三的课挪到 10/10 与 10/31 上，10/7 与 9/30 当天不上课', () {
       expect(hasClassOn(DateTime(2026, 10, 10), dayOfWeekOfCourse: 3), isTrue);
-      expect(hasClassOn(DateTime(2026, 9, 30), dayOfWeekOfCourse: 3), isFalse);
+      expect(hasClassOn(DateTime(2026, 10, 31), dayOfWeekOfCourse: 3), isTrue);
       expect(hasClassOn(DateTime(2026, 10, 7), dayOfWeekOfCourse: 3), isFalse);
+      expect(hasClassOn(DateTime(2026, 9, 30), dayOfWeekOfCourse: 3), isFalse);
     });
   });
 
@@ -91,23 +100,23 @@ void main() {
     test('原排在补课日（周末）的课停掉，由任课教师自行补', () {
       // 9/20 是周日：周日原本的课停掉，那天只上调休挪来的周二课程。
       expect(hasClassOn(DateTime(2026, 9, 20), dayOfWeekOfCourse: 7), isFalse);
-      // 10/10 是周六：周六原有的课同理停掉。
+      // 10/10、10/17、10/24、10/31 是周六：周六原有的课同理停掉。
       expect(hasClassOn(DateTime(2026, 10, 10), dayOfWeekOfCourse: 6), isFalse);
+      expect(hasClassOn(DateTime(2026, 10, 17), dayOfWeekOfCourse: 6), isFalse);
+      expect(hasClassOn(DateTime(2026, 10, 24), dayOfWeekOfCourse: 6), isFalse);
+      expect(hasClassOn(DateTime(2026, 10, 31), dayOfWeekOfCourse: 6), isFalse);
     });
 
     test('假期外的正常日期不受影响', () {
-      expect(rules.isNoClassDate(DateTime(2026, 9, 28)), isFalse);
       expect(rules.isNoClassDate(DateTime(2026, 10, 8)), isFalse);
       expect(hasClassOn(DateTime(2026, 10, 14), dayOfWeekOfCourse: 3), isTrue);
     });
 
-    test('9/26、9/27 是中秋法定假期，但通知要求上班，补课仍须落地', () {
-      // 内置法定名单含 9/25-9/27（中秋）。调休优先于节假日，
-      // 所以这两天的补课不会被假期名单吃掉。
-      expect(rules.isMakeupWorkday(DateTime(2026, 9, 26)), isTrue);
-      expect(rules.isMakeupWorkday(DateTime(2026, 9, 27)), isTrue);
-      expect(hasClassOn(DateTime(2026, 9, 26), dayOfWeekOfCourse: 2), isTrue);
-      expect(hasClassOn(DateTime(2026, 9, 27), dayOfWeekOfCourse: 3), isTrue);
+    test('中秋假期（9/25-9/27）不再占用补课，正常享受假期', () {
+      expect(rules.isMakeupWorkday(DateTime(2026, 9, 26)), isFalse);
+      expect(rules.isMakeupWorkday(DateTime(2026, 9, 27)), isFalse);
+      expect(rules.isNoClassDate(DateTime(2026, 9, 26)), isTrue);
+      expect(rules.isNoClassDate(DateTime(2026, 9, 27)), isTrue);
     });
   });
 
@@ -196,14 +205,15 @@ void main() {
       ]);
       expect(preset.makeupOriginalCancelledDates, [
         '2026-09-20',
-        '2026-09-26',
-        '2026-09-27',
         '2026-10-10',
+        '2026-10-17',
+        '2026-10-24',
+        '2026-10-31',
       ]);
     });
 
     test('补课日仍会停掉原有课程（合并进 allNoClassDates）', () {
-      expect(preset.allNoClassDates.length, 9);
+      expect(preset.allNoClassDates.length, 10);
       for (final date in preset.makeupOriginalCancelledDates) {
         expect(preset.allNoClassDates, contains(date));
       }

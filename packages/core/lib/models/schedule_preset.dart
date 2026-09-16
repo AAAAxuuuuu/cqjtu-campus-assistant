@@ -61,16 +61,17 @@ class SchedulePreset {
 
 /// 内置预设目录。
 abstract final class SchedulePresetCatalog {
-  /// 重庆交通大学 2026 年国庆放假调休安排。
+  /// 重庆交通大学 2026 年国庆放假调休安排（最新调整）。
   ///
-  /// 教务通知：9月29日（周二）至10月7日（周三）放假调休共9天。
-  /// 10月1日至2日国庆停课，10月5日补休停课；
-  /// 9月20日（周日）补上10月6日（周二）的课程，
-  /// 9月26日（周六）补上9月29日（周二）的课程，
-  /// 9月27日（周日）补上9月30日（周三）的课程，
-  /// 10月10日（周六）补上10月7日（周三）的课程。
-  /// 原安排在9月20日、9月26日、9月27日、10月10日的课程由任课教师自行安排补上，
-  /// 故这四天的原有课程按停课处理。
+  /// 教务通知：
+  /// 9月20日（星期日）、10月10日（星期六）、10月17日（周六）、10月24日（周六）、10月31日（周六）正常上班上课。
+  /// 调课安排：
+  /// 9月20日（周日）补上10月6日（周二）课程（新生军训不补课）；
+  /// 10月10日（周六）补上10月7日（周三）课程；
+  /// 10月17日（周六）补上9月28日（周一）课程；
+  /// 10月24日（周六）补上9月29日（周二）课程；
+  /// 10月31日（周六）补上9月30日（周三）课程。
+  /// 原安排在10月10日、17日、24日、31日以及9月20日的课程，由任课教师按教学进度自行补上。
   static final nationalDay2026 = SchedulePreset(
     id: 'cqjtu_national_day_2026',
     name: '2026 国庆放假调休',
@@ -87,22 +88,15 @@ abstract final class SchedulePresetCatalog {
       '2026-10-04',
       '2026-10-05',
     ],
-    // 这四天要上班，上的是调休挪来的课；原本排在这几天的课由任课教师自行补。
+    // 这五天要上班上课，上的是调休挪来的课；原本排在这几天的课由任课教师自行补。
     makeupOriginalCancelledDates: [
       '2026-09-20',
-      '2026-09-26',
-      '2026-09-27',
       '2026-10-10',
+      '2026-10-17',
+      '2026-10-24',
+      '2026-10-31',
     ],
     adjustments: [
-      ScheduleDateAdjustment(
-        sourceDate: DateTime(2026, 9, 29),
-        targetDate: DateTime(2026, 9, 26),
-      ),
-      ScheduleDateAdjustment(
-        sourceDate: DateTime(2026, 9, 30),
-        targetDate: DateTime(2026, 9, 27),
-      ),
       ScheduleDateAdjustment(
         sourceDate: DateTime(2026, 10, 6),
         targetDate: DateTime(2026, 9, 20),
@@ -110,6 +104,18 @@ abstract final class SchedulePresetCatalog {
       ScheduleDateAdjustment(
         sourceDate: DateTime(2026, 10, 7),
         targetDate: DateTime(2026, 10, 10),
+      ),
+      ScheduleDateAdjustment(
+        sourceDate: DateTime(2026, 9, 28),
+        targetDate: DateTime(2026, 10, 17),
+      ),
+      ScheduleDateAdjustment(
+        sourceDate: DateTime(2026, 9, 29),
+        targetDate: DateTime(2026, 10, 24),
+      ),
+      ScheduleDateAdjustment(
+        sourceDate: DateTime(2026, 9, 30),
+        targetDate: DateTime(2026, 10, 31),
       ),
     ],
   );
