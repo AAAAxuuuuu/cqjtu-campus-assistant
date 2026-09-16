@@ -1974,7 +1974,12 @@ class _EcardParser {
   }
 
   static String _numbersOnly(String value) {
-    return value.replaceAll(RegExp(r'[^0-9.]'), '').trim();
+    final normalized = value.replaceAll('－', '-');
+    final match = RegExp(r'(-?)\s*(\d+(?:\.\d+)?)').firstMatch(normalized);
+    if (match == null) return '';
+    final sign = match.group(1) ?? '';
+    final number = match.group(2) ?? '';
+    return '$sign$number';
   }
 
   static String? _extractNumberNearAnyKeyword(
@@ -1986,10 +1991,16 @@ class _EcardParser {
       if (index < 0) continue;
       final end = (index + 900).clamp(0, html.length);
       final window = html.substring(index, end);
+      final text =
+          _stripTags(_decodeBasicHtmlEntities(window)).replaceAll('－', '-');
       final match = RegExp(
-        r'\d+(?:\.\d+)?',
-      ).firstMatch(_stripTags(_decodeBasicHtmlEntities(window)));
-      if (match != null) return match.group(0);
+        r'(-?)\s*(\d+(?:\.\d+)?)',
+      ).firstMatch(text);
+      if (match != null) {
+        final sign = match.group(1) ?? '';
+        final number = match.group(2) ?? '';
+        return '$sign$number';
+      }
     }
     return null;
   }

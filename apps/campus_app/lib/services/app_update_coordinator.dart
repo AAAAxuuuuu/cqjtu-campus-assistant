@@ -172,7 +172,7 @@ class AppUpdateCoordinator {
         _showSnackBar(context, '下载完成，已打开系统安装器');
         return;
       case AppUpdateLaunchStatus.permissionRequired:
-        _showSnackBar(context, '请先允许本应用安装未知来源应用，然后再点一次立即更新');
+        _showSnackBar(context, '请在系统设置中开启「允许安装未知应用」，开启后返回将自动继续安装');
         return;
       case AppUpdateLaunchStatus.browserOpened:
         _showSnackBar(context, '直装失败，已为你打开 GitHub Release 页面');

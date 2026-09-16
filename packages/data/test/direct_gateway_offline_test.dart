@@ -75,6 +75,13 @@ const _elecResultHtml = '''
 </body></html>
 ''';
 
+const _elecNegativeResultHtml = '''
+<html><body>
+<div class="weui-cells"><label class="weui-label">剩余电量</label></div>
+<div class="weui-cell__bd">-6.53元</div>
+</body></html>
+''';
+
 class _ScriptedTransport {
   final List<
       ({
@@ -488,6 +495,24 @@ void main() {
       );
 
       expect(balance, '123.45');
+    });
+
+    test('parses negative electricity balance correctly', () async {
+      final transport = _ScriptedTransport();
+      _scriptCasLogin(transport);
+      transport.handlers.addAll([
+        (method, uri) async => _html(_elecEntryHtml),
+        (method, uri) async => _html(_elecNegativeResultHtml),
+      ]);
+
+      final gateway = DirectSchoolCampusGateway(transport: transport.call);
+      final balance = await gateway.getElecBalance(
+        '123456789012',
+        'secret',
+        dormParams: {'buildid': 'B1', 'roomid': '101'},
+      );
+
+      expect(balance, '-6.53');
     });
   });
 }

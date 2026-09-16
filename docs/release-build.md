@@ -24,6 +24,10 @@ APK，把三套 `libflutter.so` + `libapp.so` 全塞进一个包——用户下�
 报错 `Conflicting configuration ... in ndk abiFilters cannot be present when
 splits abi filters are set`。命令行参数是官方支持的唯一路径。
 
+### 注意：versionCode 与 ABI 偏移
+使用 `--split-per-abi` 时，Flutter Gradle 会自动给各 ABI 的 `versionCode` 增加偏移量（如 `arm64-v8a` +2000，`versionCode` 会变为 `2000 + buildNumber`）。
+在 GitHub Release 上传安装包时，务必上传对应的分架构包（如 `CQJTU-Hub-vX.X.X.apk` 对应 `arm64-v8a`）。如果用户手机上之前安装了带 2000 偏移的分包，后续上传未带偏移的包会导致 Android 系统判定为“版本降级”（`INSTALL_FAILED_VERSION_DOWNGRADE`）而无法覆盖安装。项目中 `pubspec.yaml` 的基础 `buildNumber` 已提升为 2100+ 以避开历史降级冲突。
+
 ## 体积构成（arm64-v8a，24.8MB）
 
 | 项 | 体积 | 说明 |

@@ -19,8 +19,10 @@ class MainActivity : FlutterActivity() {
     private val classReminderChannel = "campus_app/class_reminder"
     private val scheduleWidgetChannel = "campus_app/schedule_widget"
     private val widgetNavigationChannelName = "campus_app/widget_navigation"
+
     private var widgetNavigationChannel: MethodChannel? = null
     private var pendingWidgetTarget: String? = null
+    private var pendingInstallApkPath: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -44,22 +46,9 @@ class MainActivity : FlutterActivity() {
                     startActivity(intent)
                     result.success(null)
                 }
-                "openMiuiAutostart" -> {
-                    try {
-                        val intent = Intent().apply {
-                            component = android.content.ComponentName(
-                                "com.miui.securitycenter",
-                                "com.miui.permcenter.autostart.AutoStartManagementActivity"
-                            )
-                        }
-                        startActivity(intent)
-                        result.success(null)
-                    } catch (e: Exception) {
-                        openAppSettings(result)
-                    }
+                "openAppSettings" -> {
+                    openAppSettings(result)
                 }
-                "checkMiuiAutostart" -> result.success(null)
-                "openBatterySettings" -> openAppSettings(result)
                 else -> result.notImplemented()
             }
         }
@@ -69,10 +58,31 @@ class MainActivity : FlutterActivity() {
             cookieChannel
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "setCookie" -> {
+                    val url = call.argument<String>("url")
+                    val cookie = call.argument<String>("cookie")
+                    if (url.isNullOrBlank() || cookie.isNullOrBlank()) {
+                        result.error(
+                            "INVALID_ARG",
+                            "url and cookie parameters are required",
+                            null
+                        )
+                        return@setMethodCallHandler
+                    }
+                    val manager = CookieManager.getInstance()
+                    manager.setAcceptCookie(true)
+                    manager.setCookie(url, cookie)
+                    manager.flush()
+                    result.success(null)
+                }
                 "getCookies" -> {
                     val url = call.argument<String>("url")
-                    if (url == null) {
-                        result.error("INVALID_ARG", "url parameter is required", null)
+                    if (url.isNullOrBlank()) {
+                        result.error(
+                            "INVALID_ARG",
+                            "url parameter is required",
+                            null
+                        )
                         return@setMethodCallHandler
                     }
                     val manager = CookieManager.getInstance()
@@ -100,6 +110,14 @@ class MainActivity : FlutterActivity() {
                         return@setMethodCallHandler
                     }
                     installApk(path, result)
+                }
+                "checkApkFile" -> {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    result.success(isApkValid(path))
                 }
                 else -> result.notImplemented()
             }
@@ -225,17 +243,87 @@ class MainActivity : FlutterActivity() {
         widgetNavigationChannel?.invokeMethod("widgetTargetChanged", target)
     }
 
+    override fun onResume() {
+        super.onResume()
+        checkAndResumePendingInstall()
+    }
+
+    private fun checkAndResumePendingInstall() {
+        val path = pendingInstallApkPath ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            return
+        }
+        val file = File(path)
+        if (file.exists() && file.length() > 0) {
+            pendingInstallApkPath = null
+            try {
+                launchPackageInstaller(file)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun isApkValid(path: String): Boolean {
+        return try {
+            val file = File(path)
+            if (!file.exists() || file.length() <= 0) return false
+            val archiveInfo = packageManager.getPackageArchiveInfo(path, 0) ?: return false
+            archiveInfo.packageName == packageName
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun installApk(path: String, result: MethodChannel.Result) {
         try {
             val file = File(path)
-            if (!file.exists()) {
-                result.error("FILE_NOT_FOUND", "APK file does not exist", null)
+            if (!file.exists() || file.length() <= 0) {
+                result.error("FILE_NOT_FOUND", "APK file does not exist or is empty", null)
                 return
+            }
+
+            val archiveInfo = packageManager.getPackageArchiveInfo(path, 0)
+            if (archiveInfo == null) {
+                result.error("APK_CORRUPT", "安装包解析失败，可能文件损坏或未下载完整", null)
+                return
+            }
+
+            // 检查安装包版本是否低于当前已安装版本（防止降级拦截）
+            val currentPackageInfo = try {
+                packageManager.getPackageInfo(packageName, 0)
+            } catch (_: Exception) {
+                null
+            }
+
+            if (currentPackageInfo != null) {
+                val currentCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    currentPackageInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    currentPackageInfo.versionCode.toLong()
+                }
+                val newCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    archiveInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    archiveInfo.versionCode.toLong()
+                }
+
+                if (newCode < currentCode) {
+                    result.error(
+                        "VERSION_DOWNGRADE",
+                        "安装包版本号 ($newCode) 低于当前已安装版本 ($currentCode)，系统禁止覆盖安装。请先卸载旧版本或安装更高版本。",
+                        null
+                    )
+                    return
+                }
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 !packageManager.canRequestPackageInstalls()
             ) {
+                pendingInstallApkPath = path
                 val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                     data = Uri.parse("package:$packageName")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -245,22 +333,27 @@ class MainActivity : FlutterActivity() {
                 return
             }
 
-            val apkUri = FileProvider.getUriForFile(
-                this,
-                "$packageName.fileprovider",
-                file
-            )
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(intent)
+            pendingInstallApkPath = null
+            launchPackageInstaller(file)
             result.success("install_started")
         } catch (e: Exception) {
             result.error("INSTALL_FAILED", e.message, null)
         }
+    }
+
+    private fun launchPackageInstaller(file: File) {
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            file
+        )
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(intent)
     }
 
     private fun openAppSettings(result: MethodChannel.Result) {

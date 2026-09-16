@@ -115,6 +115,20 @@ class AppUpdateInstaller {
           status: AppUpdateLaunchStatus.permissionRequired,
         );
       }
+    } on PlatformException catch (error) {
+      if (error.code == 'VERSION_DOWNGRADE') {
+        return AppUpdateLaunchResult(
+          status: AppUpdateLaunchStatus.failed,
+          error: error.message ?? '安装包版本低于已安装版本，无法直接覆盖安装',
+        );
+      }
+      final opened = await _openExternalUrl(fallbackUrl);
+      return AppUpdateLaunchResult(
+        status: opened
+            ? AppUpdateLaunchStatus.browserOpened
+            : AppUpdateLaunchStatus.failed,
+        error: error.message ?? error,
+      );
     } catch (error) {
       final opened = await _openExternalUrl(fallbackUrl);
       return AppUpdateLaunchResult(
@@ -144,7 +158,26 @@ class AppUpdateInstaller {
       '-',
     );
     final file = File('${dir.path}/$safeFileName');
-    if (await file.exists()) {
+
+    // 如果本地已存在完整的合法 APK，跳过重复下载
+    if (await file.exists() && await file.length() > 0) {
+      try {
+        final isValid = await _channel.invokeMethod<bool>('checkApkFile', {
+          'path': file.path,
+        });
+        if (isValid == true) {
+          debugPrint(
+            '[Update] Found existing valid APK at ${file.path}, skipping download.',
+          );
+          final len = await file.length();
+          onProgress?.call(
+            AppUpdateDownloadProgress(receivedBytes: len, totalBytes: len),
+          );
+          return file.path;
+        }
+      } catch (e) {
+        debugPrint('[Update] verify existing APK error: $e');
+      }
       await file.delete();
     }
 
