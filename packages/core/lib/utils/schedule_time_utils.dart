@@ -47,3 +47,16 @@ int endSlotFor(DateTime end) {
   }
   return slotMinuteRanges.keys.last;
 }
+
+/// 计算 DateTime 对应的学期字符串（如 2026-2027-1）。
+String calculateSemester(DateTime date) {
+  final year = date.year;
+  final month = date.month;
+  if (month >= 8) {
+    return '$year-${year + 1}-1';
+  } else if (month == 1) {
+    return '${year - 1}-$year-1';
+  } else {
+    return '${year - 1}-$year-2';
+  }
+}
