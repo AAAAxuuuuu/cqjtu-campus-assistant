@@ -413,6 +413,10 @@ class ApiService implements CampusSessionApi {
     if (code == 449) {
       throw CaptchaRequiredException();
     }
+    if (statusCode == 429 || code == 429) {
+      final msg = raw['msg'] as String? ?? '登录过于频繁，请稍后再试';
+      throw ApiException(429, msg);
+    }
     if (code == 200) return;
     if (raw.isNotEmpty) {
       throw ApiException(code, data['msg'] as String? ?? '未知错误');

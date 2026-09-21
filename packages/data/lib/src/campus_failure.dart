@@ -51,6 +51,13 @@ class RateLimitedFailure extends CampusFailure {
   const RateLimitedFailure([super.message = '访问频率受限，请稍后再试']);
 }
 
+/// 手动登录密码错误过多触发频控。
+class ManualLoginRateLimitedFailure extends CampusFailure {
+  const ManualLoginRateLimitedFailure([
+    super.message = '密码错误次数过多，请稍后再试或使用网页登录',
+  ]);
+}
+
 /// 宿舍参数未配置。
 class DormNotConfiguredFailure extends CampusFailure {
   const DormNotConfiguredFailure([super.message = '请先设置宿舍']);

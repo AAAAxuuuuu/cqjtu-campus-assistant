@@ -242,6 +242,14 @@ class ManualCookieJar {
 
   void clear() => _store.clear();
 
+  /// Clears only the academic system session cookies (e.g. JSESSIONID, bzb_jsxsd)
+  /// while preserving CASTGC and WAF cookies.
+  void clearJwgSessionCookies() {
+    _store.removeWhere(
+      (_, entry) => _isJwgSessionCookieName(entry.cookie.name),
+    );
+  }
+
   /// Drop the session/ticket-granting cookies that make CAS skip its login
   /// form, while keeping everything else.
   ///
@@ -651,6 +659,9 @@ class _SchoolHttpClient {
   /// Drop CAS session/ticket cookies but keep the WAF cookie.
   void clearAuthArtifacts() => _jar.clearAuthArtifacts();
 
+  /// Drop academic system session cookies but keep CASTGC and WAF cookies.
+  void clearJwgSessionCookies() => _jar.clearJwgSessionCookies();
+
   void importCookieHeader(String url, String cookieHeader) {
     final trimmed = cookieHeader.trim();
     if (trimmed.isEmpty) return;
@@ -778,6 +789,49 @@ class _CasAuthenticator {
     _cachedPassword = password;
   }
 
+  /// Try to renew the session using a live CASTGC ticket-granting cookie.
+  ///
+  /// Instead of wiping the session and performing a full password login,
+  /// this visits CAS login with service URL. If the CASTGC cookie is valid,
+  /// CAS will issue a new service ticket and redirect to the service, establishing
+  /// a new session without user credentials or hitting rate limits.
+  Future<bool> trySsoSessionRenewal() async {
+    final hasCastgc =
+        _httpClient._jar.hasCookieForHost('ids.cqjtu.edu.cn', 'CASTGC');
+    if (!hasCastgc) return false;
+
+    try {
+      dev.log(
+        '[_CasAuth] Attempting silent SSO session renewal via CASTGC',
+        name: 'DirectSchool',
+      );
+      _httpClient.clearJwgSessionCookies();
+      final res = await _httpClient.get(
+        _config.casLoginUrl,
+        allowChallenge: true,
+      );
+      if (res.isBotChallenge) return false;
+
+      final hasServiceSession =
+          _httpClient._jar.hasJwgSessionCookieForHost('jwgln.cqjtu.edu.cn');
+      if ((hasServiceSession || _isAcademicSystemBody(res.body)) &&
+          !res.body.contains('authserver/login') &&
+          !_looksLikeCasLoginForm(res.body)) {
+        dev.log(
+          '[_CasAuth] Silent SSO session renewal succeeded',
+          name: 'DirectSchool',
+        );
+        return true;
+      }
+    } catch (e) {
+      dev.log(
+        '[_CasAuth] Silent SSO session renewal failed: $e',
+        name: 'DirectSchool',
+      );
+    }
+    return false;
+  }
+
   /// Perform full CAS login. Returns the username on success.
   Future<String> login(String username, String password) async {
     dev.log(
@@ -785,19 +839,22 @@ class _CasAuthenticator {
       name: 'DirectSchool',
     );
 
-    // Step 0: Drop any ticket-granting cookie before asking for the form.
-    //
-    // With a live CASTGC in the jar, CAS single-signs-on immediately and
-    // answers this GET with a 302 to the service instead of rendering the
-    // form — leaving no `execution` token to read. The WAF cookie is kept.
-    _httpClient.clearAuthArtifacts();
-
-    // Step 1: GET the CAS login page
-    final loginPage = await _httpClient.get(
+    // Step 1: GET the CAS login page (preserving CASTGC in the jar)
+    var loginPage = await _httpClient.get(
       _config.casLoginUrl,
       allowChallenge: true,
     );
-    final html = loginPage.body;
+    var html = loginPage.body;
+
+    // Check if live CASTGC single-signed-on immediately to the academic system
+    if (_isAcademicSystemBody(html)) {
+      _cachedPassword = password;
+      dev.log(
+        '[_CasAuth] Instant SSO login successful for ${_redactIdentifier(username)} via live CASTGC',
+        name: 'DirectSchool',
+      );
+      return username;
+    }
 
     // Step 2: A WAF challenge means we never reached the IDP at all.
     if (loginPage.isBotChallenge) {
@@ -815,7 +872,22 @@ class _CasAuthenticator {
     }
 
     // Step 4: Extract execution token and encryption salt
-    final execution = _extractInputValue(html, 'execution');
+    var execution = _extractInputValue(html, 'execution');
+    if (execution == null || execution.isEmpty) {
+      // If live/stale cookies prevented the form from rendering, clear auth artifacts and retry once
+      dev.log(
+        '[_CasAuth] Form missing execution token, clearing auth artifacts and retrying GET',
+        name: 'DirectSchool',
+      );
+      _httpClient.clearAuthArtifacts();
+      loginPage = await _httpClient.get(
+        _config.casLoginUrl,
+        allowChallenge: true,
+      );
+      html = loginPage.body;
+      execution = _extractInputValue(html, 'execution');
+    }
+
     if (execution == null || execution.isEmpty) {
       dev.log(
         '[_CasAuth] No execution token found in login page '
@@ -862,12 +934,20 @@ class _CasAuthenticator {
     final resultBody = loginResult.body;
 
     // Step 6: Evaluate result — check for login error / password invalid
+    if (_containsCaptcha(resultBody)) {
+      throw const CaptchaRequiredFailure();
+    }
+
     final extractedError = _extractLoginErrorMessage(resultBody);
     if (extractedError != null && extractedError.isNotEmpty) {
       dev.log(
         '[_CasAuth] Extracted login error: $extractedError',
         name: 'DirectSchool',
       );
+      if (extractedError.contains('验证码') ||
+          extractedError.toLowerCase().contains('captcha')) {
+        throw CaptchaRequiredFailure(extractedError);
+      }
       throw AuthInvalidFailure(extractedError);
     }
 
@@ -914,7 +994,8 @@ class _CasAuthenticator {
 
     // Still on CAS page
     if (resultBody.contains('authserver/login') ||
-        resultBody.contains('casLoginForm')) {
+        resultBody.contains('casLoginForm') ||
+        _looksLikeCasLoginForm(resultBody)) {
       if (_containsCaptcha(resultBody)) {
         throw const CaptchaRequiredFailure();
       }
@@ -978,7 +1059,8 @@ class _CasAuthenticator {
     }
 
     if (resultBody.contains('authserver/login') ||
-        resultBody.contains('casLoginForm')) {
+        resultBody.contains('casLoginForm') ||
+        _looksLikeCasLoginForm(resultBody)) {
       if (_containsCaptcha(resultBody)) {
         throw const CaptchaRequiredFailure();
       }
@@ -1144,7 +1226,12 @@ class _CasAuthenticator {
         lower.contains('showerrortip') ||
         lower.contains('password error') ||
         lower.contains('bad credentials') ||
-        lower.contains('invalid credentials');
+        lower.contains('invalid credentials') ||
+        lower.contains('锁定') ||
+        lower.contains('冻结') ||
+        lower.contains('已被禁用') ||
+        lower.contains('account locked') ||
+        lower.contains('account disabled');
   }
 
   String? _extractLoginErrorMessage(String html) {
@@ -1175,11 +1262,18 @@ class _CasAuthenticator {
   }
 
   bool _isAcademicSystemBody(String html) {
-    return html.contains('jsxsd') ||
-        html.contains('timetable') ||
+    if (html.contains('authserver/login') ||
+        html.contains('casLoginForm') ||
+        html.contains('pwdFromId') ||
+        html.contains('pwdEncryptSalt') ||
+        _looksLikeCasLoginForm(html)) {
+      return false;
+    }
+    return html.contains('timetable') ||
         html.contains('kbcontent') ||
         html.contains('xsMain') ||
-        html.contains('framework');
+        html.contains('framework') ||
+        (html.contains('jsxsd') && html.contains('教学管理系统'));
   }
 
   /// Whether this body really is the IDP's credential form.
@@ -1199,9 +1293,12 @@ class _CasAuthenticator {
 // HTML parsers
 // ---------------------------------------------------------------------------
 
+typedef _ScheduleParser = ScheduleParser;
+
 /// Parses the timetable HTML from the 强智 educational administration system.
-class _ScheduleParser {
+class ScheduleParser {
   /// Parse the timetable HTML and return courses + remark.
+
   static ({List<Course> courses, String remark}) parse(String html) {
     final courses = <Course>[];
     final document = html_parser.parse(html);
@@ -1218,7 +1315,24 @@ class _ScheduleParser {
     final table = document.getElementById('timetable');
     if (table == null) {
       dev.log('[_ScheduleParser] No #timetable found', name: 'DirectSchool');
-      return (courses: courses, remark: remark);
+      if (html.contains(r'$_ts') ||
+          html.contains("r='m'") ||
+          html.contains('r="m"') ||
+          _isBotChallengeResponse(200, const <String, String>{}, html)) {
+        throw const BotChallengeFailure('教务系统开启了人机验证，请使用网页登录完成验证');
+      }
+      if (html.contains('authserver/login') ||
+          html.contains('casLoginForm') ||
+          html.contains('请重新登录') ||
+          html.contains('会话超时') ||
+          html.contains('未登录') ||
+          html.contains('pwdEncryptSalt')) {
+        throw const SessionExpiredFailure('教务会话已过期，请重新登录');
+      }
+      if (html.contains('验证码') || html.contains('captcha')) {
+        throw const CaptchaRequiredFailure('教务系统需要安全验证');
+      }
+      throw const SchoolSystemChangedFailure('未在响应中找到课程表结构(#timetable)');
     }
 
     final rows = table.querySelectorAll('tr');
@@ -2100,11 +2214,62 @@ class DirectSchoolCampusGateway implements CampusGateway {
 
   // Lazy-initialized per-user state
   final Map<String, _UserSession> _sessions = {};
+  final Set<String> _inMemoryBrokenAccounts = {};
+
+  Future<bool> isAuthCircuitBroken(String username) async {
+    final session = _sessions[username];
+    final wasBrokenInMemory = _inMemoryBrokenAccounts.contains(username) ||
+        (session != null && session.isInMemoryCircuitBroken);
+    final store = _sessionStore;
+    if (store != null) {
+      try {
+        final broken = await store.isAuthCircuitBroken(username);
+        if (!broken) {
+          if (wasBrokenInMemory) {
+            _inMemoryBrokenAccounts.remove(username);
+            session?.resetSilentLoginState();
+          }
+          return false;
+        }
+        return true;
+      } catch (_) {
+        // Fallback to in-memory state on store read exception
+      }
+    }
+    if (_inMemoryBrokenAccounts.contains(username)) return true;
+    if (session != null && session.isInMemoryCircuitBroken) return true;
+    return false;
+  }
+
+  Future<void> markAuthCircuitBroken(String username) async {
+    _inMemoryBrokenAccounts.add(username);
+    final session = _sessions[username];
+    if (session != null) {
+      session.isInMemoryCircuitBroken = true;
+    }
+    await _sessionStore?.markAuthCircuitBroken(username);
+  }
+
+  Future<void> resetAuthCircuitBreaker(String username) async {
+    _inMemoryBrokenAccounts.remove(username);
+    final session = _sessions[username];
+    if (session != null) {
+      session.resetSilentLoginState();
+    }
+    await _sessionStore?.resetAuthCircuitBreaker(username);
+  }
 
   _UserSession _session(String username) {
     return _sessions.putIfAbsent(
       username,
-      () => _UserSession(_config, _sessionStore, _transport),
+      () => _UserSession(
+        _config,
+        _sessionStore,
+        _transport,
+        isCircuitBroken: isAuthCircuitBroken,
+        markCircuitBroken: markAuthCircuitBroken,
+        resetCircuitBreaker: resetAuthCircuitBreaker,
+      ),
     );
   }
 
@@ -2119,6 +2284,9 @@ class DirectSchoolCampusGateway implements CampusGateway {
     }
     final session = _session(username);
     await session.loginWithTicket(username, ticket);
+    await resetAuthCircuitBreaker(username);
+    await _sessionStore?.clearManualLoginAttempts(username);
+    await _sessionStore?.resetSecurityFailures(username);
   }
 
   /// Starts an explicit credential login from a clean, per-account session.
@@ -2127,14 +2295,34 @@ class DirectSchoolCampusGateway implements CampusGateway {
   /// removes volatile authentication artifacts that can otherwise cause CAS to
   /// redirect away from the login form before an `execution` token is issued.
   Future<void> resetLoginSession(String username) async {
-    _sessions.remove(username);
+    _inMemoryBrokenAccounts.remove(username);
+    final session = _sessions.remove(username);
+    if (session != null) {
+      session.resetSilentLoginState();
+    }
     await _sessionStore?.clearLoginArtifacts(username);
+    await _sessionStore?.resetAuthCircuitBreaker(username);
   }
 
   /// Authenticates credentials with CAS without making a schedule request part
   /// of the login gate.
   Future<void> loginWithPassword(String username, String password) async {
-    await _session(username).forceRelogin(username, password);
+    final canAttempt =
+        await _sessionStore?.canAttemptManualLogin(username) ?? true;
+    if (!canAttempt) {
+      throw const ManualLoginRateLimitedFailure(
+        '密码错误次数过多，请稍后再试或使用网页登录',
+      );
+    }
+    try {
+      await _session(username).forceRelogin(username, password, isSilent: false);
+      await resetAuthCircuitBreaker(username);
+      await _sessionStore?.clearManualLoginAttempts(username);
+      await _sessionStore?.resetSecurityFailures(username);
+    } on AuthInvalidFailure {
+      await _sessionStore?.recordManualLoginAttempt(username);
+      rethrow;
+    }
   }
 
   /// Confirms that WebView artifacts were imported without making a schedule
@@ -2164,6 +2352,9 @@ class DirectSchoolCampusGateway implements CampusGateway {
       jwgCookies: jwgCookies,
       ecardCookies: ecardCookies,
     );
+    await resetAuthCircuitBreaker(username);
+    await _sessionStore?.clearManualLoginAttempts(username);
+    await _sessionStore?.resetSecurityFailures(username);
   }
 
   @override
@@ -2177,17 +2368,17 @@ class DirectSchoolCampusGateway implements CampusGateway {
     await session.ensureAuth(username, password);
 
     // POST to schedule URL with semester parameter
-    final formBody = <String, String>{};
-    if (semester != null && semester.isNotEmpty) {
-      formBody['xnxq01id'] = semester;
-    }
+    final targetSemester = semester == null || semester.trim().isEmpty
+        ? _currentSemester()
+        : semester;
+    final formBody = <String, String>{'xnxq01id': targetSemester};
 
     final resp = await session.httpClient.post(
       _config.scheduleUrl,
       formBody: formBody,
     );
 
-    if (_isSessionExpired(resp.body)) {
+    if (_isSessionExpired(resp.body) || !resp.body.contains('timetable')) {
       await session.forceRelogin(username, password);
       final retryResp = await session.httpClient.post(
         _config.scheduleUrl,
@@ -2704,7 +2895,14 @@ class DirectSchoolCampusGateway implements CampusGateway {
 
 /// Holds the HTTP client, authenticator, and auth state for one user.
 class _UserSession {
-  _UserSession(this._config, this._sessionStore, this._transport) {
+  _UserSession(
+    this._config,
+    this._sessionStore,
+    this._transport, {
+    required this.isCircuitBroken,
+    required this.markCircuitBroken,
+    required this.resetCircuitBreaker,
+  }) {
     _httpClient = _SchoolHttpClient(transport: _transport);
     _authenticator = _CasAuthenticator(_httpClient, _config);
   }
@@ -2712,9 +2910,21 @@ class _UserSession {
   final SchoolSystemConfig _config;
   final SelfHostedSessionStore? _sessionStore;
   final SchoolHttpTransport? _transport;
+  final Future<bool> Function(String username) isCircuitBroken;
+  final Future<void> Function(String username) markCircuitBroken;
+  final Future<void> Function(String username) resetCircuitBreaker;
+  bool isInMemoryCircuitBroken = false;
+  bool _silentLoginAttemptedInSession = false;
+  Object? _lastSilentLoginFailure;
   late final _SchoolHttpClient _httpClient;
   late final _CasAuthenticator _authenticator;
   bool _authenticated = false;
+
+  void resetSilentLoginState() {
+    isInMemoryCircuitBroken = false;
+    _silentLoginAttemptedInSession = false;
+    _lastSilentLoginFailure = null;
+  }
 
   /// Shared by concurrent [forceRelogin] / [ensureAuth] callers so they never race
   /// each other through CAS login.
@@ -2738,29 +2948,117 @@ class _UserSession {
     final attempt = Future<void>(() async {
       _authenticator.cachePassword(password);
 
+      final isBroken = await isCircuitBroken(username);
+      if (isBroken) {
+        dev.log(
+          '[_Session] Auth circuit breaker is active for ${_redactIdentifier(username)}, blocking silent login',
+          name: 'DirectSchool',
+        );
+        throw const AuthInvalidFailure(
+          '账号或密码错误（已熔断保护），请在应用中重新登录',
+        );
+      }
+
+      if (_silentLoginAttemptedInSession && !_authenticated) {
+        dev.log(
+          '[_Session] Silent login already attempted in this session, short-circuiting for ${_redactIdentifier(username)}',
+          name: 'DirectSchool',
+        );
+        if (_lastSilentLoginFailure is CampusFailure) {
+          throw _lastSilentLoginFailure!;
+        }
+        throw const SessionExpiredFailure('单次会话内已尝试过自动登录，跳过重试');
+      }
+
       if (_authenticated) {
         // Quick session validity check
         if (await _authenticator.isSessionValid()) return;
+        _authenticated = false;
         dev.log(
           '[_Session] Session expired, re-logging in',
           name: 'DirectSchool',
         );
       }
 
-      if (await _restoreStoredCookies(username) &&
-          await _authenticator.isSessionValid()) {
-        _authenticated = true;
-        await _persistCookies(username);
-        dev.log(
-          '[_Session] Restored stored cookies for ${_redactIdentifier(username)}',
-          name: 'DirectSchool',
-        );
-        return;
+      if (await _restoreStoredCookies(username)) {
+        if (await _authenticator.isSessionValid()) {
+          _authenticated = true;
+          await _persistCookies(username);
+          dev.log(
+            '[_Session] Restored stored cookies for ${_redactIdentifier(username)}',
+            name: 'DirectSchool',
+          );
+          return;
+        }
+
+        // Try silent SSO session renewal via live CASTGC before burning an auto-login attempt
+        if (await _authenticator.trySsoSessionRenewal()) {
+          _authenticated = true;
+          await _persistCookies(username);
+          dev.log(
+            '[_Session] Renewed session via CASTGC for ${_redactIdentifier(username)}',
+            name: 'DirectSchool',
+          );
+          return;
+        }
       }
 
-      await _authenticator.login(username, password);
-      _authenticated = true;
-      await _persistCookies(username);
+      if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+        _silentLoginAttemptedInSession = true;
+        throw const SessionExpiredFailure('触发安全防护，请稍后手动登录');
+      }
+
+      final canAttempt =
+          await _sessionStore?.canAttemptAutoLogin(username) ?? true;
+      if (!canAttempt) {
+        final isHourlyLimit =
+            await _sessionStore?.isAutoLoginHourlyLimitReached(username) ??
+                false;
+        if (isHourlyLimit) {
+          throw const SessionExpiredFailure(
+            '自动登录已达每小时上限（6次），请稍后重试或手动登录',
+          );
+        }
+        // 5分钟防抖冷却等内部节流：保持隐性，不向用户展示每小时上限误导文案
+        throw const SessionExpiredFailure('会话已失效，请重新登录');
+      }
+      await _sessionStore?.recordAutoLoginAttempt(username);
+      _silentLoginAttemptedInSession = true;
+
+      try {
+        await _authenticator.login(username, password);
+        _authenticated = true;
+        _lastSilentLoginFailure = null;
+        await _persistCookies(username);
+        await resetCircuitBreaker(username);
+        await _sessionStore?.resetSecurityFailures(username);
+      } on AuthInvalidFailure catch (e) {
+        _authenticated = false;
+        isInMemoryCircuitBroken = true;
+        _lastSilentLoginFailure = e;
+        await markCircuitBroken(username);
+        rethrow;
+      } on BotChallengeFailure catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        await _sessionStore?.recordSecurityFailure(username);
+        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+          _silentLoginAttemptedInSession = true;
+        }
+        rethrow;
+      } on CaptchaRequiredFailure catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        await _sessionStore?.recordSecurityFailure(username);
+        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+          _silentLoginAttemptedInSession = true;
+        }
+        rethrow;
+      } catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        rethrow;
+      }
     });
 
     _reloginInFlight = attempt;
@@ -2770,6 +3068,8 @@ class _UserSession {
   }
 
   Future<void> loginWithTicket(String username, String ticket) async {
+    _silentLoginAttemptedInSession = false;
+    _lastSilentLoginFailure = null;
     // Keep the 瑞数 WAF cookie: redeeming a ticket is itself an HTTP request to
     // the protected host, so wiping the whole jar here would guarantee a 412.
     _httpClient.clearAuthArtifacts();
@@ -2785,6 +3085,8 @@ class _UserSession {
     String? jwgCookies,
     String? ecardCookies,
   }) async {
+    _silentLoginAttemptedInSession = false;
+    _lastSilentLoginFailure = null;
     _httpClient.clearCookies();
     _authenticated = false;
     if (casCookies != null && casCookies.trim().isNotEmpty) {
@@ -2812,18 +3114,101 @@ class _UserSession {
   /// again, wiping the jar another attempt had just populated — a relogin storm
   /// that leaves every request unauthenticated. `getGrades` fans out across
   /// semesters, so this is reachable in normal use.
-  Future<void> forceRelogin(String username, String password) {
+  Future<void> forceRelogin(
+    String username,
+    String password, {
+    bool isSilent = true,
+  }) {
     final pending = _reloginInFlight;
     if (pending != null) return pending;
 
     final attempt = Future<void>(() async {
-      // Only the CAS session/ticket cookies must go. A full `clearCookies()`
-      // would also discard the 瑞数 WAF cookie that a WebView minted, and no
-      // subsequent HTTP request could get past the challenge to replace it.
-      _httpClient.clearAuthArtifacts();
-      await _authenticator.login(username, password);
-      _authenticated = true;
-      await _persistCookies(username);
+      _authenticated = false;
+      if (isSilent) {
+        final isBroken = await isCircuitBroken(username);
+        if (isBroken) {
+          dev.log(
+            '[_Session] Auth circuit breaker is active for ${_redactIdentifier(username)}, blocking silent relogin',
+            name: 'DirectSchool',
+          );
+          throw const AuthInvalidFailure(
+            '账号或密码错误（已熔断保护），请在应用中重新登录',
+          );
+        }
+
+        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+          _silentLoginAttemptedInSession = true;
+          throw const SessionExpiredFailure('触发安全防护，请稍后手动登录');
+        }
+
+        if (_silentLoginAttemptedInSession && !_authenticated) {
+          dev.log(
+            '[_Session] Silent relogin already attempted in this session, short-circuiting for ${_redactIdentifier(username)}',
+            name: 'DirectSchool',
+          );
+          if (_lastSilentLoginFailure is CampusFailure) {
+            throw _lastSilentLoginFailure!;
+          }
+          throw const SessionExpiredFailure('单次会话内已尝试过自动登录，跳过重试');
+        }
+
+        final canAttempt =
+            await _sessionStore?.canAttemptAutoLogin(username) ?? true;
+        if (!canAttempt) {
+          final isHourlyLimit =
+              await _sessionStore?.isAutoLoginHourlyLimitReached(username) ??
+                  false;
+          if (isHourlyLimit) {
+            throw const SessionExpiredFailure(
+              '自动登录已达每小时上限（6次），请稍后重试或手动登录',
+            );
+          }
+          // 5分钟防抖冷却等内部节流：保持隐性，不向用户展示每小时上限误导文案
+          throw const SessionExpiredFailure('会话已失效，请重新登录');
+        }
+        await _sessionStore?.recordAutoLoginAttempt(username);
+        _silentLoginAttemptedInSession = true;
+      } else {
+        _silentLoginAttemptedInSession = false;
+        _lastSilentLoginFailure = null;
+        // In explicit manual login, drop previous auth artifacts so CAS renders a clean form
+        _httpClient.clearAuthArtifacts();
+      }
+
+      try {
+        await _authenticator.login(username, password);
+        _authenticated = true;
+        _lastSilentLoginFailure = null;
+        await _persistCookies(username);
+        await resetCircuitBreaker(username);
+        await _sessionStore?.resetSecurityFailures(username);
+      } on AuthInvalidFailure catch (e) {
+        _authenticated = false;
+        isInMemoryCircuitBroken = true;
+        _lastSilentLoginFailure = e;
+        await markCircuitBroken(username);
+        rethrow;
+      } on BotChallengeFailure catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        await _sessionStore?.recordSecurityFailure(username);
+        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+          _silentLoginAttemptedInSession = true;
+        }
+        rethrow;
+      } on CaptchaRequiredFailure catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        await _sessionStore?.recordSecurityFailure(username);
+        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
+          _silentLoginAttemptedInSession = true;
+        }
+        rethrow;
+      } catch (e) {
+        _authenticated = false;
+        _lastSilentLoginFailure = e;
+        rethrow;
+      }
     });
 
     _reloginInFlight = attempt;

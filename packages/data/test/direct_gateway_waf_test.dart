@@ -318,6 +318,28 @@ $_timetableHtml
             'valid timetable containing authserver link must not trigger relogin',
       );
     });
+
+    test(
+        'schedule response missing timetable after retry throws failure, never reporting empty courses',
+        () async {
+      final transport = _WafTransport(
+        jwgln: (method, uri) {
+          if (uri.path.contains('xsMain')) {
+            return _html(
+              _landingHtml,
+              cookies: [Cookie('JSESSIONID', 'sess-abc')],
+            );
+          }
+          return _html('<html><body><div>系统维护中或未登录</div></body></html>');
+        },
+      );
+
+      final gateway = DirectSchoolCampusGateway(transport: transport.call);
+      expect(
+        () => gateway.getSchedule('123456789012', 'secret'),
+        throwsA(isA<CampusFailure>()),
+      );
+    });
   });
 
   group('challenge detection through the gateway', () {

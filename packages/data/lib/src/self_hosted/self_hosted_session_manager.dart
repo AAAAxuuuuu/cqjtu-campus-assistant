@@ -136,7 +136,7 @@ class SelfHostedSessionManager {
 /// 自部署后端会话存储接口。
 ///
 /// 允许在 data 包中解耦平台特定的存储实现。
-abstract class SelfHostedSessionStore {
+abstract mixin class SelfHostedSessionStore {
   Future<String?> loadSessionId(String username);
   Future<void> saveSessionId(String username, String sessionId);
 
@@ -159,4 +159,57 @@ abstract class SelfHostedSessionStore {
 
   Future<String?> loadZoveToken(String username);
   Future<void> saveZoveToken(String username, String token);
+
+  Future<bool> isAuthCircuitBroken(String username) async => false;
+
+  Future<void> markAuthCircuitBroken(String username) async {}
+
+  Future<void> resetAuthCircuitBreaker(String username) async {}
+
+  Future<bool> canAttemptAutoLogin(
+    String username, {
+    DateTime? now,
+    int maxAttemptsPerHour = 6,
+  }) async =>
+      true;
+
+  Future<bool> isAutoLoginHourlyLimitReached(
+    String username, {
+    DateTime? now,
+    int maxAttemptsPerHour = 6,
+  }) async =>
+      true;
+
+  Future<void> recordAutoLoginAttempt(
+    String username, {
+    DateTime? now,
+  }) async {}
+
+  Future<bool> canAttemptManualLogin(
+    String username, {
+    DateTime? now,
+    int maxManualAttemptsPerHour = 5,
+  }) async =>
+      true;
+
+  Future<void> recordManualLoginAttempt(
+    String username, {
+    DateTime? now,
+  }) async {}
+
+  Future<void> clearManualLoginAttempts(String username) async {}
+
+  Future<bool> isInSecurityCooldown(
+    String username, {
+    DateTime? now,
+  }) async =>
+      false;
+
+  Future<void> recordSecurityFailure(
+    String username, {
+    DateTime? now,
+  }) async {}
+
+  Future<void> resetSecurityFailures(String username) async {}
 }
+
