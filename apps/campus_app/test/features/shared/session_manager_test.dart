@@ -132,6 +132,70 @@ class _FakeSessionStore implements SelfHostedSessionStore {
   Future<void> saveZoveToken(String username, String token) async {
     values['zove:$username'] = token;
   }
+
+  @override
+  Future<bool> canAttemptAutoLogin(
+    String username, {
+    DateTime? now,
+    int maxAttemptsPerHour = 6,
+  }) async => true;
+
+  @override
+  Future<bool> isAutoLoginHourlyLimitReached(
+    String username, {
+    DateTime? now,
+    int maxAttemptsPerHour = 6,
+  }) async => false;
+
+  @override
+  Future<void> recordAutoLoginAttempt(String username, {DateTime? now}) async {}
+
+  @override
+  Future<bool> canAttemptManualLogin(
+    String username, {
+    DateTime? now,
+    int maxManualAttemptsPerHour = 5,
+  }) async => true;
+
+  @override
+  Future<void> recordManualLoginAttempt(
+    String username, {
+    DateTime? now,
+  }) async {}
+
+  @override
+  Future<void> clearManualLoginAttempts(String username) async {}
+
+  @override
+  Future<bool> isInSecurityCooldown(
+    String username, {
+    DateTime? now,
+  }) async => false;
+
+  @override
+  Future<void> recordSecurityFailure(
+    String username, {
+    DateTime? now,
+  }) async {}
+
+  @override
+  Future<void> resetSecurityFailures(String username) async {}
+
+  final Set<String> _brokenAccounts = {};
+
+  @override
+  Future<bool> isAuthCircuitBroken(String username) async =>
+      _brokenAccounts.contains(username);
+
+  @override
+  Future<void> markAuthCircuitBroken(String username) async {
+    _brokenAccounts.add(username);
+  }
+
+  @override
+  Future<void> resetAuthCircuitBreaker(String username) async {
+    _brokenAccounts.remove(username);
+  }
 }
 
 Future<void> _flushSnapshots() async {

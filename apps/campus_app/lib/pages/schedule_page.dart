@@ -190,12 +190,18 @@ class _ScheduleBody extends ConsumerWidget {
       }
     } catch (e) {
       final errorStr = e.toString();
-      // 如果报错内容提示需要验证码，唤起 WebView
+      // 如果报错内容提示需要验证码或会话失效/频控超限，唤起 WebView 重新认证
       if (e is BotChallengeFailure ||
+          e is SessionExpiredFailure ||
+          e is CaptchaRequiredFailure ||
           errorStr.contains('449') ||
           errorStr.contains('验证码') ||
           errorStr.contains('HTML') ||
-          errorStr.contains('CAS')) {
+          errorStr.contains('CAS') ||
+          errorStr.contains('过期') ||
+          errorStr.contains('上限') ||
+          errorStr.contains('未登录') ||
+          errorStr.contains('失效')) {
         if (context.mounted) {
           final result = await Navigator.of(context).push<Map<String, dynamic>>(
             MaterialPageRoute(
@@ -356,10 +362,16 @@ class _ScheduleBody extends ConsumerWidget {
           // 这条指引比 formatCampusError 的通用文案更可操作，故优先。
           final errMsg =
               (e is BotChallengeFailure ||
+                  e is SessionExpiredFailure ||
+                  e is CaptchaRequiredFailure ||
                   raw.contains('449') ||
                   raw.contains('验证码') ||
                   raw.contains('HTML') ||
-                  raw.contains('CAS'))
+                  raw.contains('CAS') ||
+                  raw.contains('过期') ||
+                  raw.contains('上限') ||
+                  raw.contains('未登录') ||
+                  raw.contains('失效'))
               ? '系统会话已过期或需要安全验证\n请点击下方重试按钮进行验证'
               : formatCampusError(e);
 

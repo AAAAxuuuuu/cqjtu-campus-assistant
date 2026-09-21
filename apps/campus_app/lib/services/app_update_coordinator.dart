@@ -1,6 +1,8 @@
 import 'package:campus_platform/services/app_update_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/app_snackbar.dart';
@@ -101,12 +103,61 @@ class AppUpdateCoordinator {
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  latest.notes,
-                  style: const TextStyle(
-                    color: AppColors.textBody,
-                    height: 1.45,
-                  ),
+                MarkdownBody(
+                  data: latest.notes,
+                  selectable: true,
+                  onTapLink: (text, href, title) {
+                    if (href != null) {
+                      final uri = Uri.tryParse(href);
+                      if (uri != null) {
+                        launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    }
+                  },
+                  styleSheet:
+                      MarkdownStyleSheet.fromTheme(
+                        Theme.of(dialogContext),
+                      ).copyWith(
+                        p: const TextStyle(fontSize: 13.5, height: 1.5),
+                        h1: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          height: 1.5,
+                        ),
+                        h2: const TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.bold,
+                          height: 1.5,
+                        ),
+                        h3: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.4,
+                        ),
+                        blockquoteDecoration: BoxDecoration(
+                          color: Theme.of(dialogContext)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border(
+                            left: BorderSide(
+                              color: Theme.of(
+                                dialogContext,
+                              ).colorScheme.primary,
+                              width: 4,
+                            ),
+                          ),
+                        ),
+                        blockquotePadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        listBullet: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.primary,
+                          fontSize: 14,
+                        ),
+                      ),
                 ),
               ],
               if (!hasDirectDownload) ...[

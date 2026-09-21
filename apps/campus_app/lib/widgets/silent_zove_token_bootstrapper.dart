@@ -10,6 +10,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../utils/providers.dart';
 import '../utils/campus_error_message.dart';
+import '../services/academic_web_bridge.dart';
 
 String _redactUsername(String value) {
   final trimmed = value.trim();
@@ -43,11 +44,13 @@ class _SilentZoveTokenBootstrapperState
 
   late final WebViewController _controller;
   Completer<void>? _pageLoadCompleter;
+  Completer<void>? _casRedirectCompleter;
   Completer<String>? _tokenCompleter;
   String? _capturedZoveToken;
   Timer? _healthTimer;
 
   bool _running = false;
+  bool _hasSubmittedCasThisRun = false;
   String? _lastSeenUser;
   DateTime? _lastFailureCooldown;
 
@@ -83,16 +86,15 @@ class _SilentZoveTokenBootstrapperState
             if (!(_pageLoadCompleter?.isCompleted ?? true)) {
               _pageLoadCompleter?.complete();
             }
+            if (!(_casRedirectCompleter?.isCompleted ?? true)) {
+              _casRedirectCompleter?.complete();
+            }
             await _controller.runJavaScript(_hookScript);
             if (url.contains('ids.cqjtu.edu.cn/authserver/login')) {
-              debugPrint(
-                '[SilentZoveToken] CAS login page reached; aborting background attempt to prevent CAS lock',
-              );
-              _lastFailureCooldown = DateTime.now().add(
-                const Duration(minutes: 30),
-              );
-              _running = false;
-              return;
+              final creds = ref.read(credentialsProvider);
+              if (creds != null) {
+                await _handleCasLoginPage(creds.username, creds.password);
+              }
             }
             if (Uri.tryParse(url)?.host.toLowerCase() == 'zhxg.cqjtu.edu.cn') {
               final creds = ref.read(credentialsProvider);
@@ -147,6 +149,7 @@ class _SilentZoveTokenBootstrapperState
     }
 
     _running = true;
+    _hasSubmittedCasThisRun = false;
     unawaited(_bootstrap(creds.username, sessionService));
   }
 
@@ -238,6 +241,7 @@ class _SilentZoveTokenBootstrapperState
     } finally {
       _running = false;
       if (mounted && updated) {
+        unawaited(ref.read(academicWebBridgeProvider).reloadWithNewSession());
         ref.read(sessionUpdateProvider.notifier).triggerRefresh();
       }
     }
@@ -305,6 +309,167 @@ class _SilentZoveTokenBootstrapperState
           name.startsWith('bzb_') ||
           name.contains('jsxsd'),
     );
+  }
+
+  Future<void> _handleCasLoginPage(String username, String password) async {
+    if (_hasSubmittedCasThisRun) {
+      debugPrint(
+        '[SilentZoveToken] CAS login already attempted in this run; setting 30-min cooldown to prevent loops',
+      );
+      _lastFailureCooldown = DateTime.now().add(const Duration(minutes: 30));
+      _running = false;
+      return;
+    }
+
+    // 1. 检查页面中是否有图形验证码或显式错误提示
+    final pageCheckResult = await _checkCasPageSecurity();
+    if (pageCheckResult.hasCaptcha) {
+      debugPrint(
+        '[SilentZoveToken] CAS page requires CAPTCHA; aborting silent login to avoid lockout',
+      );
+      _lastFailureCooldown = DateTime.now().add(const Duration(minutes: 15));
+      _running = false;
+      return;
+    }
+
+    if (pageCheckResult.hasFatalError) {
+      debugPrint(
+        '[SilentZoveToken] CAS page shows error: ${pageCheckResult.errorMessage}; aborting',
+      );
+      _lastFailureCooldown = DateTime.now().add(const Duration(minutes: 30));
+      _running = false;
+      return;
+    }
+
+    // 2. 检查 1 小时内自动登录频控（最多 6 次，间隔 5 分钟）
+    final sessionService = ref.read(sessionServiceProvider);
+    final canAttempt = await sessionService.canAttemptAutoLogin(username);
+    if (!canAttempt) {
+      debugPrint(
+        '[SilentZoveToken] 1-hour auto-login limit (6/hr, 5-min interval) exceeded for ${_redactUsername(username)}; '
+        'aborting silent background attempt',
+      );
+      _lastFailureCooldown = DateTime.now().add(const Duration(minutes: 30));
+      _running = false;
+      return;
+    }
+
+    // 3. 记录一次尝试并自动填表提交，等待重定向结果
+    _hasSubmittedCasThisRun = true;
+    await sessionService.recordAutoLoginAttempt(username);
+    debugPrint(
+      '[SilentZoveToken] Submitting credentials on CAS login page for ${_redactUsername(username)}',
+    );
+    _casRedirectCompleter = Completer<void>();
+    await _autofillAndSubmit(username, password);
+    try {
+      await _casRedirectCompleter!.future.timeout(const Duration(seconds: 15));
+    } catch (_) {
+      debugPrint('[SilentZoveToken] CAS login redirection wait timed out');
+    } finally {
+      _casRedirectCompleter = null;
+    }
+  }
+
+  Future<({bool hasCaptcha, bool hasFatalError, String errorMessage})>
+  _checkCasPageSecurity() async {
+    try {
+      final jsResult = await _controller.runJavaScriptReturningResult(r'''
+        (function() {
+          var isNeedCaptcha = false;
+          if (typeof window.needCaptcha !== 'undefined' && (window.needCaptcha === true || window.needCaptcha === '1' || window.needCaptcha === 1)) {
+            isNeedCaptcha = true;
+          }
+          var captchaDiv = document.getElementById('captchaDiv') || document.getElementById('cAuthCode') || document.getElementById('sliderCaptchaDiv');
+          if (captchaDiv) {
+            var style = window.getComputedStyle(captchaDiv);
+            var isVisible = style.display !== 'none' && style.visibility !== 'hidden' && !captchaDiv.classList.contains('hide');
+            var captchaImg = document.getElementById('captchaImg');
+            var hasImgSrc = captchaImg && captchaImg.getAttribute('src') && captchaImg.getAttribute('src').length > 0;
+            if (isVisible && (hasImgSrc || isNeedCaptcha)) {
+              isNeedCaptcha = true;
+            }
+          }
+          var errElem = document.getElementById('msg') ||
+            document.querySelector('.auth_error, .show_error, #showErrorMsg, .errors');
+          var errText = errElem ? (errElem.textContent || '').trim() : '';
+          var isFatal = errText.indexOf('锁定') !== -1 ||
+            errText.indexOf('错误') !== -1 ||
+            errText.indexOf('无效') !== -1;
+          return JSON.stringify({
+            hasCaptcha: Boolean(isNeedCaptcha),
+            hasFatalError: Boolean(isFatal),
+            errorMessage: errText
+          });
+        })()
+      ''');
+      final normalized = _normalizeJsString(jsResult);
+      if (normalized != null && normalized.isNotEmpty) {
+        final data = jsonDecode(normalized) as Map<String, dynamic>;
+        return (
+          hasCaptcha: data['hasCaptcha'] as bool? ?? false,
+          hasFatalError: data['hasFatalError'] as bool? ?? false,
+          errorMessage: data['errorMessage'] as String? ?? '',
+        );
+      }
+    } catch (e) {
+      debugPrint('[SilentZoveToken] security check error: $e');
+    }
+    return (hasCaptcha: false, hasFatalError: false, errorMessage: '');
+  }
+
+  Future<void> _autofillAndSubmit(String username, String password) async {
+    final encodedUsername = jsonEncode(username);
+    final encodedPassword = jsonEncode(password);
+    await _controller.runJavaScript('''
+      (function () {
+        var username = $encodedUsername;
+        var password = $encodedPassword;
+        var attempts = 0;
+
+        function findUsername() {
+          return document.getElementById('username') ||
+            document.querySelector('input[name="username"], input[name="account"], input[name="userName"], input[name="userNo"], input[autocomplete="username"], input[placeholder*="账号"], input[placeholder*="学号"]');
+        }
+
+        function findPassword() {
+          return document.getElementById('password') ||
+            document.querySelector('input[name="password"], input[type="password"], input[autocomplete="current-password"], input[placeholder*="密码"]');
+        }
+
+        function setValue(input, value) {
+          var setter = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            'value'
+          ).set;
+          setter.call(input, value);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function fillAndSubmit() {
+          var userInput = findUsername();
+          var passwordInput = findPassword();
+          if (!userInput || !passwordInput) return false;
+          if (!userInput.value) setValue(userInput, username);
+          if (!passwordInput.value) setValue(passwordInput, password);
+          var button = document.querySelector('#login_submit') ||
+            document.querySelector('button[type="submit"]') ||
+            document.querySelector('input[type="submit"]') ||
+            Array.prototype.find.call(document.querySelectorAll('button'), function (item) {
+              return item.textContent && item.textContent.trim() === '登录';
+            });
+          if (button && !button.disabled) button.click();
+          return true;
+        }
+
+        function retry() {
+          if (fillAndSubmit() || attempts++ >= 20) return;
+          setTimeout(retry, 250);
+        }
+        retry();
+      })();
+    ''');
   }
 
   Future<void> _autofillZhxgAndSubmit(String username, String password) async {

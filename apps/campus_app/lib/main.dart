@@ -16,6 +16,7 @@ import 'utils/providers.dart';
 import 'utils/semester_service.dart';
 import 'package:campus_platform/services/background_task.dart';
 import 'pages/login_page.dart';
+import 'pages/webview_login_page.dart';
 import 'pages/schedule_page.dart';
 import 'pages/campus_card_page.dart';
 import 'pages/electricity_page.dart';
@@ -430,6 +431,33 @@ class _MainShellState extends ConsumerState<_MainShell>
       if (next.hasValue) {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => unawaited(_trySchedule()),
+        );
+      }
+    });
+
+    ref.listen<bool>(autoLoginRateLimitedProvider, (prev, next) {
+      if (next && context.mounted) {
+        final creds = ref.read(credentialsProvider);
+        if (creds == null) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('自动登录已达每小时上限（6次），请手动登录以继续使用'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: '手动登录',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WebViewLoginPage(
+                      username: creds.username,
+                      password: creds.password,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         );
       }
     });

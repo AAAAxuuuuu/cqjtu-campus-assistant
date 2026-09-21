@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:campus_platform/services/credential_service.dart';
+import 'package:campus_platform/services/session_service.dart';
 import 'package:data/data.dart';
 
 import '../theme/app_theme.dart';
@@ -39,6 +40,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final previousUsername = ref.read(credentialsProvider)?.username.trim();
     await ref.read(credentialServiceProvider).save(username, password);
     ref.read(credentialsProvider.notifier).set(username, password);
+    await ref.read(sessionServiceProvider).clearAutoLoginAttempts(username);
+    await ref.read(sessionServiceProvider).resetAuthCircuitBreaker(username);
+    final gateway = ref.read(campusGatewayProvider);
+    if (gateway is DirectSchoolCampusGateway) {
+      await gateway.resetAuthCircuitBreaker(username);
+    }
+    ref.read(autoLoginRateLimitedProvider.notifier).state = false;
+    ref.read(manualLoginRateLimitedProvider.notifier).state = false;
     if (previousUsername != null &&
         previousUsername.isNotEmpty &&
         previousUsername != username) {
@@ -70,7 +79,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await _verifyLoginForCurrentMode(username, password);
       await _saveCredentialsAndFinish(username, password);
     } catch (error) {
-      if (_requiresSecurityVerification(error)) {
+      if (error is ManualLoginRateLimitedFailure) {
+        ref.read(manualLoginRateLimitedProvider.notifier).state = true;
+        setState(() {
+          _error = '密码错误次数过多，请稍后再试或使用网页登录';
+          _loading = false;
+        });
+      } else if (_requiresSecurityVerification(error)) {
         setState(() {
           _error = '需要安全验证，正在打开网页登录...';
           _loading = false;

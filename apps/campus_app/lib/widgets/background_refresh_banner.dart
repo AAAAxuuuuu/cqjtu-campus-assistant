@@ -1,15 +1,40 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:campus_app/theme/app_theme.dart';
 
-class BackgroundRefreshBanner extends StatelessWidget {
+class BackgroundRefreshBanner extends StatefulWidget {
   const BackgroundRefreshBanner({
     super.key,
     required this.onRefresh,
     this.message = '后台刷新连续失败，当前显示的是上次缓存。',
   });
 
-  final VoidCallback onRefresh;
+  final FutureOr<void> Function() onRefresh;
   final String message;
+
+  @override
+  State<BackgroundRefreshBanner> createState() =>
+      _BackgroundRefreshBannerState();
+}
+
+class _BackgroundRefreshBannerState extends State<BackgroundRefreshBanner> {
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      final res = widget.onRefresh();
+      if (res is Future) {
+        await res;
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,14 +56,25 @@ class BackgroundRefreshBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              message,
+              widget.message,
               style: TextStyle(color: AppColors.textBody, fontSize: 12),
             ),
           ),
           TextButton.icon(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('手动刷新'),
+            onPressed: _isRefreshing ? null : _handleRefresh,
+            icon: _isRefreshing
+                ? SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.warning,
+                      ),
+                    ),
+                  )
+                : const Icon(Icons.refresh, size: 16),
+            label: Text(_isRefreshing ? '正在刷新' : '手动刷新'),
           ),
         ],
       ),

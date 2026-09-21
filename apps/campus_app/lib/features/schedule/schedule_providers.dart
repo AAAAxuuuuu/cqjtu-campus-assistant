@@ -40,7 +40,9 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
   Duration get cacheFreshness => const Duration(hours: 2);
 
   @override
-  String? cacheScopeForArg(String? arg) => arg;
+  String? cacheScopeForArg(String? arg) {
+    return resolveSemesterKeySync(ref, arg);
+  }
 
   @override
   Object? encode(ScheduleResult data) => {
@@ -87,7 +89,11 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
     final selectedSemester = await ref.read(
       selectedScheduleSemesterProvider.future,
     );
-    final semesterKey = resourceArg ?? selectedSemester;
+    final semesterKey = await resolveSemesterKey(
+      ref,
+      resourceArg ?? selectedSemester,
+      listen: false,
+    );
     final customCourses = await ref.read(
       customCoursesProvider(semesterKey).future,
     );
@@ -97,9 +103,15 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
     final scheduleResult = await gateway.getSchedule(
       credentials.username,
       credentials.password,
-      semester: resourceArg,
+      semester: semesterKey,
       forceRefresh: forceRefresh,
     );
+
+    if (scheduleResult.courses.isEmpty &&
+        state.hasData &&
+        state.data.courses.isNotEmpty) {
+      throw const SchoolSystemChangedFailure('远端课表返回空数据，已拦截以保护既有本地缓存');
+    }
 
     final semesterStart = await _resolveSemesterStart(ref, semesterKey);
     final examCourses = semesterStart == null
@@ -108,7 +120,7 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
             gateway: gateway,
             username: credentials.username,
             password: credentials.password,
-            semester: resourceArg,
+            semester: semesterKey,
             semesterStart: semesterStart,
             totalWeeks: totalWeeks,
           );
@@ -152,7 +164,10 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
 
 Future<DateTime?> _resolveSemesterStart(Ref ref, String? semesterKey) async {
   if (semesterKey != null && semesterKey.isNotEmpty) {
-    return ref.watch(semesterStartForKeyProvider(semesterKey).future);
+    final startForKey = await ref.watch(
+      semesterStartForKeyProvider(semesterKey).future,
+    );
+    if (startForKey != null) return startForKey;
   }
   return ref.watch(semesterStartProvider.future);
 }
@@ -342,6 +357,47 @@ String calculateSemester(DateTime date) {
   } else {
     return '${year - 1}-$year-2';
   }
+}
+
+/// 同步解析学期 Key。
+/// 当 [semester] 为 null 或空串时，优先使用选中的学期字符串；
+/// 若未选择，则使用当前激活学期的 start date 计算学期字符串；
+/// 仍未设置 start date 时后备回退到当前时间的学期字符串。
+String resolveSemesterKeySync(Ref ref, String? semester) {
+  final safeSemester = semester?.trim();
+  if (safeSemester != null && safeSemester.isNotEmpty) {
+    return safeSemester;
+  }
+
+  final selected = ref
+      .read(selectedScheduleSemesterProvider)
+      .valueOrNull
+      ?.trim();
+  if (selected != null && selected.isNotEmpty) {
+    return selected;
+  }
+
+  final startDate = ref.read(semesterStartProvider).valueOrNull;
+  if (startDate != null) {
+    return calculateSemester(startDate);
+  }
+
+  final accountId = getAccountId(ref, listen: false);
+  final service = ref.read(semesterServiceProvider);
+  if (service.cacheReadyFor(accountId)) {
+    final selectedSync = service
+        .loadSelectedSemesterSync(accountId: accountId)
+        ?.trim();
+    if (selectedSync != null && selectedSync.isNotEmpty) {
+      return selectedSync;
+    }
+    final defaultStart = service.loadSync(accountId: accountId);
+    if (defaultStart != null) {
+      return calculateSemester(defaultStart);
+    }
+  }
+
+  return calculateSemester(DateTime.now());
 }
 
 /// 动态解析学期 Key。

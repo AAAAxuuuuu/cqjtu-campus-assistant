@@ -242,7 +242,7 @@ mixin CachedResourceRefreshMixin<T> {
     });
 
     ref.listen<int>(sessionUpdateProvider, (_, next) {
-      unawaited(refresh(forceRefresh: true));
+      unawaited(refresh(forceRefresh: false));
     });
 
     listenDependencies();

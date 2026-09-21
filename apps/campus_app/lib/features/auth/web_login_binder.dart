@@ -1,6 +1,7 @@
 import 'package:data/data.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'auth_providers.dart';
 import '../../providers/runtime_mode.dart';
 import '../../providers/session.dart';
 import '../../providers/shared.dart';
@@ -24,6 +25,13 @@ class WebLoginBinder {
         await _bindSelfHosted(username: username, result: result);
     }
 
+    await ref.read(sessionServiceProvider).resetAuthCircuitBreaker(username);
+    final gateway = ref.read(campusGatewayProvider);
+    if (gateway is DirectSchoolCampusGateway) {
+      await gateway.resetAuthCircuitBreaker(username);
+    }
+
+    ref.read(autoLoginRateLimitedProvider.notifier).state = false;
     ref.read(sessionUpdateProvider.notifier).triggerRefresh();
     ref.read(zoveTokenRefreshProvider.notifier).requestRefresh();
   }
@@ -50,6 +58,7 @@ class WebLoginBinder {
           ecardCookies: artifacts.ecardCookies,
           zoveToken: artifacts.zoveToken,
         );
+    await ref.read(sessionServiceProvider).clearAutoLoginAttempts(username);
 
     final hasCookies =
         artifacts.jwgCookies.isNotEmpty || artifacts.casCookies.isNotEmpty;

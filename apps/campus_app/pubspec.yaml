@@ -1,7 +1,7 @@
 name: campus_app
 description: "重交校园助手 - 课程表、校园卡、电费一体化管理"
 publish_to: 'none'
-version: 1.0.3+2100
+version: 1.0.4+2201
 
 environment:
   sdk: ^3.11.0
@@ -58,6 +58,7 @@ dependencies:
     path: ../../packages/platform
   data:
     path: ../../packages/data
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:

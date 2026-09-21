@@ -64,3 +64,10 @@ void ensureCredentialPassword(({String username, String password}) creds) {
     throw Exception('Credential password is empty, please login again');
   }
 }
+
+/// Indicates whether the current account has hit the 1-hour 6-attempts auto-login limit, min 5-min interval.
+final autoLoginRateLimitedProvider = StateProvider<bool>((ref) => false);
+
+/// Indicates whether the current account has hit the 1-hour 5-attempts manual login failure limit.
+final manualLoginRateLimitedProvider = StateProvider<bool>((ref) => false);
+

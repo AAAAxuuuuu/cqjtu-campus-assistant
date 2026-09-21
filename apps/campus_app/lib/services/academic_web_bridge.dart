@@ -6,8 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../features/auth/auth_providers.dart';
+
 final academicWebBridgeProvider = Provider<AcademicWebBridge>((ref) {
-  final bridge = AcademicWebBridge();
+  final bridge = AcademicWebBridge(
+    getCredentials: () => ref.read(credentialsProvider),
+  );
   ref.onDispose(bridge.dispose);
   return bridge;
 });
@@ -19,7 +23,9 @@ final academicWebBridgeProvider = Provider<AcademicWebBridge>((ref) {
 /// by allowing the WAF's client-side scripts to dynamically compute and attach
 /// valid request signatures (`mGW1fXiL4aFHT`) to every outgoing academic request.
 class AcademicWebBridge {
-  AcademicWebBridge() {
+  AcademicWebBridge({
+    ({String username, String password})? Function()? getCredentials,
+  }) : _getCredentials = getCredentials {
     _controller = WebViewController()
       ..setUserAgent(campusWebUserAgent)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -35,14 +41,9 @@ class AcademicWebBridge {
           onPageFinished: (url) async {
             debugPrint('[AcademicBridge] page finished: $url');
             if (url.contains('jwgln.cqjtu.edu.cn')) {
+              _isSubmittingCas = false;
               if (url.contains('authserver/login')) {
-                debugPrint(
-                  '[AcademicBridge] landed on CAS login, session expired',
-                );
-                _isReady = false;
-                if (!(_readyCompleter?.isCompleted ?? true)) {
-                  _readyCompleter?.complete();
-                }
+                await _handleCasRedirect(url);
               } else {
                 // If this is the initial Ruishu challenge page (very short body with $_ts),
                 // Chromium is about to auto-reload. Delay marking ready until the real page settles.
@@ -69,10 +70,7 @@ class AcademicWebBridge {
               }
             } else if (url.contains('ids.cqjtu.edu.cn')) {
               debugPrint('[AcademicBridge] redirected to CAS login ($url)');
-              _isReady = false;
-              if (!(_readyCompleter?.isCompleted ?? true)) {
-                _readyCompleter?.complete();
-              }
+              await _handleCasRedirect(url);
             }
           },
           onWebResourceError: (error) {
@@ -80,6 +78,148 @@ class AcademicWebBridge {
           },
         ),
       );
+  }
+
+  final ({String username, String password})? Function()? _getCredentials;
+  bool _isSubmittingCas = false;
+
+  Future<void> _handleCasRedirect(String url) async {
+    _isReady = false;
+    final creds = _getCredentials?.call();
+    if (creds == null) {
+      debugPrint(
+        '[AcademicBridge] landed on CAS login, but no credentials available',
+      );
+      if (!(_readyCompleter?.isCompleted ?? true)) {
+        _readyCompleter?.complete();
+      }
+      return;
+    }
+
+    if (_isSubmittingCas) {
+      debugPrint(
+        '[AcademicBridge] already attempting CAS login, awaiting result',
+      );
+      return;
+    }
+
+    try {
+      final jsResult = await _controller.runJavaScriptReturningResult(r'''
+        (function() {
+          var isNeedCaptcha = false;
+          if (typeof window.needCaptcha !== 'undefined' && (window.needCaptcha === true || window.needCaptcha === '1' || window.needCaptcha === 1)) {
+            isNeedCaptcha = true;
+          }
+          var captchaDiv = document.getElementById('captchaDiv') || document.getElementById('cAuthCode') || document.getElementById('sliderCaptchaDiv');
+          if (captchaDiv) {
+            var style = window.getComputedStyle(captchaDiv);
+            var isVisible = style.display !== 'none' && style.visibility !== 'hidden' && !captchaDiv.classList.contains('hide');
+            var captchaImg = document.getElementById('captchaImg');
+            var hasImgSrc = captchaImg && captchaImg.getAttribute('src') && captchaImg.getAttribute('src').length > 0;
+            if (isVisible && (hasImgSrc || isNeedCaptcha)) {
+              isNeedCaptcha = true;
+            }
+          }
+          var errElem = document.getElementById('msg') ||
+            document.querySelector('.auth_error, .show_error, #showErrorMsg, .errors');
+          var errText = errElem ? (errElem.textContent || '').trim() : '';
+          var isFatal = errText.indexOf('锁定') !== -1 ||
+            errText.indexOf('错误') !== -1 ||
+            errText.indexOf('无效') !== -1;
+          return JSON.stringify({
+            hasCaptcha: Boolean(isNeedCaptcha),
+            hasFatalError: Boolean(isFatal),
+            errorMessage: errText
+          });
+        })()
+      ''');
+      final normalized = _normalizeJsString(jsResult);
+      if (normalized != null && normalized.isNotEmpty) {
+        final data = jsonDecode(normalized) as Map<String, dynamic>;
+        if (data['hasCaptcha'] == true || data['hasFatalError'] == true) {
+          debugPrint(
+            '[AcademicBridge] CAS page requires CAPTCHA or shows error: ${data['errorMessage']}; aborting silent login',
+          );
+          if (!(_readyCompleter?.isCompleted ?? true)) {
+            _readyCompleter?.complete();
+          }
+          return;
+        }
+      }
+
+      _isSubmittingCas = true;
+      debugPrint(
+        '[AcademicBridge] landed on CAS login, automatically filling and submitting credentials',
+      );
+      final encodedUsername = jsonEncode(creds.username);
+      final encodedPassword = jsonEncode(creds.password);
+      await _controller.runJavaScript('''
+        (function () {
+          var username = $encodedUsername;
+          var password = $encodedPassword;
+          var attempts = 0;
+
+          function findUsername() {
+            return document.getElementById('username') ||
+              document.querySelector('input[name="username"], input[name="account"], input[name="userName"], input[name="userNo"], input[autocomplete="username"], input[placeholder*="账号"], input[placeholder*="学号"]');
+          }
+
+          function findPassword() {
+            return document.getElementById('password') ||
+              document.querySelector('input[name="password"], input[type="password"], input[autocomplete="current-password"], input[placeholder*="密码"]');
+          }
+
+          function setValue(input, value) {
+            var setter = Object.getOwnPropertyDescriptor(
+              HTMLInputElement.prototype,
+              'value'
+            ).set;
+            setter.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+
+          function fillAndSubmit() {
+            var userInput = findUsername();
+            var passwordInput = findPassword();
+            if (!userInput || !passwordInput) return false;
+            if (!userInput.value) setValue(userInput, username);
+            if (!passwordInput.value) setValue(passwordInput, password);
+            var button = document.querySelector('#login_submit') ||
+              document.querySelector('button[type="submit"]') ||
+              document.querySelector('input[type="submit"]') ||
+              Array.prototype.find.call(document.querySelectorAll('button'), function (item) {
+                return item.textContent && item.textContent.trim() === '登录';
+              });
+            if (button && !button.disabled) button.click();
+            return true;
+          }
+
+          function retry() {
+            if (fillAndSubmit() || attempts++ >= 20) return;
+            setTimeout(retry, 250);
+          }
+          retry();
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('[AcademicBridge] CAS auto-submit error: $e');
+      _isSubmittingCas = false;
+      if (!(_readyCompleter?.isCompleted ?? true)) {
+        _readyCompleter?.complete();
+      }
+    }
+  }
+
+  String? _normalizeJsString(Object? value) {
+    if (value == null) return null;
+    var text = value.toString().trim();
+    if (text == 'null' || text == 'undefined') return null;
+    if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+      text = text.substring(1, text.length - 1);
+    }
+    text = text.replaceAll(r'\"', '"').replaceAll(r'\n', '\n').trim();
+    return text.isEmpty ? null : text;
   }
 
   late final WebViewController _controller;
