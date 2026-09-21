@@ -28,6 +28,8 @@ class CredentialService {
   Future<void> save(String username, String password) async {
     await _storage.write(key: _keyUsername, value: username);
     await _storage.write(key: _keyPassword, value: password);
+    await _storage.delete(key: 'auth_circuit_broken_$username');
+    await _storage.delete(key: 'auto_login_attempts_$username');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_signedInUsernameKey, username);
     if (kDebugMode) {

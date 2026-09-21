@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'package:core/models/course.dart';
 import 'package:core/models/dorm_room.dart';
-import 'package:core/utils/resource_cache_key.dart';
+import 'package:core/models/schedule_calendar_rules.dart';
 import 'package:core/utils/polling_utils.dart';
+import 'package:core/utils/resource_cache_key.dart';
+import 'package:core/utils/schedule_time_utils.dart';
 import 'package:data/data.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'app_update_service.dart';
 import 'notification_service.dart';
+import 'schedule_widget_service.dart';
+import 'session_service.dart';
 
 const kBgTaskName = 'balanceMonitor';
 const kBgTaskTag = 'com.axu.schedule.balanceMonitor';
@@ -134,6 +139,11 @@ void backgroundCallbackDispatcher() {
         const String.fromEnvironment('ENV', defaultValue: 'localAndroid'),
       );
 
+      final sessionService = SessionService();
+      final sharedGateway =
+          DirectSchoolCampusGateway(sessionStore: sessionService);
+
+      var balanceAuthOk = true;
       if (runtimeMode == CampusRuntimeMode.selfHosted) {
         await _runSelfHostedBalanceChecks(
           storage: storage,
@@ -146,7 +156,7 @@ void backgroundCallbackDispatcher() {
           dormParams: dormParams,
         );
       } else if (runtimeMode == CampusRuntimeMode.localAndroid) {
-        await _runLocalAndroidBalanceChecks(
+        balanceAuthOk = await runLocalAndroidBalanceChecks(
           prefs: prefs,
           plugin: plugin,
           username: username,
@@ -154,6 +164,29 @@ void backgroundCallbackDispatcher() {
           elecThreshold: elecThreshold,
           cardThreshold: cardThreshold,
           dormParams: dormParams,
+          sessionService: sessionService,
+          gateway: sharedGateway,
+        );
+      }
+
+      // Silent schedule synchronization with 2-hour freshness window and 10/hr rate limiting
+      if (balanceAuthOk &&
+          !(await sessionService.isAuthCircuitBroken(username)) &&
+          !(await sharedGateway.isAuthCircuitBroken(username))) {
+        try {
+          await runBackgroundScheduleSync(
+            prefs: prefs,
+            username: username,
+            password: password,
+            sessionService: sessionService,
+            gateway: sharedGateway,
+          );
+        } catch (error) {
+          debugPrint('[BG] schedule sync unexpected failure: $error');
+        }
+      } else {
+        debugPrint(
+          '[BG] skipping schedule sync due to preceding auth failure or circuit breaker for ${_redactIdentifier(username)}',
         );
       }
 
@@ -264,7 +297,8 @@ Future<void> _runSelfHostedBalanceChecks({
   );
 }
 
-Future<void> _runLocalAndroidBalanceChecks({
+@visibleForTesting
+Future<bool> runLocalAndroidBalanceChecks({
   required SharedPreferences prefs,
   required FlutterLocalNotificationsPlugin plugin,
   required String username,
@@ -272,31 +306,80 @@ Future<void> _runLocalAndroidBalanceChecks({
   required double elecThreshold,
   required double cardThreshold,
   required Map<String, String>? dormParams,
+  SessionService? sessionService,
+  DirectSchoolCampusGateway? gateway,
+  DateTime? now,
 }) async {
-  final gateway = DirectSchoolCampusGateway();
+  final session = sessionService ?? SessionService();
+  final gw = gateway ?? DirectSchoolCampusGateway(sessionStore: session);
   String? elecBalance;
   String? cardBalance;
+  var authFailed = false;
+
+  // Check circuit breaker first
+  if (await session.isAuthCircuitBroken(username) ||
+      await gw.isAuthCircuitBroken(username)) {
+    debugPrint(
+      '[BG] auth circuit breaker active for ${_redactIdentifier(username)}, skipping balance checks',
+    );
+    return false;
+  }
+
+  // Front-gate rate limit check (F5)
+  if (!await session.canAttemptAutoLogin(username, now: now)) {
+    debugPrint(
+      '[BG] auto-login rate limit exceeded for ${_redactIdentifier(username)}, skipping balance checks',
+    );
+    return false;
+  }
 
   if (dormParams != null) {
     try {
-      elecBalance = await gateway.getElecBalance(
+      elecBalance = await gw.getElecBalance(
         username,
         password,
         dormParams: dormParams,
       );
       await _notifyElecIfNeeded(plugin, prefs, elecBalance, elecThreshold);
+    } on AuthInvalidFailure catch (e) {
+      debugPrint('[BG] local elec check auth invalid: $e');
+      authFailed = true;
+      await session.markAuthCircuitBroken(username);
+    } on CampusFailure catch (e) {
+      debugPrint('[BG] local elec check campus failure: $e');
+      if (e is! DormNotConfiguredFailure) {
+        authFailed = true;
+      }
     } catch (error) {
       debugPrint('[BG] local elec check failed: ${error.runtimeType}');
+      authFailed = true;
     }
   } else {
     debugPrint('[BG] local elec check skipped: dorm not configured');
   }
 
-  try {
-    cardBalance = await gateway.getCampusCardBalance(username, password);
-    await _notifyCardIfNeeded(plugin, prefs, cardBalance, cardThreshold);
-  } catch (error) {
-    debugPrint('[BG] local card check failed: ${error.runtimeType}');
+  // If previous subtask suffered an auth failure or rate limit, short-circuit!
+  if (!authFailed &&
+      !(await session.isAuthCircuitBroken(username)) &&
+      !(await gw.isAuthCircuitBroken(username))) {
+    try {
+      cardBalance = await gw.getCampusCardBalance(username, password);
+      await _notifyCardIfNeeded(plugin, prefs, cardBalance, cardThreshold);
+    } on AuthInvalidFailure catch (e) {
+      debugPrint('[BG] local card check auth invalid: $e');
+      authFailed = true;
+      await session.markAuthCircuitBroken(username);
+    } on CampusFailure catch (e) {
+      debugPrint('[BG] local card check campus failure: $e');
+      authFailed = true;
+    } catch (error) {
+      debugPrint('[BG] local card check failed: ${error.runtimeType}');
+      authFailed = true;
+    }
+  } else {
+    debugPrint(
+      '[BG] local card check skipped due to previous auth failure or circuit breaker for ${_redactIdentifier(username)}',
+    );
   }
 
   await backfillBalanceCaches(
@@ -306,6 +389,8 @@ Future<void> _runLocalAndroidBalanceChecks({
     cardBalance: cardBalance,
     dormParams: dormParams,
   );
+
+  return !authFailed;
 }
 
 Map<String, String>? _readDormParams(
@@ -452,6 +537,304 @@ Future<void> backfillBalanceCaches({
     );
     await prefs.setInt('bg_card_checked_at_ms', now);
   }
+}
+
+/// Silently synchronizes timetable schedule in background task.
+///
+/// Adheres to:
+/// - 2-hour freshness window: skips network call if schedule was checked within 2 hours.
+/// - Auto-login rate limiting: skips if 10 attempts were made in the past 1 hour.
+/// - Defensive cache guard: never overwrites existing non-empty cache with empty courses.
+/// - Standard ResourceCacheStore persistence in SharedPreferences.
+/// - Updates desktop AppWidget and class reminders on successful fresh fetch.
+/// - Silently catches all errors (captcha, WAF, session timeout, network) without clearing cache.
+@visibleForTesting
+Future<bool> runBackgroundScheduleSync({
+  required SharedPreferences prefs,
+  required String username,
+  required String password,
+  String? semester,
+  DirectSchoolCampusGateway? gateway,
+  SessionService? sessionService,
+  DateTime? now,
+}) async {
+  final current = now ?? DateTime.now();
+  final session = sessionService ?? SessionService();
+  final targetSemester = (semester != null && semester.trim().isNotEmpty)
+      ? semester.trim()
+      : _resolveTargetSemester(prefs, username, current);
+  final cacheKey =
+      resourceCacheKey('schedule', username: username, scope: targetSemester);
+
+  // 1. Freshness Check (2-hour window)
+  final lastCheckedMs = _getScheduleLastCheckedMs(prefs, username, cacheKey);
+  if (lastCheckedMs != null && lastCheckedMs > 0) {
+    final lastChecked = DateTime.fromMillisecondsSinceEpoch(lastCheckedMs);
+    final age = current.difference(lastChecked);
+    if (!age.isNegative && age < const Duration(hours: 2)) {
+      debugPrint(
+        '[BG] schedule freshness hit (age=${age.inMinutes}m < 2h) for ${_redactIdentifier(username)}, skipping network sync',
+      );
+      return false;
+    }
+  }
+
+  // 2. Circuit Breaker & Auto-login Rate Limiting Check (<= 6 attempts per hour, min 5-min interval)
+  if (await session.isAuthCircuitBroken(username) ||
+      (gateway != null && await gateway.isAuthCircuitBroken(username))) {
+    debugPrint(
+      '[BG] auth circuit breaker active for ${_redactIdentifier(username)}, skipping schedule sync',
+    );
+    return false;
+  }
+  final canLogin = await session.canAttemptAutoLogin(username, now: current);
+  if (!canLogin) {
+    debugPrint(
+      '[BG] auto-login rate limit exceeded (6/hr) for ${_redactIdentifier(username)}, skipping schedule sync',
+    );
+    return false;
+  }
+
+  // 3. Network Fetch via Gateway
+  final gw = gateway ?? DirectSchoolCampusGateway(sessionStore: session);
+  final ({List<Course> courses, String remark}) scheduleResult;
+  try {
+    scheduleResult = await gw.getSchedule(
+      username,
+      password,
+      semester: targetSemester,
+    );
+  } on AuthInvalidFailure catch (e) {
+    await session.markAuthCircuitBroken(username);
+    debugPrint(
+      '[BG] silent schedule sync auth invalid for ${_redactIdentifier(username)}: $e',
+    );
+    return false;
+  } on CampusFailure catch (e) {
+    debugPrint(
+      '[BG] silent schedule sync campus failure for ${_redactIdentifier(username)}: $e',
+    );
+    return false;
+  } catch (error) {
+    debugPrint(
+      '[BG] silent schedule sync network/unknown failure for ${_redactIdentifier(username)}: ${error.runtimeType}',
+    );
+    return false;
+  }
+
+  // 4. Defensive Cache Check: Do not overwrite non-empty cache with empty courses
+  final existingRaw = prefs.getString(cacheKey);
+  var hasNonEmptyExistingCache = false;
+  if (existingRaw != null && existingRaw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(existingRaw);
+      if (decoded is Map) {
+        final data = decoded['data'];
+        if (data is Map) {
+          final courses = data['courses'];
+          if (courses is List && courses.isNotEmpty) {
+            hasNonEmptyExistingCache = true;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (scheduleResult.courses.isEmpty && hasNonEmptyExistingCache) {
+    debugPrint(
+      '[BG] remote schedule is empty while existing cache has courses for $targetSemester, preserving local cache',
+    );
+    return false;
+  }
+
+  // 5. Cache Write in ResourceCacheStore format
+  final customCourses = _resolveCustomCourses(prefs, username, targetSemester);
+  final allCourses = [...scheduleResult.courses, ...customCourses];
+  final payload = jsonEncode({
+    'updatedAtMs': current.millisecondsSinceEpoch,
+    'data': {
+      'courses': allCourses.map((c) => c.toJson()).toList(),
+      'remark': scheduleResult.remark,
+    },
+  });
+  await prefs.setString(cacheKey, payload);
+  await prefs.setInt(
+    'bg_schedule_last_sync_ms_$username',
+    current.millisecondsSinceEpoch,
+  );
+  await prefs.setInt(
+    'bg_schedule_checked_at_ms',
+    current.millisecondsSinceEpoch,
+  );
+
+  // 6. Update Desktop AppWidget & System Class Reminders
+  final semesterStart =
+      _resolveSemesterStart(prefs, username, targetSemester, current);
+  final totalWeeks = _resolveTotalWeeks(prefs, username, targetSemester);
+  final calendarRules = _resolveCalendarRules(prefs, username);
+
+  try {
+    await ScheduleWidgetService.updateScheduleWidgets(
+      courses: allCourses,
+      semesterStart: semesterStart,
+      selectedSemester: targetSemester,
+      remark: scheduleResult.remark,
+      totalWeeks: totalWeeks,
+      calendarRules: calendarRules,
+    );
+  } catch (error) {
+    debugPrint('[BG] widget update failed: $error');
+  }
+
+  try {
+    await NotificationService.scheduleClassReminders(
+      allCourses,
+      semesterStart,
+      totalWeeks: totalWeeks,
+      calendarRules: calendarRules,
+      accountId: username,
+    );
+  } catch (error) {
+    debugPrint('[BG] reminder update failed: $error');
+  }
+
+  return true;
+}
+
+String _resolveTargetSemester(
+  SharedPreferences prefs,
+  String username,
+  DateTime now,
+) {
+  final selected = prefs.getString('user_${username}_selected_semester_str') ??
+      prefs.getString('selected_semester_str');
+  if (selected != null && selected.trim().isNotEmpty) {
+    return selected.trim();
+  }
+  final startDateStr =
+      prefs.getString('user_${username}_semester_start_date') ??
+          prefs.getString('semester_start_date');
+  if (startDateStr != null) {
+    final startDate = DateTime.tryParse(startDateStr);
+    if (startDate != null) {
+      return calculateSemester(startDate);
+    }
+  }
+  return calculateSemester(now);
+}
+
+DateTime _resolveSemesterStart(
+  SharedPreferences prefs,
+  String username,
+  String semesterKey,
+  DateTime now,
+) {
+  final keyStartStr =
+      prefs.getString('user_${username}_semester_start_key_$semesterKey') ??
+          prefs.getString('semester_start_key_$semesterKey');
+  if (keyStartStr != null) {
+    final date = DateTime.tryParse(keyStartStr);
+    if (date != null) return date;
+  }
+  final defaultStartStr =
+      prefs.getString('user_${username}_semester_start_date') ??
+          prefs.getString('semester_start_date');
+  if (defaultStartStr != null) {
+    final date = DateTime.tryParse(defaultStartStr);
+    if (date != null) return date;
+  }
+  return _calculateFallbackSemesterStart(now, semesterKey);
+}
+
+DateTime _calculateFallbackSemesterStart(DateTime now, String semesterKey) {
+  final parts = semesterKey.split('-');
+  if (parts.length == 3) {
+    final startYear = int.tryParse(parts[0]);
+    final term = parts[2];
+    if (startYear != null) {
+      if (term == '1') {
+        return DateTime(startYear, 9, 1);
+      } else if (term == '2') {
+        return DateTime(startYear + 1, 2, 20);
+      }
+    }
+  }
+  return DateTime(now.year, now.month, 1);
+}
+
+int _resolveTotalWeeks(
+  SharedPreferences prefs,
+  String username,
+  String semesterKey,
+) {
+  final stored =
+      prefs.getInt('user_${username}_semester_total_weeks_$semesterKey') ??
+          prefs.getInt('semester_total_weeks_$semesterKey') ??
+          prefs.getInt('user_${username}_semester_total_weeks') ??
+          prefs.getInt('semester_total_weeks');
+  if (stored != null && stored > 0) {
+    return stored.clamp(1, 40).toInt();
+  }
+  return 20;
+}
+
+ScheduleCalendarRules _resolveCalendarRules(
+  SharedPreferences prefs,
+  String username,
+) {
+  final raw = prefs.getString('user_${username}_schedule_calendar_rules') ??
+      prefs.getString('schedule_calendar_rules');
+  if (raw != null && raw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      return ScheduleCalendarRules.fromJson(decoded);
+    } catch (_) {}
+  }
+  return ScheduleCalendarRules.empty;
+}
+
+List<Course> _resolveCustomCourses(
+  SharedPreferences prefs,
+  String username,
+  String semesterKey,
+) {
+  final raw = prefs.getString('user_${username}_custom_courses_$semesterKey') ??
+      prefs.getString('custom_courses_$semesterKey');
+  if (raw != null && raw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) => Course.fromJson(Map<String, dynamic>.from(item)))
+            .map((course) => course.copyWith(isCustom: true))
+            .toList();
+      }
+    } catch (_) {}
+  }
+  return const <Course>[];
+}
+
+int? _getScheduleLastCheckedMs(
+  SharedPreferences prefs,
+  String username,
+  String cacheKey,
+) {
+  final bgLastSync = prefs.getInt('bg_schedule_last_sync_ms_$username');
+  final cachedRaw = prefs.getString(cacheKey);
+  int? cacheUpdatedAt;
+  if (cachedRaw != null && cachedRaw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(cachedRaw);
+      if (decoded is Map && decoded['updatedAtMs'] is int) {
+        cacheUpdatedAt = decoded['updatedAtMs'] as int;
+      }
+    } catch (_) {}
+  }
+  if (bgLastSync != null && cacheUpdatedAt != null) {
+    return bgLastSync > cacheUpdatedAt ? bgLastSync : cacheUpdatedAt;
+  }
+  return bgLastSync ?? cacheUpdatedAt;
 }
 
 Future<void> _notifyElecIfNeeded(
