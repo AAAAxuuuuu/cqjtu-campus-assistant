@@ -17,6 +17,7 @@ import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/background_refresh_banner.dart';
 import '../widgets/course_cell.dart';
 import '../widgets/error_view.dart';
 import '../widgets/glass_surface.dart';
@@ -382,6 +383,10 @@ class _ScheduleBody extends ConsumerWidget {
         },
         data: (result) => Column(
           children: [
+            if (scheduleAsync.shouldOfferManualRefresh)
+              BackgroundRefreshBanner(
+                onRefresh: () => _doRefresh(context, ref),
+              ),
             _WeekNavigator(
               semesterStart: semesterStart,
               selectedWeek: selectedWeek,
