@@ -105,7 +105,7 @@ void main() {
   });
 
   test(
-    'entering the campus-card page force-refreshes balance and pay code',
+    'entering campus-card page performs soft refresh (forceRefresh: false) and initial pay code fetch',
     () async {
       final gateway = TrackingCampusGateway();
       final container = ProviderContainer(
@@ -119,10 +119,60 @@ void main() {
         container.read(payCodeProvider.notifier),
       );
 
-      expect(gateway.balanceForceRefreshValues, contains(true));
+      expect(gateway.balanceForceRefreshValues, [false]);
       expect(container.read(campusCardBalanceProvider).data, '66.80');
       expect(container.read(payCodeProvider).token, 'pay-code-token');
-      expect(gateway.payCodeCalls, greaterThanOrEqualTo(1));
+      expect(gateway.payCodeCalls, 1);
+    },
+  );
+
+  test(
+    'second entry within debounce window reuses cached pay code without duplicate network calls',
+    () async {
+      final gateway = TrackingCampusGateway();
+      final container = ProviderContainer(
+        overrides: [campusGatewayProvider.overrideWithValue(gateway)],
+      );
+      addTearDown(container.dispose);
+      container.read(credentialsProvider.notifier).set('student', 'password');
+
+      // First entry
+      await refreshCampusCardOnEntry(
+        container.read(campusCardBalanceProvider.notifier),
+        container.read(payCodeProvider.notifier),
+      );
+      expect(gateway.payCodeCalls, 1);
+
+      // Second entry (switching back to tab)
+      await refreshCampusCardOnEntry(
+        container.read(campusCardBalanceProvider.notifier),
+        container.read(payCodeProvider.notifier),
+        refreshPayCode: false,
+      );
+      expect(gateway.payCodeCalls, 1);
+      expect(container.read(payCodeProvider).token, 'pay-code-token');
+    },
+  );
+
+  test(
+    'forceRefresh explicitly passed force-refreshes balance and payCode',
+    () async {
+      final gateway = TrackingCampusGateway();
+      final container = ProviderContainer(
+        overrides: [campusGatewayProvider.overrideWithValue(gateway)],
+      );
+      addTearDown(container.dispose);
+      container.read(credentialsProvider.notifier).set('student', 'password');
+
+      await refreshCampusCardOnEntry(
+        container.read(campusCardBalanceProvider.notifier),
+        container.read(payCodeProvider.notifier),
+        forceRefresh: true,
+        refreshPayCode: true,
+      );
+
+      expect(gateway.balanceForceRefreshValues, [true]);
+      expect(gateway.payCodeCalls, 1);
     },
   );
 }
