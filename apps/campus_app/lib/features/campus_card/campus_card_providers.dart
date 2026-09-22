@@ -17,12 +17,14 @@ final mainTabIndexProvider = StateProvider<int>((ref) => 0);
 
 Future<void> refreshCampusCardOnEntry(
   CampusCardBalanceNotifier balanceNotifier,
-  PayCodeNotifier payCodeNotifier,
-) async {
-  await Future.wait([
-    balanceNotifier.refresh(forceRefresh: true),
-    payCodeNotifier.refresh(forceRefresh: true),
-  ]);
+  PayCodeNotifier payCodeNotifier, {
+  bool forceRefresh = false,
+  bool refreshPayCode = false,
+}) async {
+  await balanceNotifier.refresh(forceRefresh: forceRefresh);
+  if (refreshPayCode || !payCodeNotifier.hasToken) {
+    await payCodeNotifier.refresh(forceRefresh: forceRefresh);
+  }
 }
 
 final campusCardBalanceProvider =
@@ -38,6 +40,9 @@ class CampusCardBalanceNotifier extends SimpleCachedResourceNotifier<String> {
 
   @override
   String get cacheNamespace => 'campus_card_balance';
+
+  @override
+  Duration? get cacheFreshness => const Duration(minutes: 15);
 
   @override
   Object? encode(String data) => data;
@@ -82,6 +87,7 @@ class PayCodeState {
     this.error,
     this.stackTrace,
     this.consecutiveFailures = 0,
+    this.updatedAt,
   });
 
   final String token;
@@ -89,6 +95,7 @@ class PayCodeState {
   final Object? error;
   final StackTrace? stackTrace;
   final int consecutiveFailures;
+  final DateTime? updatedAt;
 
   bool get hasToken => token.isNotEmpty;
   bool get hasError => error != null;
@@ -116,6 +123,7 @@ class PayCodeState {
     StackTrace? stackTrace,
     bool clearError = false,
     int? consecutiveFailures,
+    DateTime? updatedAt,
   }) {
     return PayCodeState(
       token: identical(token, _unsetToken) ? this.token : token as String,
@@ -123,6 +131,7 @@ class PayCodeState {
       error: clearError ? null : error ?? this.error,
       stackTrace: clearError ? null : stackTrace ?? this.stackTrace,
       consecutiveFailures: consecutiveFailures ?? this.consecutiveFailures,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }
@@ -139,9 +148,19 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
   @override
   PayCodeState build() => const PayCodeState();
 
+  bool get hasToken => state.hasToken;
+
   Future<void> refresh({bool forceRefresh = false, bool throwOnError = false}) {
     final existing = _inflight;
     if (existing != null && !forceRefresh) return existing;
+
+    if (!forceRefresh && state.hasToken) {
+      final updated = state.updatedAt;
+      if (updated != null &&
+          DateTime.now().difference(updated) < const Duration(minutes: 3)) {
+        return Future.value();
+      }
+    }
 
     final task = _refreshInternal(
       forceRefresh: forceRefresh,
@@ -173,7 +192,11 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
       final token = await ref
           .read(campusGatewayProvider)
           .getPayCodeToken(creds.username, password: creds.password);
-      state = PayCodeState(token: token);
+      state = PayCodeState(
+        token: token,
+        updatedAt: DateTime.now(),
+        consecutiveFailures: 0,
+      );
     } catch (error, stackTrace) {
       state = state.copyWith(
         isRefreshing: false,
