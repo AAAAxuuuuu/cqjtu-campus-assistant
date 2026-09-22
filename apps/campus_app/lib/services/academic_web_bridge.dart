@@ -235,6 +235,7 @@ class AcademicWebBridge {
 
   void _markReady() {
     _isReady = true;
+    _isSubmittingCas = false;
     if (!(_readyCompleter?.isCompleted ?? true)) {
       _readyCompleter?.complete();
     }
@@ -262,7 +263,7 @@ class AcademicWebBridge {
     }
   }
 
-  Future<void> warmup({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> warmup({Duration timeout = const Duration(seconds: 25)}) async {
     if (_disposed) return;
     final currentUrl = await _controller.currentUrl();
     if (currentUrl != null &&
@@ -311,11 +312,29 @@ class AcademicWebBridge {
       await warmup();
     }
 
-    final postWarmupUrl = await _controller.currentUrl();
-    final canFetch =
+    var postWarmupUrl = await _controller.currentUrl();
+    var canFetch =
         postWarmupUrl != null &&
         postWarmupUrl.contains('jwgln.cqjtu.edu.cn') &&
         !postWarmupUrl.contains('authserver/login');
+
+    if (!canFetch) {
+      if (_isSubmittingCas) {
+        debugPrint(
+          '[AcademicBridge] still submitting CAS credentials, waiting for redirect...',
+        );
+        for (var i = 0; i < 6; i++) {
+          await Future.delayed(const Duration(milliseconds: 1000));
+          postWarmupUrl = await _controller.currentUrl();
+          if (postWarmupUrl != null &&
+              postWarmupUrl.contains('jwgln.cqjtu.edu.cn') &&
+              !postWarmupUrl.contains('authserver/login')) {
+            canFetch = true;
+            break;
+          }
+        }
+      }
+    }
 
     if (!canFetch) {
       debugPrint(
