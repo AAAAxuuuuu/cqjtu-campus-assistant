@@ -3041,10 +3041,6 @@ class _UserSession {
       } on BotChallengeFailure catch (e) {
         _authenticated = false;
         _lastSilentLoginFailure = e;
-        await _sessionStore?.recordSecurityFailure(username);
-        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
-          _silentLoginAttemptedInSession = true;
-        }
         rethrow;
       } on CaptchaRequiredFailure catch (e) {
         _authenticated = false;
@@ -3191,10 +3187,6 @@ class _UserSession {
       } on BotChallengeFailure catch (e) {
         _authenticated = false;
         _lastSilentLoginFailure = e;
-        await _sessionStore?.recordSecurityFailure(username);
-        if (await _sessionStore?.isInSecurityCooldown(username) ?? false) {
-          _silentLoginAttemptedInSession = true;
-        }
         rethrow;
       } on CaptchaRequiredFailure catch (e) {
         _authenticated = false;

@@ -169,8 +169,13 @@ void backgroundCallbackDispatcher() {
         );
       }
 
-      // Silent schedule synchronization with 2-hour freshness window and 10/hr rate limiting
-      if (balanceAuthOk &&
+      // Silent schedule synchronization with 2-hour freshness window and 10/hr rate limiting.
+      // NOTE: In localAndroid mode, the headless background Dart isolate has no WebView to solve
+      // the Ruishu 6 WAF on jwgln.cqjtu.edu.cn (which returns 412). Therefore, schedule sync is
+      // only executed when running in selfHosted mode (or non-localAndroid).
+      // Class reminders in localAndroid are kept fresh offline by NotificationService.replenishFromSeedIfNeeded below.
+      if (runtimeMode != CampusRuntimeMode.localAndroid &&
+          balanceAuthOk &&
           !(await sessionService.isAuthCircuitBroken(username)) &&
           !(await sharedGateway.isAuthCircuitBroken(username))) {
         try {
@@ -186,7 +191,7 @@ void backgroundCallbackDispatcher() {
         }
       } else {
         debugPrint(
-          '[BG] skipping schedule sync due to preceding auth failure or circuit breaker for ${_redactIdentifier(username)}',
+          '[BG] skipping headless schedule sync (runtimeMode=$runtimeMode) or circuit breaker for ${_redactIdentifier(username)}',
         );
       }
 
