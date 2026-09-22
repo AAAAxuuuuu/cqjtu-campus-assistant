@@ -2366,6 +2366,9 @@ class DirectSchoolCampusGateway implements CampusGateway {
     bool forceRefresh = false,
   }) async {
     final session = _session(username);
+    if (forceRefresh) {
+      session.resetSilentLoginState();
+    }
     await session.ensureAuth(username, password);
 
     // POST to schedule URL with semester parameter
@@ -2717,6 +2720,9 @@ class DirectSchoolCampusGateway implements CampusGateway {
     bool forceRefresh = false,
   }) async {
     final session = _session(username);
+    if (forceRefresh) {
+      session.resetSilentLoginState();
+    }
     await session.ensureAuth(username, password);
 
     final ecardOk = await session.ensureEcardAuth(username);
