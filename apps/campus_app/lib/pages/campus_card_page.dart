@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:data/data.dart';
 import '../theme/app_theme.dart';
+import '../utils/campus_error_message.dart';
 import '../utils/providers.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_entrance.dart';
@@ -14,6 +15,7 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/glass_surface.dart';
 import '../widgets/spinning_refresh_button.dart';
+import 'webview_login_page.dart';
 
 class CampusCardPage extends ConsumerStatefulWidget {
   const CampusCardPage({super.key, this.scrollToQr = false});
@@ -35,16 +37,91 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
       if (widget.scrollToQr) {
         _scrollToQr();
       }
-      _autoRefreshCardData();
+      _autoRefreshCardData(refreshPayCode: widget.scrollToQr);
     });
   }
 
-  void _autoRefreshCardData() => unawaited(
+  void _autoRefreshCardData({bool refreshPayCode = false}) => unawaited(
     refreshCampusCardOnEntry(
       ref.read(campusCardBalanceProvider.notifier),
       ref.read(payCodeProvider.notifier),
+      forceRefresh: false,
+      refreshPayCode: refreshPayCode,
     ),
   );
+
+  Future<void> _doRefresh({bool refreshPayCode = true}) async {
+    final creds = ref.read(credentialsProvider);
+    if (creds == null) return;
+
+    try {
+      AppSnackBar.status(context, '正在同步校园卡数据...');
+
+      await ref
+          .read(campusCardBalanceProvider.notifier)
+          .refresh(forceRefresh: true, throwOnError: true);
+      if (refreshPayCode) {
+        await ref
+            .read(payCodeProvider.notifier)
+            .refresh(forceRefresh: true, throwOnError: true);
+      }
+
+      if (mounted) {
+        AppSnackBar.success(context, '校园卡数据已更新');
+      }
+    } catch (e) {
+      final errorStr = e.toString();
+      if (e is BotChallengeFailure ||
+          e is SessionExpiredFailure ||
+          e is CaptchaRequiredFailure ||
+          errorStr.contains('449') ||
+          errorStr.contains('验证码') ||
+          errorStr.contains('HTML') ||
+          errorStr.contains('CAS') ||
+          errorStr.contains('过期') ||
+          errorStr.contains('上限') ||
+          errorStr.contains('未登录') ||
+          errorStr.contains('失效')) {
+        if (mounted) {
+          final result = await Navigator.of(context).push<Map<String, dynamic>>(
+            MaterialPageRoute(
+              builder: (_) => WebViewLoginPage(
+                username: creds.username,
+                password: creds.password,
+              ),
+            ),
+          );
+
+          if (result != null && mounted) {
+            try {
+              await ref
+                  .read(webLoginBinderProvider)
+                  .bind(username: creds.username, result: result);
+              await ref
+                  .read(campusCardBalanceProvider.notifier)
+                  .refresh(forceRefresh: true, throwOnError: true);
+              if (refreshPayCode) {
+                await ref
+                    .read(payCodeProvider.notifier)
+                    .refresh(forceRefresh: true, throwOnError: true);
+              }
+              if (mounted) {
+                AppSnackBar.success(context, '验证通过，校园卡数据已更新');
+              }
+            } catch (injectErr) {
+              if (mounted) {
+                AppSnackBar.error(context, '会话恢复失败: $injectErr');
+              }
+            }
+          }
+        }
+      } else {
+        if (mounted) {
+          AppSnackBar.error(context, '刷新失败：${formatCampusError(e)}');
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -56,7 +133,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
   Widget build(BuildContext context) {
     ref.listen<int>(mainTabIndexProvider, (previous, next) {
       if (next == 1 && previous != 1) {
-        _autoRefreshCardData();
+        _autoRefreshCardData(refreshPayCode: false);
       }
     });
 
@@ -66,12 +143,21 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
       _handledQrScrollSignal = qrScrollSignal;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToQr();
-        _autoRefreshCardData();
+        _autoRefreshCardData(refreshPayCode: true);
       });
     }
 
     return Scaffold(
-      appBar: GlassAppBar(title: const Text('校园卡')),
+      appBar: GlassAppBar(
+        title: const Text('校园卡'),
+        actions: [
+          IconButton(
+            tooltip: '刷新校园卡',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _doRefresh(refreshPayCode: true),
+          ),
+        ],
+      ),
       body: ListView(
         controller: _controller,
         padding: AppInsets.withNavBarClearanceOf(
@@ -81,13 +167,20 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
         children: [
           if (balanceState.shouldOfferManualRefresh)
             BackgroundRefreshBanner(
-              onRefresh: () => ref
-                  .read(campusCardBalanceProvider.notifier)
-                  .refresh(forceRefresh: true),
+              onRefresh: () => _doRefresh(refreshPayCode: false),
             ),
-          AppEntrance(child: const _BalanceCard()),
+          AppEntrance(
+            child: _BalanceCard(
+              onRefresh: () => _doRefresh(refreshPayCode: false),
+            ),
+          ),
           const SizedBox(height: 16),
-          AppEntrance(index: 1, child: const _QrCard()),
+          AppEntrance(
+            index: 1,
+            child: _QrCard(
+              onRefresh: () => _doRefresh(refreshPayCode: true),
+            ),
+          ),
         ],
       ),
     );
@@ -105,7 +198,9 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
 
 // ── 校园卡余额 ───────────────────────────────────────────────
 class _BalanceCard extends ConsumerWidget {
-  const _BalanceCard();
+  const _BalanceCard({this.onRefresh});
+
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -170,22 +265,27 @@ class _BalanceCard extends ConsumerWidget {
                       color: Colors.white,
                       size: 22,
                       tooltip: '刷新余额',
-                      onPressed: () async {
-                        AppSnackBar.status(context, '正在刷新余额...');
-                        try {
-                          await ref
-                              .read(campusCardBalanceProvider.notifier)
-                              .refresh(forceRefresh: true, throwOnError: true);
-                          if (context.mounted) {
-                            AppSnackBar.success(context, '余额已更新');
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            AppSnackBar.error(context, '刷新失败：$e');
-                          }
-                          rethrow;
-                        }
-                      },
+                      onPressed: onRefresh != null
+                          ? () => onRefresh!()
+                          : () async {
+                              AppSnackBar.status(context, '正在刷新余额...');
+                              try {
+                                await ref
+                                    .read(campusCardBalanceProvider.notifier)
+                                    .refresh(
+                                      forceRefresh: true,
+                                      throwOnError: true,
+                                    );
+                                if (context.mounted) {
+                                  AppSnackBar.success(context, '余额已更新');
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  AppSnackBar.error(context, '刷新失败：$e');
+                                }
+                                rethrow;
+                              }
+                            },
                     ),
                   ],
                 ),
@@ -304,7 +404,9 @@ class _BalanceCard extends ConsumerWidget {
 
 // ── 消费二维码 ───────────────────────────────────────────────
 class _QrCard extends ConsumerWidget {
-  const _QrCard();
+  const _QrCard({this.onRefresh});
+
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -383,9 +485,11 @@ class _QrCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: () => ref
-                      .read(payCodeProvider.notifier)
-                      .refresh(forceRefresh: true, throwOnError: false),
+                  onPressed: onRefresh != null
+                      ? () => onRefresh!()
+                      : () => ref
+                          .read(payCodeProvider.notifier)
+                          .refresh(forceRefresh: true, throwOnError: false),
                   child: const Text('重新获取'),
                 ),
               ],
@@ -398,9 +502,11 @@ class _QrCard extends ConsumerWidget {
                     child: FilledButton.icon(
                       icon: const Icon(Icons.qr_code_2),
                       label: const Text('获取消费二维码'),
-                      onPressed: () => ref
-                          .read(payCodeProvider.notifier)
-                          .refresh(forceRefresh: true, throwOnError: false),
+                      onPressed: onRefresh != null
+                          ? () => onRefresh!()
+                          : () => ref
+                              .read(payCodeProvider.notifier)
+                              .refresh(forceRefresh: true, throwOnError: false),
                     ),
                   ),
                 );
