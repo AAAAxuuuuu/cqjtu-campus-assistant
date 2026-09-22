@@ -18,7 +18,7 @@ class ExamsNotifier extends CachedResourceNotifier<List<Exam>, String?> {
   String get cacheNamespace => 'exams';
 
   @override
-  Duration get cacheFreshness => const Duration(hours: 2);
+  Duration get cacheFreshness => const Duration(hours: 24);
 
   @override
   String? cacheScopeForArg(String? arg) => arg;
