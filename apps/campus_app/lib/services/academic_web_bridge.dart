@@ -185,6 +185,12 @@ class AcademicWebBridge {
             if (!userInput || !passwordInput) return false;
             if (!userInput.value) setValue(userInput, username);
             if (!passwordInput.value) setValue(passwordInput, password);
+            var rem = document.getElementById('rememberMe') || document.querySelector('input[name="rememberMe"]');
+            if (rem && !rem.checked) {
+              rem.click();
+              rem.checked = true;
+              rem.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             var button = document.querySelector('#login_submit') ||
               document.querySelector('button[type="submit"]') ||
               document.querySelector('input[type="submit"]') ||

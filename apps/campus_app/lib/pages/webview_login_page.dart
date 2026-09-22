@@ -145,6 +145,12 @@ class _WebViewLoginPageState extends State<WebViewLoginPage> {
           u.dispatchEvent(new Event('input', { bubbles: true }));
           p.dispatchEvent(new Event('input', { bubbles: true }));
         }
+        var rem = document.getElementById('rememberMe') || document.querySelector('input[name="rememberMe"]');
+        if (rem && !rem.checked) {
+          rem.click();
+          rem.checked = true;
+          rem.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, 300);
     ''');
   }

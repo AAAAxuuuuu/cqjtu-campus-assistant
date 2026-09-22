@@ -926,6 +926,7 @@ class _CasAuthenticator {
         '_eventId': 'submit',
         'cllt': 'userNameLogin',
         'dllt': 'generalLogin',
+        'rememberMe': 'true',
         'rmShown': '1',
         'lt': '',
       },
