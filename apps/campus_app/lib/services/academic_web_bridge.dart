@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:campus_platform/services/session_service.dart';
 import 'package:data/data.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -11,6 +14,7 @@ import '../features/auth/auth_providers.dart';
 final academicWebBridgeProvider = Provider<AcademicWebBridge>((ref) {
   final bridge = AcademicWebBridge(
     getCredentials: () => ref.read(credentialsProvider),
+    sessionService: ref.read(sessionServiceProvider),
   );
   ref.onDispose(bridge.dispose);
   return bridge;
@@ -25,7 +29,9 @@ final academicWebBridgeProvider = Provider<AcademicWebBridge>((ref) {
 class AcademicWebBridge {
   AcademicWebBridge({
     ({String username, String password})? Function()? getCredentials,
-  }) : _getCredentials = getCredentials {
+    SessionService? sessionService,
+  })  : _getCredentials = getCredentials,
+        _sessionService = sessionService {
     _controller = WebViewController()
       ..setUserAgent(campusWebUserAgent)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -80,7 +86,10 @@ class AcademicWebBridge {
       );
   }
 
+  static const _cookieChannel = MethodChannel('campus_app/cookie_manager');
+
   final ({String username, String password})? Function()? _getCredentials;
+  final SessionService? _sessionService;
   bool _isSubmittingCas = false;
 
   Future<void> _handleCasRedirect(String url) async {
@@ -242,8 +251,33 @@ class AcademicWebBridge {
   void _markReady() {
     _isReady = true;
     _isSubmittingCas = false;
+    unawaited(_syncCookiesToStorage());
     if (!(_readyCompleter?.isCompleted ?? true)) {
       _readyCompleter?.complete();
+    }
+  }
+
+  Future<void> _syncCookiesToStorage() async {
+    final creds = _getCredentials?.call();
+    final sessionService = _sessionService;
+    if (creds == null || sessionService == null) return;
+    try {
+      final casCookies = await _cookieChannel.invokeMethod<String>(
+        'getCookies',
+        {'url': 'https://ids.cqjtu.edu.cn/authserver/'},
+      );
+      if (casCookies != null && casCookies.trim().isNotEmpty) {
+        await sessionService.saveCasCookies(creds.username, casCookies.trim());
+      }
+      final jwgCookies = await _cookieChannel.invokeMethod<String>(
+        'getCookies',
+        {'url': 'https://jwgln.cqjtu.edu.cn/jsxsd/'},
+      );
+      if (jwgCookies != null && jwgCookies.trim().isNotEmpty) {
+        await sessionService.saveJwgCookies(creds.username, jwgCookies.trim());
+      }
+    } catch (e) {
+      debugPrint('[AcademicBridge] syncCookiesToStorage error: $e');
     }
   }
 
@@ -301,10 +335,8 @@ class AcademicWebBridge {
     Map<String, String>? headers,
     List<int>? body,
   }) async {
-    if (uri.host != 'jwgln.cqjtu.edu.cn' ||
-        uri.path.contains('sso.jsp') ||
-        uri.path.contains('login')) {
-      // Fall through to native HttpClient for sso.jsp redirects and non-jwgln hosts
+    if (uri.host != 'jwgln.cqjtu.edu.cn') {
+      // Fall through to native HttpClient for non-jwgln hosts (CAS, E-card)
       return null;
     }
 
@@ -375,17 +407,58 @@ class AcademicWebBridge {
 
     try {
       await _controller.runJavaScript(script);
-      return await completer.future.timeout(
+      final response = await completer.future.timeout(
         const Duration(seconds: 25),
         onTimeout: () {
           _pendingRequests.remove(id);
           throw TimeoutException('教务系统请求超时 (URL: ${uri.path})');
         },
       );
+
+      // Sync active session cookies from Android CookieManager into SchoolHttpResponse
+      // so DirectSchoolCampusGateway's ManualCookieJar and SessionStore are kept fresh.
+      try {
+        final cookieStr = await _cookieChannel.invokeMethod<String>(
+          'getCookies',
+          {'url': 'https://jwgln.cqjtu.edu.cn/jsxsd/'},
+        );
+        if (cookieStr != null && cookieStr.isNotEmpty) {
+          final cookies = _parseCookies(cookieStr);
+          if (cookies.isNotEmpty) {
+            return SchoolHttpResponse(
+              statusCode: response.statusCode,
+              headers: response.headers,
+              body: response.body,
+              cookies: cookies,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[AcademicBridge] cookie sync error: $e');
+      }
+
+      return response;
     } catch (e) {
       _pendingRequests.remove(id);
       rethrow;
     }
+  }
+
+  static List<Cookie> _parseCookies(String cookieStr) {
+    final cookies = <Cookie>[];
+    for (final part in cookieStr.split(';')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      final eqIdx = trimmed.indexOf('=');
+      if (eqIdx <= 0) continue;
+      final name = trimmed.substring(0, eqIdx).trim();
+      final value = trimmed.substring(eqIdx + 1).trim();
+      if (name.isEmpty) continue;
+      try {
+        cookies.add(Cookie(name, value));
+      } catch (_) {}
+    }
+    return cookies;
   }
 
   void _onMessageReceived(JavaScriptMessage message) {
