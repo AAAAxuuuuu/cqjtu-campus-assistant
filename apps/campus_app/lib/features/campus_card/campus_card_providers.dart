@@ -21,10 +21,10 @@ Future<void> refreshCampusCardOnEntry(
   bool forceRefresh = false,
   bool refreshPayCode = false,
 }) async {
-  await balanceNotifier.refresh(forceRefresh: forceRefresh);
   if (refreshPayCode || !payCodeNotifier.hasToken) {
     await payCodeNotifier.refresh(forceRefresh: forceRefresh);
   }
+  await balanceNotifier.refresh(forceRefresh: forceRefresh);
 }
 
 final campusCardBalanceProvider =
