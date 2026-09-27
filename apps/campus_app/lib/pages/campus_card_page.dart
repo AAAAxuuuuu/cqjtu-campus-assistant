@@ -14,7 +14,6 @@ import '../widgets/app_entrance.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/background_refresh_banner.dart';
 import '../widgets/glass_surface.dart';
-import '../widgets/spinning_refresh_button.dart';
 import 'webview_login_page.dart';
 
 class CampusCardPage extends ConsumerStatefulWidget {
@@ -148,40 +147,31 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
     }
 
     return Scaffold(
-      appBar: GlassAppBar(
-        title: const Text('校园卡'),
-        actions: [
-          IconButton(
-            tooltip: '刷新校园卡',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _doRefresh(refreshPayCode: true),
+      appBar: GlassAppBar(title: const Text('校园卡')),
+      body: RefreshIndicator(
+        onRefresh: () => _doRefresh(refreshPayCode: false),
+        child: ListView(
+          controller: _controller,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: AppInsets.withNavBarClearanceOf(
+            context,
+            const EdgeInsets.all(16),
           ),
-        ],
-      ),
-      body: ListView(
-        controller: _controller,
-        padding: AppInsets.withNavBarClearanceOf(
-          context,
-          const EdgeInsets.all(16),
+          children: [
+            if (balanceState.shouldOfferManualRefresh)
+              BackgroundRefreshBanner(
+                onRefresh: () => _doRefresh(refreshPayCode: false),
+              ),
+            AppEntrance(child: const _BalanceCard()),
+            const SizedBox(height: 16),
+            AppEntrance(
+              index: 1,
+              child: _QrCard(
+                onRefresh: () => _doRefresh(refreshPayCode: true),
+              ),
+            ),
+          ],
         ),
-        children: [
-          if (balanceState.shouldOfferManualRefresh)
-            BackgroundRefreshBanner(
-              onRefresh: () => _doRefresh(refreshPayCode: false),
-            ),
-          AppEntrance(
-            child: _BalanceCard(
-              onRefresh: () => _doRefresh(refreshPayCode: false),
-            ),
-          ),
-          const SizedBox(height: 16),
-          AppEntrance(
-            index: 1,
-            child: _QrCard(
-              onRefresh: () => _doRefresh(refreshPayCode: true),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -198,9 +188,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
 
 // ── 校园卡余额 ───────────────────────────────────────────────
 class _BalanceCard extends ConsumerWidget {
-  const _BalanceCard({this.onRefresh});
-
-  final Future<void> Function()? onRefresh;
+  const _BalanceCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -259,33 +247,6 @@ class _BalanceCard extends ConsumerWidget {
                         color: Colors.white70,
                         fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    const Spacer(),
-                    SpinningRefreshButton(
-                      color: Colors.white,
-                      size: 22,
-                      tooltip: '刷新余额',
-                      onPressed: onRefresh != null
-                          ? () => onRefresh!()
-                          : () async {
-                              AppSnackBar.status(context, '正在刷新余额...');
-                              try {
-                                await ref
-                                    .read(campusCardBalanceProvider.notifier)
-                                    .refresh(
-                                      forceRefresh: true,
-                                      throwOnError: true,
-                                    );
-                                if (context.mounted) {
-                                  AppSnackBar.success(context, '余额已更新');
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  AppSnackBar.error(context, '刷新失败：$e');
-                                }
-                                rethrow;
-                              }
-                            },
                     ),
                   ],
                 ),
