@@ -175,4 +175,37 @@ void main() {
       expect(gateway.payCodeCalls, 1);
     },
   );
+
+  test(
+    'initial entry with null credentials does not throw and auto-fetches once credentials arrive',
+    () async {
+      final gateway = TrackingCampusGateway();
+      final container = ProviderContainer(
+        overrides: [campusGatewayProvider.overrideWithValue(gateway)],
+      );
+      addTearDown(container.dispose);
+
+      // Listen to payCodeProvider to keep it active
+      container.listen(payCodeProvider, (_, __) {});
+
+      // Initial entry with credentials == null
+      await refreshCampusCardOnEntry(
+        container.read(campusCardBalanceProvider.notifier),
+        container.read(payCodeProvider.notifier),
+      );
+
+      expect(gateway.payCodeCalls, 0);
+      expect(container.read(payCodeProvider).token, '');
+      expect(container.read(payCodeProvider).isRefreshing, false);
+
+      // Credentials arrive (e.g. from storage load)
+      container.read(credentialsProvider.notifier).set('student', 'password');
+
+      // Allow microtasks/futures to run
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(gateway.payCodeCalls, 1);
+      expect(container.read(payCodeProvider).token, 'pay-code-token');
+    },
+  );
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:campus_platform/services/schedule_widget_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/runtime_mode.dart';
+import '../../providers/shared.dart';
 import '../auth/auth_providers.dart';
 import '../shared/cached_resource.dart';
 
@@ -21,10 +24,15 @@ Future<void> refreshCampusCardOnEntry(
   bool forceRefresh = false,
   bool refreshPayCode = false,
 }) async {
+  final balanceFuture = balanceNotifier.refresh(forceRefresh: forceRefresh);
   if (refreshPayCode || !payCodeNotifier.hasToken) {
-    await payCodeNotifier.refresh(forceRefresh: forceRefresh);
+    await Future.wait([
+      payCodeNotifier.refresh(forceRefresh: forceRefresh),
+      balanceFuture,
+    ]);
+  } else {
+    await balanceFuture;
   }
-  await balanceNotifier.refresh(forceRefresh: forceRefresh);
 }
 
 final campusCardBalanceProvider =
@@ -146,7 +154,31 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
   Future<void>? _inflight;
 
   @override
-  PayCodeState build() => const PayCodeState();
+  PayCodeState build() {
+    ref.listen<({String username, String password})?>(credentialsProvider, (
+      previous,
+      next,
+    ) {
+      if (next == null) {
+        _inflight = null;
+        state = const PayCodeState();
+      } else if (previous?.username != next.username) {
+        _inflight = null;
+        state = const PayCodeState();
+        unawaited(refresh(forceRefresh: true));
+      } else if (previous == null && next != null) {
+        if (!state.hasToken && !state.isRefreshing) {
+          unawaited(refresh(forceRefresh: false));
+        }
+      }
+    });
+
+    ref.listen<int>(sessionUpdateProvider, (_, __) {
+      unawaited(refresh(forceRefresh: false));
+    });
+
+    return const PayCodeState();
+  }
 
   bool get hasToken => state.hasToken;
 
@@ -177,7 +209,14 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
     required bool throwOnError,
   }) async {
     final creds = ref.read(credentialsProvider);
-    if (creds == null) return;
+    if (creds == null) {
+      state = state.copyWith(
+        token: '',
+        isRefreshing: false,
+        clearError: true,
+      );
+      return;
+    }
     ensureCredentialPassword(creds);
 
     state = state.copyWith(

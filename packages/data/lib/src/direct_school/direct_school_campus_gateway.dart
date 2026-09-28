@@ -426,7 +426,8 @@ class _SchoolHttpClient {
 
   final Duration _readTimeout;
   final SchoolHttpTransport? _transport;
-  final HttpClient _client = HttpClient();
+  final HttpClient _client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 15);
   final ManualCookieJar _jar = ManualCookieJar();
 
   /// Must stay identical to the WebViews' UA — see [campusWebUserAgent].
@@ -507,7 +508,8 @@ class _SchoolHttpClient {
 
     final res = await req.close().timeout(_readTimeout);
     _jar.saveFromResponse(uri, res.cookies);
-    final bodyText = await res.transform(utf8.decoder).join();
+    final bodyText =
+        await res.transform(utf8.decoder).join().timeout(_readTimeout);
     final headerMap = <String, String>{};
     res.headers.forEach((name, values) {
       headerMap[name.toLowerCase()] = values.join(', ');

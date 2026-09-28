@@ -149,7 +149,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
     return Scaffold(
       appBar: GlassAppBar(title: const Text('校园卡')),
       body: RefreshIndicator(
-        onRefresh: () => _doRefresh(refreshPayCode: false),
+        onRefresh: () => _doRefresh(refreshPayCode: true),
         child: ListView(
           controller: _controller,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -160,7 +160,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
           children: [
             if (balanceState.shouldOfferManualRefresh)
               BackgroundRefreshBanner(
-                onRefresh: () => _doRefresh(refreshPayCode: false),
+                onRefresh: () => _doRefresh(refreshPayCode: true),
               ),
             AppEntrance(child: const _BalanceCard()),
             const SizedBox(height: 16),
@@ -372,12 +372,14 @@ class _QrCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokenAsync = ref.watch(payCodeProvider);
+    final creds = ref.watch(credentialsProvider);
     final isUpdating = tokenAsync.isRefreshing && tokenAsync.hasToken;
 
-    // 关键自愈：只要当前尚未拿到码且不在拉取或报错中，自动触发获取，不再需要手动点按钮
+    // 关键自愈：只要当前尚未拿到码且不在拉取或报错中，凭据已加载，自动触发获取
     if (!tokenAsync.hasToken &&
         !tokenAsync.isRefreshing &&
-        !tokenAsync.hasError) {
+        !tokenAsync.hasError &&
+        creds != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(payCodeProvider.notifier).refresh(forceRefresh: false);
       });
@@ -461,34 +463,73 @@ class _QrCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  e.toString(),
+                  formatCampusError(e),
                   style: AppType.subtitle.copyWith(color: AppColors.danger),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                FilledButton(
+                FilledButton.icon(
                   onPressed: onRefresh != null
                       ? () => onRefresh!()
                       : () => ref
                           .read(payCodeProvider.notifier)
                           .refresh(forceRefresh: true, throwOnError: false),
-                  child: const Text('重新获取'),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('重新获取'),
                 ),
               ],
             ),
             data: (token) {
               if (token.isEmpty) {
-                return const SizedBox(
+                if (tokenAsync.isRefreshing) {
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text(
+                            '正在生成二维码...',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return SizedBox(
                   height: 200,
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 12),
-                        Text(
-                          '正在生成二维码...',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        const Icon(
+                          Icons.qr_code_2,
+                          size: 48,
+                          color: AppColors.muted,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          '未获取到二维码',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: onRefresh != null
+                              ? () => onRefresh!()
+                              : () => ref
+                                  .read(payCodeProvider.notifier)
+                                  .refresh(
+                                    forceRefresh: true,
+                                    throwOnError: false,
+                                  ),
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text('获取二维码'),
                         ),
                       ],
                     ),
