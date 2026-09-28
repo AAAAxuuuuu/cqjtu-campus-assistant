@@ -2806,14 +2806,21 @@ class DirectSchoolCampusGateway implements CampusGateway {
     }
 
     final ecardOk = await session.ensureEcardAuth(username);
-    if (!ecardOk) return '';
+    if (!ecardOk) {
+      throw const SessionExpiredFailure('一卡通授权失效，请重试');
+    }
 
     try {
       final resp = await session.httpClient.get(_config.ecardV5qrcodeUrl);
-      return _EcardParser.parsePayCodeToken(resp.body) ?? '';
+      final token = _EcardParser.parsePayCodeToken(resp.body);
+      if (token == null || token.isEmpty) {
+        throw const SchoolSystemChangedFailure('未能获取到有效的消费二维码');
+      }
+      return token;
     } catch (e) {
       dev.log('[_Card] Pay code token failed: $e', name: 'DirectSchool');
-      return '';
+      if (e is CampusFailure) rethrow;
+      throw NetworkFailure('获取付款码失败：$e');
     }
   }
 
