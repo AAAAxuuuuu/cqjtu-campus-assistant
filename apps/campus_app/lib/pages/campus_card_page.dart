@@ -508,7 +508,7 @@ class _QrCard extends ConsumerWidget {
                         const Icon(
                           Icons.qr_code_2,
                           size: 48,
-                          color: AppColors.muted,
+                          color: AppColors.textMuted,
                         ),
                         const SizedBox(height: 12),
                         const Text(
