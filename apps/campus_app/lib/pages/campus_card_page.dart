@@ -36,11 +36,11 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
       if (widget.scrollToQr) {
         _scrollToQr();
       }
-      _autoRefreshCardData(refreshPayCode: widget.scrollToQr);
+      _autoRefreshCardData(refreshPayCode: true);
     });
   }
 
-  void _autoRefreshCardData({bool refreshPayCode = false}) => unawaited(
+  void _autoRefreshCardData({bool refreshPayCode = true}) => unawaited(
     refreshCampusCardOnEntry(
       ref.read(campusCardBalanceProvider.notifier),
       ref.read(payCodeProvider.notifier),
@@ -132,7 +132,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
   Widget build(BuildContext context) {
     ref.listen<int>(mainTabIndexProvider, (previous, next) {
       if (next == 1 && previous != 1) {
-        _autoRefreshCardData(refreshPayCode: false);
+        _autoRefreshCardData(refreshPayCode: true);
       }
     });
 
@@ -374,6 +374,15 @@ class _QrCard extends ConsumerWidget {
     final tokenAsync = ref.watch(payCodeProvider);
     final isUpdating = tokenAsync.isRefreshing && tokenAsync.hasToken;
 
+    // 关键自愈：只要当前尚未拿到码且不在拉取或报错中，自动触发获取，不再需要手动点按钮
+    if (!tokenAsync.hasToken &&
+        !tokenAsync.isRefreshing &&
+        !tokenAsync.hasError) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(payCodeProvider.notifier).refresh(forceRefresh: false);
+      });
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -429,7 +438,19 @@ class _QrCard extends ConsumerWidget {
             skipLoadingOnReload: true,
             loading: () => const SizedBox(
               height: 200,
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text(
+                      '正在生成二维码...',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
             ),
             error: (e, _) => Column(
               children: [
@@ -457,17 +478,19 @@ class _QrCard extends ConsumerWidget {
             ),
             data: (token) {
               if (token.isEmpty) {
-                return SizedBox(
-                  height: 220,
+                return const SizedBox(
+                  height: 200,
                   child: Center(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.qr_code_2),
-                      label: const Text('获取消费二维码'),
-                      onPressed: onRefresh != null
-                          ? () => onRefresh!()
-                          : () => ref
-                              .read(payCodeProvider.notifier)
-                              .refresh(forceRefresh: true, throwOnError: false),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text(
+                          '正在生成二维码...',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ],
                     ),
                   ),
                 );
