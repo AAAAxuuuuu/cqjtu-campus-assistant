@@ -49,6 +49,33 @@ const _timetableHtml = '''
 </body></html>
 ''';
 
+/// 教务的机房/实验课会把连续多节写成一个区间：
+/// `[03-04-05节]`（三连堂）或 `[06-07-08-09节]`（四连堂）。
+/// 解析器必须把首尾节次都还原出来，否则整块会被塞进第 1 节。
+const _multiSlotTimetableHtml = '''
+<html><body>
+<table id="timetable">
+<tr><th></th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
+<tr>
+  <td></td><td></td>
+  <td><div class="kbcontent">
+    <font>计算机系统基础</font><br>
+    <font title="教师">李艳辉★副教授</font><br>
+    <font title="周次(节次)">9,11,13,15(周)[03-04-05节]</font><br>
+    <font title="教室">601002二机房A区</font>
+  </div></td>
+  <td><div class="kbcontent">
+    <font>工程训练</font><br>
+    <font title="教师">王老师</font><br>
+    <font title="周次(节次)">17(周)[06-07-08-09节]</font><br>
+    <font title="教室">601005一机房A区</font>
+  </div></td>
+  <td></td><td></td><td></td>
+</tr>
+</table>
+</body></html>
+''';
+
 const _gradesHtml = '''
 <html><body>
 <div>所修门数：12 所修总学分：45.5 平均学分绩点：3.52 平均成绩：85.3 绩点班级排名：3 绩点专业排名：10</div>
@@ -402,6 +429,33 @@ void main() {
       expect(english.endTimeSlot, 4);
       // 2-17 双周 → even weeks only.
       expect(english.weekList, [for (var w = 2; w <= 17; w += 2) w]);
+    });
+
+    test('parses multi-slot blocks such as [03-04-05节]', () async {
+      final transport = _ScriptedTransport();
+      _scriptCasLogin(transport);
+      transport.handlers.add(
+        (method, uri) async => _html(_multiSlotTimetableHtml),
+      );
+
+      final gateway = DirectSchoolCampusGateway(transport: transport.call);
+      final result = await gateway.getSchedule('123456789012', 'secret');
+
+      final lab = result.courses.firstWhere(
+        (course) => course.name == '计算机系统基础',
+      );
+      expect(lab.dayOfWeek, 3);
+      expect(lab.timeSlot, 3);
+      expect(lab.endTimeSlot, 5);
+      expect(lab.weekList, [9, 11, 13, 15]);
+
+      final training = result.courses.firstWhere(
+        (course) => course.name == '工程训练',
+      );
+      expect(training.dayOfWeek, 4);
+      expect(training.timeSlot, 6);
+      expect(training.endTimeSlot, 9);
+      expect(training.weekList, [17]);
     });
 
     test('getSchedule re-authenticates when the session expired', () async {

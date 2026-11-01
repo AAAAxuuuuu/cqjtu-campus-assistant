@@ -1424,23 +1424,27 @@ class ScheduleParser {
       return _ParsedTimeStr(weekList: [], startSlot: 1, endSlot: 1);
     }
 
-    // Extract slot info: [09-10节] or [05节]
+    // Extract slot info, tolerating any number of segments inside the
+    // brackets. 教务 uses at least three shapes in the wild:
+    //   [05节]          一节课
+    //   [09-10节]       两节连堂
+    //   [03-04-05节]    三节连堂（机房/实验课常见）
+    //   [06-07-08-09节] 四节连堂
+    // Older code only matched the first two, so 3+ segment blocks silently
+    // collapsed to slot 1 (a 19:00 三连堂 showed up as an 08:20 single class).
     var startSlot = 1;
     var endSlot = 1;
 
-    final rangeMatch = RegExp(r'\[(\d+)-(\d+)节\]').firstMatch(timeStr);
-    if (rangeMatch != null) {
-      startSlot = int.tryParse(rangeMatch.group(1) ?? '') ?? 1;
-      endSlot = int.tryParse(rangeMatch.group(2) ?? '') ?? startSlot;
-      // Clamp to valid range
-      startSlot = startSlot.clamp(1, 13);
-      endSlot = endSlot.clamp(startSlot, 13);
-    } else {
-      final singleMatch = RegExp(r'\[(\d+)节\]').firstMatch(timeStr);
-      if (singleMatch != null) {
-        startSlot = int.tryParse(singleMatch.group(1) ?? '') ?? 1;
-        startSlot = startSlot.clamp(1, 13);
-        endSlot = startSlot;
+    final bracketMatch = RegExp(r'\[([\d\s-]+)节\]').firstMatch(timeStr);
+    if (bracketMatch != null) {
+      final slots = (bracketMatch.group(1) ?? '')
+          .split('-')
+          .map((part) => int.tryParse(part.trim()))
+          .whereType<int>()
+          .toList();
+      if (slots.isNotEmpty) {
+        startSlot = slots.first.clamp(1, 13);
+        endSlot = slots.last.clamp(startSlot, 13);
       }
     }
 
@@ -2318,7 +2322,8 @@ class DirectSchoolCampusGateway implements CampusGateway {
       );
     }
     try {
-      await _session(username).forceRelogin(username, password, isSilent: false);
+      await _session(username)
+          .forceRelogin(username, password, isSilent: false);
       await resetAuthCircuitBreaker(username);
       await _sessionStore?.clearManualLoginAttempts(username);
       await _sessionStore?.resetSecurityFailures(username);
