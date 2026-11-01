@@ -70,4 +70,3 @@ final autoLoginRateLimitedProvider = StateProvider<bool>((ref) => false);
 
 /// Indicates whether the current account has hit the 1-hour 5-attempts manual login failure limit.
 final manualLoginRateLimitedProvider = StateProvider<bool>((ref) => false);
-

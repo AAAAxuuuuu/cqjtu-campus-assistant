@@ -166,9 +166,7 @@ class _CampusCardPageState extends ConsumerState<CampusCardPage> {
             const SizedBox(height: 16),
             AppEntrance(
               index: 1,
-              child: _QrCard(
-                onRefresh: () => _doRefresh(refreshPayCode: true),
-              ),
+              child: _QrCard(onRefresh: () => _doRefresh(refreshPayCode: true)),
             ),
           ],
         ),
@@ -472,8 +470,8 @@ class _QrCard extends ConsumerWidget {
                   onPressed: onRefresh != null
                       ? () => onRefresh!()
                       : () => ref
-                          .read(payCodeProvider.notifier)
-                          .refresh(forceRefresh: true, throwOnError: false),
+                            .read(payCodeProvider.notifier)
+                            .refresh(forceRefresh: true, throwOnError: false),
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('重新获取'),
                 ),
@@ -523,11 +521,11 @@ class _QrCard extends ConsumerWidget {
                           onPressed: onRefresh != null
                               ? () => onRefresh!()
                               : () => ref
-                                  .read(payCodeProvider.notifier)
-                                  .refresh(
-                                    forceRefresh: true,
-                                    throwOnError: false,
-                                  ),
+                                    .read(payCodeProvider.notifier)
+                                    .refresh(
+                                      forceRefresh: true,
+                                      throwOnError: false,
+                                    ),
                           icon: const Icon(Icons.refresh, size: 16),
                           label: const Text('获取二维码'),
                         ),

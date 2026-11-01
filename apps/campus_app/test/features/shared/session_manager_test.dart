@@ -167,16 +167,11 @@ class _FakeSessionStore implements SelfHostedSessionStore {
   Future<void> clearManualLoginAttempts(String username) async {}
 
   @override
-  Future<bool> isInSecurityCooldown(
-    String username, {
-    DateTime? now,
-  }) async => false;
+  Future<bool> isInSecurityCooldown(String username, {DateTime? now}) async =>
+      false;
 
   @override
-  Future<void> recordSecurityFailure(
-    String username, {
-    DateTime? now,
-  }) async {}
+  Future<void> recordSecurityFailure(String username, {DateTime? now}) async {}
 
   @override
   Future<void> resetSecurityFailures(String username) async {}

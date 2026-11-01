@@ -166,14 +166,10 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
         _inflight = null;
         state = const PayCodeState();
         unawaited(refresh(forceRefresh: true));
-      } else if (previous == null && next != null) {
-        if (!state.hasToken && !state.isRefreshing) {
-          unawaited(refresh(forceRefresh: false));
-        }
       }
     });
 
-    ref.listen<int>(sessionUpdateProvider, (_, __) {
+    ref.listen<int>(sessionUpdateProvider, (_, _) {
       unawaited(refresh(forceRefresh: false));
     });
 
@@ -210,11 +206,7 @@ class PayCodeNotifier extends Notifier<PayCodeState> {
   }) async {
     final creds = ref.read(credentialsProvider);
     if (creds == null) {
-      state = state.copyWith(
-        token: '',
-        isRefreshing: false,
-        clearError: true,
-      );
+      state = state.copyWith(token: '', isRefreshing: false, clearError: true);
       return;
     }
     ensureCredentialPassword(creds);

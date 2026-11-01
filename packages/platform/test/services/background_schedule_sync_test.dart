@@ -472,8 +472,10 @@ void main() {
       );
 
       expect(balanceSuccess, isFalse);
-      expect(elecCalled, isFalse, reason: 'elec check must be skipped at front gate');
-      expect(cardCalled, isFalse, reason: 'card check must be skipped at front gate');
+      expect(elecCalled, isFalse,
+          reason: 'elec check must be skipped at front gate');
+      expect(cardCalled, isFalse,
+          reason: 'card check must be skipped at front gate');
     });
 
     test(

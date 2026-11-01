@@ -116,7 +116,8 @@ class _SlidingWindowSessionStore extends SelfHostedSessionStore {
   }
 
   @override
-  Future<void> recordManualLoginAttempt(String username, {DateTime? now}) async {
+  Future<void> recordManualLoginAttempt(String username,
+      {DateTime? now}) async {
     final current = now ?? simulatedNow ?? DateTime.now();
     manualAttemptsByUser.putIfAbsent(username, () => []).add(current);
   }
@@ -140,7 +141,8 @@ class _SlidingWindowSessionStore extends SelfHostedSessionStore {
     securityFailuresByUser[username] = count;
     if (count >= 3) {
       final current = now ?? simulatedNow ?? DateTime.now();
-      securityCooldownUntil[username] = current.add(const Duration(minutes: 30));
+      securityCooldownUntil[username] =
+          current.add(const Duration(minutes: 30));
     }
   }
 
@@ -818,7 +820,8 @@ void main() {
       for (var i = 0; i < 5; i++) {
         transport.handlers.addAll([
           (m, u) async => _html(_loginPageHtml),
-          (m, u) async => _html('<html><body><form id="casLoginForm"><input name="execution" value="e$i"/></form><span id="msg">用户名或密码错误</span></body></html>'),
+          (m, u) async => _html(
+              '<html><body><form id="casLoginForm"><input name="execution" value="e$i"/></form><span id="msg">用户名或密码错误</span></body></html>'),
         ]);
       }
 
@@ -857,12 +860,12 @@ void main() {
         sessionStore: store,
         transport: ticketTransport.call,
       );
-      await gatewayTicket.loginWithTicket('manual_fail_user', 'ST-valid-ticket');
+      await gatewayTicket.loginWithTicket(
+          'manual_fail_user', 'ST-valid-ticket');
       expect(store.manualAttemptsByUser['manual_fail_user'], isNull);
     });
 
-    test(
-        'security failures enter 30-min cooldown and block silent auto-login',
+    test('security failures enter 30-min cooldown and block silent auto-login',
         () async {
       final store = _SlidingWindowSessionStore();
       final baseTime = DateTime(2026, 9, 19, 10, 0, 0);
@@ -873,7 +876,8 @@ void main() {
       await store.recordSecurityFailure('sec_user', now: baseTime);
       await store.recordSecurityFailure('sec_user', now: baseTime);
 
-      expect(await store.isInSecurityCooldown('sec_user', now: baseTime), isTrue);
+      expect(
+          await store.isInSecurityCooldown('sec_user', now: baseTime), isTrue);
 
       final transport = _ScriptedTransport();
       final gateway = DirectSchoolCampusGateway(

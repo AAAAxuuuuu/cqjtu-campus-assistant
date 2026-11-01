@@ -212,4 +212,3 @@ abstract mixin class SelfHostedSessionStore {
 
   Future<void> resetSecurityFailures(String username) async {}
 }
-

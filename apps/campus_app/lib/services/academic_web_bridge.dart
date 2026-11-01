@@ -30,8 +30,8 @@ class AcademicWebBridge {
   AcademicWebBridge({
     ({String username, String password})? Function()? getCredentials,
     SessionService? sessionService,
-  })  : _getCredentials = getCredentials,
-        _sessionService = sessionService {
+  }) : _getCredentials = getCredentials,
+       _sessionService = sessionService {
     _controller = WebViewController()
       ..setUserAgent(campusWebUserAgent)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)

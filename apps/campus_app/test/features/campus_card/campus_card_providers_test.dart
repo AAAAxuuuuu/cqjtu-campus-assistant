@@ -186,7 +186,7 @@ void main() {
       addTearDown(container.dispose);
 
       // Listen to payCodeProvider to keep it active
-      container.listen(payCodeProvider, (_, __) {});
+      container.listen(payCodeProvider, (_, _) {});
 
       // Initial entry with credentials == null
       await refreshCampusCardOnEntry(

@@ -332,7 +332,8 @@ class SessionService implements SelfHostedSessionStore {
   }
 
   @override
-  Future<void> recordManualLoginAttempt(String username, {DateTime? now}) async {
+  Future<void> recordManualLoginAttempt(String username,
+      {DateTime? now}) async {
     final current = now ?? DateTime.now();
     final cutoff =
         current.subtract(const Duration(hours: 1)).millisecondsSinceEpoch;
@@ -440,7 +441,8 @@ class SessionService implements SelfHostedSessionStore {
     return attempts.length < maxSportsAttemptsPerHour;
   }
 
-  Future<void> recordSportsLoginAttempt(String username, {DateTime? now}) async {
+  Future<void> recordSportsLoginAttempt(String username,
+      {DateTime? now}) async {
     final current = now ?? DateTime.now();
     final cutoff =
         current.subtract(const Duration(hours: 1)).millisecondsSinceEpoch;

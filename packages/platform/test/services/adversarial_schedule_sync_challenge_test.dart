@@ -437,8 +437,7 @@ void main() {
         now: now,
       );
 
-      expect(result6, isTrue,
-          reason: '6th attempt is within quota (<= 6/hr)');
+      expect(result6, isTrue, reason: '6th attempt is within quota (<= 6/hr)');
       expect(gateway6.scheduleCallCount, 1,
           reason: 'Network request executed for 6th attempt');
 

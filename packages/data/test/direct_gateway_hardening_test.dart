@@ -610,8 +610,8 @@ void main() {
 
       // Script 1 failed CAS login
       transport.handlers.add((method, uri) async => _html(_loginPageHtml));
-      transport.handlers.add((method, uri) async =>
-          _html('<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
+      transport.handlers.add((method, uri) async => _html(
+          '<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
 
       final gateway = DirectSchoolCampusGateway(
         sessionStore: store,
@@ -699,8 +699,8 @@ void main() {
 
       // Script failure for user_A
       transport.handlers.add((method, uri) async => _html(_loginPageHtml));
-      transport.handlers.add((method, uri) async =>
-          _html('<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
+      transport.handlers.add((method, uri) async => _html(
+          '<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
 
       // Script success for user_B
       _scriptCasLogin(transport);
@@ -898,12 +898,10 @@ void main() {
       final gateway = DirectSchoolCampusGateway(sessionStore: store);
 
       await gateway.markAuthCircuitBroken('user_reset_session');
-      expect(
-          await gateway.isAuthCircuitBroken('user_reset_session'), isTrue);
+      expect(await gateway.isAuthCircuitBroken('user_reset_session'), isTrue);
 
       await gateway.resetLoginSession('user_reset_session');
-      expect(
-          await gateway.isAuthCircuitBroken('user_reset_session'), isFalse);
+      expect(await gateway.isAuthCircuitBroken('user_reset_session'), isFalse);
     });
 
     test(
@@ -932,8 +930,8 @@ void main() {
 
       // 1. First silent attempt with bad credentials fails with AuthInvalidFailure
       transport.handlers.add((method, uri) async => _html(_loginPageHtml));
-      transport.handlers.add((method, uri) async =>
-          _html('<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
+      transport.handlers.add((method, uri) async => _html(
+          '<html><body><div id="showErrorTip">账号或密码错误</div></body></html>'));
 
       final gateway = DirectSchoolCampusGateway(
         sessionStore: store,
@@ -979,11 +977,13 @@ void main() {
 
       // Now session expires on server.
       // 1. isSessionValid check (POST to scheduleUrl) encounters expired session
-      transport.handlers.add((method, uri) async => _html('<html><body>authserver/login</body></html>'));
+      transport.handlers.add((method, uri) async =>
+          _html('<html><body>authserver/login</body></html>'));
       // 2. GET casLoginUrl to fetch login form
       transport.handlers.add((method, uri) async => _html(_loginPageHtml));
       // 3. POST casLoginUrl fails with NetworkFailure
-      transport.handlers.add((method, uri) async => throw const NetworkFailure('CAS connection timed out'));
+      transport.handlers.add((method, uri) async =>
+          throw const NetworkFailure('CAS connection timed out'));
 
       await expectLater(
         () => gateway.getElecBalance(
@@ -1021,7 +1021,6 @@ void main() {
       expect(loginPostsAfterInitial.length, greaterThanOrEqualTo(1));
     });
 
-
     test(
         'R3: when first silent subtask encounters NetworkFailure, subsequent silent subtasks in same session short-circuit with 0 additional login POSTs',
         () async {
@@ -1032,7 +1031,8 @@ void main() {
       // Initial login GET
       transport.handlers.add((method, uri) async => _html(_loginPageHtml));
       // POST login fails with NetworkFailure
-      transport.handlers.add((method, uri) async => throw const NetworkFailure('CAS connection timed out'));
+      transport.handlers.add((method, uri) async =>
+          throw const NetworkFailure('CAS connection timed out'));
 
       final gateway = DirectSchoolCampusGateway(
         sessionStore: store,
