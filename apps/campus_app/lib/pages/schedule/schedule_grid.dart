@@ -556,6 +556,20 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
 
     const outerPadding = 2.0;
     final fullWidth = _kDayW - outerPadding * 2;
+    // Stack 里一旦出现重复 ValueKey，Debug 会直接断言崩溃，Release 下 Flutter
+    // updateChildren 的 oldKeyedChildren Map 会覆盖前一个 Element，导致其
+    // RenderBox 永久孤儿化并盖在后续所有周的对应节次上。这里对单列全部
+    // placement 强制分配唯一 key 作为最终兜底。
+    final seenKeyCounts = <String, int>{};
+    String allocateKey(String baseKey) {
+      final count = seenKeyCounts.update(
+        baseKey,
+        (value) => value + 1,
+        ifAbsent: () => 0,
+      );
+      return count == 0 ? baseKey : '$baseKey#$count';
+    }
+
     final inactivePlacements = <_CoursePlacement>[];
     var index = 0;
 
@@ -573,27 +587,32 @@ class _TimetableGridState extends ConsumerState<_TimetableGrid> {
         index++;
       }
 
+      final baseKey = cluster.length > 1
+          ? 'inactive_summary_${cluster.map(_coursePlacementKeyPart).join('||')}'
+          : _coursePlacementKeyPart(cluster.first);
+
       inactivePlacements.add(
         _CoursePlacement(
           courses: cluster,
           left: outerPadding,
           width: fullWidth,
+          key: allocateKey(baseKey),
         ),
       );
     }
 
-    final activePlacements =
-        activeCourses
-            .toList()
-            .map(
-              (course) => _CoursePlacement(
-                courses: [course],
-                left: outerPadding,
-                width: fullWidth,
-              ),
-            )
-            .toList()
-          ..sort((a, b) => _compareCoursesForLayout(a.course, b.course));
+    final sortedActiveCourses = activeCourses.toList()
+      ..sort(_compareCoursesForLayout);
+    final activePlacements = sortedActiveCourses
+        .map(
+          (course) => _CoursePlacement(
+            courses: [course],
+            left: outerPadding,
+            width: fullWidth,
+            key: allocateKey(_coursePlacementKeyPart(course)),
+          ),
+        )
+        .toList();
 
     return [...inactivePlacements, ...activePlacements];
   }
@@ -680,11 +699,13 @@ class _CoursePlacement {
   final List<Course> courses;
   final double left;
   final double width;
+  final String key;
 
   const _CoursePlacement({
     required this.courses,
     required this.left,
     required this.width,
+    required this.key,
   });
 
   Course get course => courses.first;
@@ -700,13 +721,24 @@ class _CoursePlacement {
       .reduce((value, element) => value > element ? value : element);
 
   int get slotSpan => endSlot - startSlot + 1;
-
-  // 带上 displayStatus：调休时同一门课会在同一周出现「已调休」和点亮两格，
-  // 只用 name+timeStr 会撞 key。
-  String get key => isSummary
-      ? 'inactive_summary_${courses.map((course) => '${course.name}_${course.timeStr}_${course.displayStatus.name}').join('|')}'
-      : '${course.name}_${course.timeStr}_${course.displayStatus.name}';
 }
+
+// 带上完整时空与展示状态维度：调休时同一门课会在同一周出现「已调休」和点亮两格，
+// 同名同描述的课程也需按节次/教室/来源区分，再配合单列计数器彻底杜绝撞 key。
+String _coursePlacementKeyPart(Course course) => [
+  course.name,
+  course.timeStr,
+  course.classroom,
+  course.teacher,
+  course.dayOfWeek,
+  course.timeSlot,
+  course.endTimeSlot,
+  course.exactStartMinutes ?? '',
+  course.exactEndMinutes ?? '',
+  course.isExam ? '1' : '0',
+  course.isCustom ? '1' : '0',
+  course.displayStatus.name,
+].join('\u0000');
 
 class _InactiveCourseSummaryCell extends StatelessWidget {
   final List<Course> courses;

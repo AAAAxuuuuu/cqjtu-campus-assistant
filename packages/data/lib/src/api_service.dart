@@ -61,10 +61,11 @@ class ApiService implements CampusSessionApi {
     );
     _checkCode(res.data, statusCode: res.statusCode);
     final data = res.data['data'];
-    final courses = (data as List)
-        .whereType<Map<String, dynamic>>()
-        .map((e) => Course.fromJson(e))
-        .toList();
+    final courses = deduplicateCourses(
+      (data as List)
+          .whereType<Map<String, dynamic>>()
+          .map((e) => Course.fromJson(e)),
+    );
     final remark = res.data['scheduleRemark'] as String? ?? '';
     return (courses: courses, remark: remark);
   }

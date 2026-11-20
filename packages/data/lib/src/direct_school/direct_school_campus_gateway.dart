@@ -1397,11 +1397,14 @@ class ScheduleParser {
       }
     }
 
+    final deduplicated = deduplicateCourses(courses);
+
     dev.log(
-      '[_ScheduleParser] Parsed ${courses.length} courses, remark length=${remark.length}',
+      '[_ScheduleParser] Parsed ${deduplicated.length} courses '
+      '(raw=${courses.length}), remark length=${remark.length}',
       name: 'DirectSchool',
     );
-    return (courses: courses, remark: remark);
+    return (courses: deduplicated, remark: remark);
   }
 
   /// Parse the remark row from the timetable.
@@ -1496,9 +1499,9 @@ class ScheduleParser {
       }
     }
 
-    weekList.sort();
+    final uniqueWeeks = weekList.toSet().toList()..sort();
     return _ParsedTimeStr(
-      weekList: weekList,
+      weekList: uniqueWeeks,
       startSlot: startSlot,
       endSlot: endSlot,
     );

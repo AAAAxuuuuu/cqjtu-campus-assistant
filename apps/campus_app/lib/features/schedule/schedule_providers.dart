@@ -56,10 +56,11 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
     final coursesRaw = json['courses'];
     return (
       courses: coursesRaw is List
-          ? coursesRaw
-                .whereType<Map>()
-                .map((item) => Course.fromJson(Map<String, dynamic>.from(item)))
-                .toList()
+          ? deduplicateCourses(
+              coursesRaw.whereType<Map>().map(
+                (item) => Course.fromJson(Map<String, dynamic>.from(item)),
+              ),
+            )
           : const <Course>[],
       remark: json['remark']?.toString() ?? '',
     );
@@ -126,7 +127,11 @@ class ScheduleNotifier extends CachedResourceNotifier<ScheduleResult, String?> {
           );
 
     return (
-      courses: [...scheduleResult.courses, ...customCourses, ...examCourses],
+      courses: deduplicateCourses([
+        ...scheduleResult.courses,
+        ...customCourses,
+        ...examCourses,
+      ]),
       remark: scheduleResult.remark,
     );
   }

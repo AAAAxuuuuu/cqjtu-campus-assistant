@@ -573,10 +573,11 @@ class NotificationService {
         seed['semesterStartIso']?.toString() ?? '',
       );
       if (semesterStart == null) return false;
-      final courses = (seed['courses'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => Course.fromJson(Map<String, dynamic>.from(item)))
-          .toList();
+      final courses = deduplicateCourses(
+        (seed['courses'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Course.fromJson(Map<String, dynamic>.from(item))),
+      );
       if (courses.isEmpty) return false;
 
       await scheduleClassReminders(

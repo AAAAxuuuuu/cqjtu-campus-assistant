@@ -213,3 +213,49 @@ bool _boolValue(dynamic value) {
   }
   return false;
 }
+
+/// 去除重复课程，保留首次出现的顺序。
+///
+/// 强智教务 `#timetable` 按大节分行，跨大节的连堂课（如 `[06-07-08-09节]`）会在
+/// 所跨的多个行单元格中重复出现完全相同的课程块。若不去重，不仅会让提醒、导出、
+/// 小组件重复计数，还会导致课表 `Stack` 在同一天生成重复的 `ValueKey`。
+///
+/// 默认保留自定义课程（`deduplicateCustom: false`），避免影响用户手动维护的条目。
+List<Course> deduplicateCourses(
+  Iterable<Course> courses, {
+  bool deduplicateCustom = false,
+}) {
+  final seen = <String>{};
+  final result = <Course>[];
+  for (final course in courses) {
+    if (course.isCustom && !deduplicateCustom) {
+      result.add(course);
+      continue;
+    }
+    if (seen.add(_courseDedupKey(course))) {
+      result.add(course);
+    }
+  }
+  return result;
+}
+
+String _courseDedupKey(Course course) {
+  final normalizedWeeks = course.weekList.toSet().toList()..sort();
+  final timePart = normalizedWeeks.isEmpty ? course.timeStr.trim() : '';
+  return [
+    course.name.trim(),
+    course.teacher.trim(),
+    course.classroom.trim(),
+    course.dayOfWeek,
+    course.timeSlot,
+    course.endTimeSlot,
+    normalizedWeeks.join(','),
+    timePart,
+    course.isExam ? '1' : '0',
+    course.isCustom ? '1' : '0',
+    course.seatNumber.trim(),
+    course.exactStartMinutes ?? '',
+    course.exactEndMinutes ?? '',
+    course.displayStatus.name,
+  ].join('\u0000');
+}

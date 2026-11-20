@@ -147,4 +147,77 @@ void main() {
       expect(c.exactEndMinutes, 16 * 60 + 30);
     });
   });
+
+  group('deduplicateCourses', () {
+    const fourSlot = Course(
+      name: '工程实训',
+      teacher: '王老师',
+      timeStr: '17(周)[06-07-08-09节]',
+      classroom: '601005一机房A区',
+      dayOfWeek: 1,
+      timeSlot: 6,
+      endTimeSlot: 9,
+      weekList: [17],
+    );
+
+    test('collapses identical multi-row school courses while preserving order',
+        () {
+      final duplicate = Course(
+        name: ' 工程实训 ',
+        teacher: '王老师',
+        timeStr: '17(周)[06-07-08-09节]',
+        classroom: '601005一机房A区',
+        dayOfWeek: 1,
+        timeSlot: 6,
+        endTimeSlot: 9,
+        weekList: const [17, 17],
+      );
+      const other = Course(
+        name: '高等数学',
+        teacher: '张老师',
+        timeStr: '1-16(周)[06-07节]',
+        classroom: '20101',
+        dayOfWeek: 1,
+        timeSlot: 6,
+        endTimeSlot: 7,
+        weekList: [1, 2, 3],
+      );
+
+      final result = deduplicateCourses([other, fourSlot, duplicate]);
+      expect(result, hasLength(2));
+      expect(result[0].name, '高等数学');
+      expect(result[1].name, '工程实训');
+    });
+
+    test(
+        'keeps distinct courses that differ by week, slot, day, teacher, or room',
+        () {
+      final diffWeek = fourSlot.copyWith(weekList: const [18]);
+      final diffSlot = fourSlot.copyWith(timeSlot: 1, endTimeSlot: 4);
+      final diffDay = fourSlot.copyWith(dayOfWeek: 2);
+      final diffTeacher = fourSlot.copyWith(teacher: '李老师');
+      final diffRoom = fourSlot.copyWith(classroom: '601006二机房');
+
+      final result = deduplicateCourses([
+        fourSlot,
+        diffWeek,
+        diffSlot,
+        diffDay,
+        diffTeacher,
+        diffRoom,
+      ]);
+      expect(result, hasLength(6));
+    });
+
+    test('preserves duplicate custom courses by default', () {
+      final custom1 = fourSlot.copyWith(isCustom: true);
+      final custom2 = fourSlot.copyWith(isCustom: true);
+
+      expect(deduplicateCourses([custom1, custom2]), hasLength(2));
+      expect(
+        deduplicateCourses([custom1, custom2], deduplicateCustom: true),
+        hasLength(1),
+      );
+    });
+  });
 }

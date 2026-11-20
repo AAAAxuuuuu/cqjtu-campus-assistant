@@ -76,6 +76,46 @@ const _multiSlotTimetableHtml = '''
 </body></html>
 ''';
 
+/// 强智教务中跨大节的四连堂（如 `[06-07-08-09节]` 跨第 3 大节 6-7 和第 4 大节 8-9）
+/// 会在两个大节行对应的同一星期单元格内各输出一遍完全相同的课程块。
+const _duplicatedCrossRowFourSlotHtml = '''
+<html><body>
+<table id="timetable">
+<tr><th></th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr>
+  <td><div class="kbcontent">
+    <font>高等数学</font><br>
+    <font title="教师">张老师</font><br>
+    <font title="周次(节次)">1-16(周)[06-07节]</font><br>
+    <font title="教室">20101</font><br>
+    ---------------------<br>
+    <font>工程实训</font><br>
+    <font title="教师">王老师</font><br>
+    <font title="周次(节次)">17(周)[06-07-08-09节]</font><br>
+    <font title="教室">601005一机房A区</font>
+  </div></td>
+  <td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+  <td><div class="kbcontent">
+    <font>数据结构</font><br>
+    <font title="教师">李老师</font><br>
+    <font title="周次(节次)">1-16(周)[08-09节]</font><br>
+    <font title="教室">20202</font><br>
+    ---------------------<br>
+    <font>工程实训</font><br>
+    <font title="教师">王老师</font><br>
+    <font title="周次(节次)">17(周)[06-07-08-09节]</font><br>
+    <font title="教室">601005一机房A区</font>
+  </div></td>
+  <td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+</table>
+</body></html>
+''';
+
 const _gradesHtml = '''
 <html><body>
 <div>所修门数：12 所修总学分：45.5 平均学分绩点：3.52 平均成绩：85.3 绩点班级排名：3 绩点专业排名：10</div>
@@ -457,6 +497,29 @@ void main() {
       expect(training.endTimeSlot, 9);
       expect(training.weekList, [17]);
     });
+
+    test(
+      'deduplicates a 4-slot course repeated across two timetable rows',
+      () async {
+        final transport = _ScriptedTransport();
+        _scriptCasLogin(transport);
+        transport.handlers.add(
+          (method, uri) async => _html(_duplicatedCrossRowFourSlotHtml),
+        );
+
+        final gateway = DirectSchoolCampusGateway(transport: transport.call);
+        final result = await gateway.getSchedule('123456789012', 'secret');
+
+        expect(result.courses, hasLength(3));
+        final trainingCourses =
+            result.courses.where((course) => course.name == '工程实训').toList();
+        expect(trainingCourses, hasLength(1));
+        expect(trainingCourses.single.dayOfWeek, 1);
+        expect(trainingCourses.single.timeSlot, 6);
+        expect(trainingCourses.single.endTimeSlot, 9);
+        expect(trainingCourses.single.weekList, [17]);
+      },
+    );
 
     test('getSchedule re-authenticates when the session expired', () async {
       final transport = _ScriptedTransport();
